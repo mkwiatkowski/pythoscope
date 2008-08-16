@@ -11,4 +11,7 @@ setup(
     url = 'http://pythoscope.org',
 
     packages = ['pythoscope'],
+
+    test_suite = 'nose.collector',
+    tests_require = ['nose'],
 )
