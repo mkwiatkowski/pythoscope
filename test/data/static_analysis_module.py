@@ -22,3 +22,16 @@ class EmptyClass(object):
 class SubclassOfEmpty(EmptyClass):
     def new_method(self):
         pass
+
+def stand_alone_function(arg1, arg2):
+    def inner_function(arg):
+        pass
+    class InnerClass(object):
+        pass
+    pass
+
+class TopLevelClass(object):
+    class AnotherInnerClass(object):
+        pass
+    def method(self):
+        pass

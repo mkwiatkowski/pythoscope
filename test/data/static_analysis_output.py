@@ -22,5 +22,13 @@ class TestSubclassOfEmpty(unittest.TestCase):
     def test_new_method(self):
         assert False # TODO: implement your test here
 
+class TestStandAloneFunction(unittest.TestCase):
+    def test_stand_alone_function(self):
+        assert False # TODO: implement your test here
+
+class TestTopLevelClass(unittest.TestCase):
+    def test_method(self):
+        assert False # TODO: implement your test here
+
 if __name__ == '__main__':
     unittest.main()
