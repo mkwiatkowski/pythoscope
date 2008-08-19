@@ -1,4 +1,7 @@
+import sys
+
 from nose.tools import assert_equal
+from nose.exc import SkipTest
 from helper import assert_length
 
 import pythoscope
@@ -82,6 +85,13 @@ for x in range(1):
     class InsideClass(object): pass
 """
 
+definitions_inside_with = """
+from __future__ import with_statement
+with x:
+    def inside_function(): pass
+    class InsideClass(object): pass
+"""
+
 class TestCollector:
     def test_collects_information_about_top_level_classes(self):
         info = pythoscope.collect_information(new_style_class)
@@ -146,3 +156,15 @@ class TestCollector:
             assert_equal("InsideClass", info.classes[0].name)
             assert_length(info.functions, 1)
             assert_equal("inside_function", info.functions[0].name)
+
+    def test_collects_information_about_functions_and_classes_inside_with(self):
+        # With statement was introduced in Python 2.5, so skip this test for
+        # earlier versions.
+        if float(sys.version[:3]) < 2.5:
+            raise SkipTest
+
+        info = pythoscope.collect_information(definitions_inside_with)
+        assert_length(info.classes, 1)
+        assert_equal("InsideClass", info.classes[0].name)
+        assert_length(info.functions, 1)
+        assert_equal("inside_function", info.functions[0].name)
