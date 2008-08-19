@@ -15,6 +15,11 @@ class OldStyleClass:
         pass
 """
 
+class_without_methods = """
+class ClassWithoutMethods(object):
+    pass
+"""
+
 stand_alone_function = """
 def a_function():
     pass
@@ -43,3 +48,9 @@ class TestCollector:
 
         assert_length(info.classes, 1)
         assert_equal("OldStyleClass", info.classes[0].name)
+
+    def test_collects_information_about_classes_without_methods(self):
+        info = pythoscope.collect_information(class_without_methods)
+
+        assert_length(info.classes, 1)
+        assert_equal("ClassWithoutMethods", info.classes[0].name)
