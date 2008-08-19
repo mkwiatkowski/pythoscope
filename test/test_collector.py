@@ -156,7 +156,7 @@ class TestCollector:
     def test_collects_information_about_functions_and_classes_inside_with(self):
         # With statement was introduced in Python 2.5, so skip this test for
         # earlier versions.
-        if float(sys.version[:3]) < 2.5:
+        if sys.version_info < (2, 5):
             raise SkipTest
 
         info = collect_information_from_code(definitions_inside_with)
