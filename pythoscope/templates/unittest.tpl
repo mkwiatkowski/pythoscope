@@ -10,6 +10,5 @@ class Test${camelize(object.name)}(unittest.TestCase):
     #end for
 #end if
 #end for
-
 if __name__ == '__main__':
     unittest.main()
