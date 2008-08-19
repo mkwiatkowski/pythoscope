@@ -3,8 +3,9 @@ import compiler
 from compiler.visitor import ASTVisitor
 
 class Module(object):
-    def __init__(self, objects):
+    def __init__(self, objects=[], errors=[]):
         self.objects = objects
+        self.errors = errors
 
     def _get_classes(self):
         return [o for o in self.objects if isinstance(o, Class)]
@@ -50,7 +51,10 @@ class ClassVisitor(ASTVisitor):
         self.methods.append(node.name)
 
 def collect_information(code):
-    tree = compiler.parse(code)
+    try:
+        tree = compiler.parse(code)
+    except SyntaxError, e:
+        return Module(errors=[e])
     visitor = descend(tree, TopLevelVisitor)
 
     return Module(visitor.objects)

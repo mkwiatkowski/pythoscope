@@ -47,6 +47,10 @@ class ClassWithThreeMethods(object):
         pass
 """
 
+syntax_error = """
+a b c d e f g
+"""
+
 class TestCollector:
     def test_collects_information_about_top_level_classes(self):
         info = pythoscope.collect_information(new_style_class)
@@ -90,3 +94,8 @@ class TestCollector:
 
         assert_equal(["first_method", "second_method", "third_method"],
                      info.classes[0].methods)
+
+    def test_collector_handles_syntax_errors(self):
+        info = pythoscope.collect_information(syntax_error)
+
+        assert_length(info.errors, 1)
