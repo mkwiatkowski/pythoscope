@@ -1,5 +1,5 @@
 from pythoscope.generator import generate_test_module
-from pythoscope.collector import Module, Class, Function
+from pythoscope.store import Module, Class, Function
 
 from helper import assert_contains, assert_doesnt_contain
 
