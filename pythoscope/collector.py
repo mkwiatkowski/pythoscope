@@ -3,7 +3,7 @@ import compiler.ast
 
 from compiler.visitor import ASTVisitor
 
-from util import read_file_contents
+from util import read_file_contents, underscore
 
 class Module(object):
     def __init__(self, objects=[], errors=[]):
@@ -23,9 +23,15 @@ class Class(object):
         self.name = name
         self.methods = methods
 
+    def test_methods(self):
+        return self.methods
+
 class Function(object):
     def __init__(self, name):
         self.name = name
+
+    def test_methods(self):
+        return [underscore(self.name)]
 
 def descend(node, visitor_type):
     """Walk over the AST using a visitor of a given type and return the visitor

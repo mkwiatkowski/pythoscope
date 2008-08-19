@@ -25,3 +25,13 @@ class TestGenerator:
         result = generate_test_module(module)
         assert_contains(result, "class TestSomeFunction(unittest.TestCase):")
         assert_contains(result, "class TestAnotherFunction(unittest.TestCase):")
+
+    def test_generates_test_method_for_each_production_method_and_function(self):
+        module = Module(objects=[Class('SomeClass', ['some_method']),
+                                 Class('AnotherClass', ['another_method', 'one_more']),
+                                 Function('a_function')])
+        result = generate_test_module(module)
+        assert_contains(result, "def test_some_method(self):")
+        assert_contains(result, "def test_another_method(self):")
+        assert_contains(result, "def test_one_more(self):")
+        assert_contains(result, "def test_a_function(self):")
