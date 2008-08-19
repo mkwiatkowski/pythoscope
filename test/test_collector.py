@@ -25,6 +25,18 @@ def a_function():
     pass
 """
 
+inner_classes_and_function = """
+def outer_function():
+    def inner_function():
+        pass
+    class InnerClass(object):
+        pass
+
+class OuterClass(object):
+    class AnotherInnerClass(object):
+        pass
+"""
+
 class TestCollector:
     def test_collects_information_about_top_level_classes(self):
         info = pythoscope.collect_information(new_style_class)
@@ -54,3 +66,11 @@ class TestCollector:
 
         assert_length(info.classes, 1)
         assert_equal("ClassWithoutMethods", info.classes[0].name)
+
+    def test_ignores_inner_classes_and_functions(self):
+        info = pythoscope.collect_information(inner_classes_and_function)
+
+        assert_length(info.classes, 1)
+        assert_equal("OuterClass", info.classes[0].name)
+        assert_length(info.functions, 1)
+        assert_equal("outer_function", info.functions[0].name)
