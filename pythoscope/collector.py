@@ -24,7 +24,11 @@ class Class(object):
         self.methods = methods
 
     def test_methods(self):
-        return self.methods
+        def method2testmethod(name):
+            if name == '__init__':
+                return "object_initialization"
+            return name
+        return map(method2testmethod, self.methods)
 
 class Function(object):
     def __init__(self, name):

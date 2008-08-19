@@ -35,3 +35,8 @@ class TestGenerator:
         assert_contains(result, "def test_another_method(self):")
         assert_contains(result, "def test_one_more(self):")
         assert_contains(result, "def test_a_function(self):")
+
+    def test_generates_nice_name_for_init_method(self):
+        module = Module(objects=[Class('SomeClass', ['__init__'])])
+        result = generate_test_module(module)
+        assert_contains(result, "def test_object_initialization(self):")
