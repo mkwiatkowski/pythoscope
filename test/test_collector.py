@@ -51,6 +51,11 @@ syntax_error = """
 a b c d e f g
 """
 
+indentation_error = """
+  def answer():
+    42
+"""
+
 class TestCollector:
     def test_collects_information_about_top_level_classes(self):
         info = pythoscope.collect_information(new_style_class)
@@ -97,5 +102,10 @@ class TestCollector:
 
     def test_collector_handles_syntax_errors(self):
         info = pythoscope.collect_information(syntax_error)
+
+        assert_length(info.errors, 1)
+
+    def test_collector_handles_indentation_errors(self):
+        info = pythoscope.collect_information(indentation_error)
 
         assert_length(info.errors, 1)
