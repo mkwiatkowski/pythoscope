@@ -9,6 +9,12 @@ class AClass(object):
         pass
 """
 
+old_style_class = """
+class OldStyleClass:
+    def amethod(self):
+        pass
+"""
+
 stand_alone_function = """
 def a_function():
     pass
@@ -31,3 +37,9 @@ class TestCollector:
         info = pythoscope.collect_information(new_style_class)
 
         assert_length(info.functions, 0)
+
+    def test_collects_information_about_old_style_classes(self):
+        info = pythoscope.collect_information(old_style_class)
+
+        assert_length(info.classes, 1)
+        assert_equal("OldStyleClass", info.classes[0].name)
