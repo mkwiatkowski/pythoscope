@@ -3,6 +3,8 @@ import compiler.ast
 
 from compiler.visitor import ASTVisitor
 
+from util import read_file_contents
+
 class Module(object):
     def __init__(self, objects=[], errors=[]):
         self.objects = objects
@@ -56,7 +58,10 @@ class ClassVisitor(ASTVisitor):
     def visitFunction(self, node):
         self.methods.append(node.name)
 
-def collect_information(code):
+def collect_information_from_module(path):
+    return collect_information_from_code(read_file_contents(path))
+
+def collect_information_from_code(code):
     try:
         tree = compiler.parse(code)
     except SyntaxError, e:

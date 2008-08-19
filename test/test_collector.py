@@ -4,7 +4,7 @@ from nose.tools import assert_equal
 from nose.exc import SkipTest
 from helper import assert_length, assert_single_class, assert_single_function
 
-import pythoscope
+from pythoscope.collector import collect_information_from_code
 
 new_style_class = """
 class AClass(object):
@@ -98,49 +98,49 @@ lambda_function = lambda x: not x
 
 class TestCollector:
     def test_collects_information_about_top_level_classes(self):
-        info = pythoscope.collect_information(new_style_class)
+        info = collect_information_from_code(new_style_class)
 
         assert_single_class(info, "AClass")
 
     def test_collects_information_about_top_level_functions(self):
-        info = pythoscope.collect_information(stand_alone_function)
+        info = collect_information_from_code(stand_alone_function)
 
         assert_single_function(info, "a_function")
 
     def test_doesnt_count_methods_as_functions(self):
-        info = pythoscope.collect_information(new_style_class)
+        info = collect_information_from_code(new_style_class)
 
         assert_length(info.functions, 0)
 
     def test_collects_information_about_old_style_classes(self):
-        info = pythoscope.collect_information(old_style_class)
+        info = collect_information_from_code(old_style_class)
 
         assert_single_class(info, "OldStyleClass")
 
     def test_collects_information_about_classes_without_methods(self):
-        info = pythoscope.collect_information(class_without_methods)
+        info = collect_information_from_code(class_without_methods)
 
         assert_single_class(info, "ClassWithoutMethods")
 
     def test_ignores_inner_classes_and_functions(self):
-        info = pythoscope.collect_information(inner_classes_and_function)
+        info = collect_information_from_code(inner_classes_and_function)
 
         assert_single_class(info, "OuterClass")
         assert_single_function(info, "outer_function")
 
     def test_collects_information_about_methods_of_a_class(self):
-        info = pythoscope.collect_information(class_with_methods)
+        info = collect_information_from_code(class_with_methods)
 
         assert_equal(["first_method", "second_method", "third_method"],
                      info.classes[0].methods)
 
     def test_collector_handles_syntax_errors(self):
-        info = pythoscope.collect_information(syntax_error)
+        info = collect_information_from_code(syntax_error)
 
         assert_length(info.errors, 1)
 
     def test_collector_handles_indentation_errors(self):
-        info = pythoscope.collect_information(indentation_error)
+        info = collect_information_from_code(indentation_error)
 
         assert_length(info.errors, 1)
 
@@ -149,7 +149,7 @@ class TestCollector:
                  definitions_inside_while, definitions_inside_for]
 
         for case in suite:
-            info = pythoscope.collect_information(case)
+            info = collect_information_from_code(case)
             assert_single_class(info, "InsideClass")
             assert_single_function(info, "inside_function")
 
@@ -159,11 +159,11 @@ class TestCollector:
         if float(sys.version[:3]) < 2.5:
             raise SkipTest
 
-        info = pythoscope.collect_information(definitions_inside_with)
+        info = collect_information_from_code(definitions_inside_with)
         assert_single_class(info, "InsideClass")
         assert_single_function(info, "inside_function")
 
     def test_collects_information_about_functions_defined_using_lambda(self):
-        info = pythoscope.collect_information(lambda_definition)
+        info = collect_information_from_code(lambda_definition)
 
         assert_single_function(info, "lambda_function")

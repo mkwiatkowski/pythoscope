@@ -2,6 +2,8 @@ import os
 
 from nose.tools import assert_equal
 
+from pythoscope.util import read_file_contents
+
 
 DATA_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data'))
 
@@ -11,12 +13,6 @@ def data(name):
 
 def read_data(name):
     return read_file_contents(data(name))
-
-def read_file_contents(filename):
-    fd = file(filename)
-    contents = fd.read()
-    fd.close()
-    return contents
 
 def assert_length(collection, expected_length):
     actual_length = len(collection)
