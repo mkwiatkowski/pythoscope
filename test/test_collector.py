@@ -2,7 +2,7 @@ import sys
 
 from nose.tools import assert_equal
 from nose.exc import SkipTest
-from helper import assert_length
+from helper import assert_length, assert_single_class, assert_single_function
 
 import pythoscope
 
@@ -96,14 +96,12 @@ class TestCollector:
     def test_collects_information_about_top_level_classes(self):
         info = pythoscope.collect_information(new_style_class)
 
-        assert_length(info.classes, 1)
-        assert_equal("AClass", info.classes[0].name)
+        assert_single_class(info, "AClass")
 
     def test_collects_information_about_top_level_functions(self):
         info = pythoscope.collect_information(stand_alone_function)
 
-        assert_length(info.functions, 1)
-        assert_equal("a_function", info.functions[0].name)
+        assert_single_function(info, "a_function")
 
     def test_doesnt_count_methods_as_functions(self):
         info = pythoscope.collect_information(new_style_class)
@@ -113,22 +111,18 @@ class TestCollector:
     def test_collects_information_about_old_style_classes(self):
         info = pythoscope.collect_information(old_style_class)
 
-        assert_length(info.classes, 1)
-        assert_equal("OldStyleClass", info.classes[0].name)
+        assert_single_class(info, "OldStyleClass")
 
     def test_collects_information_about_classes_without_methods(self):
         info = pythoscope.collect_information(class_without_methods)
 
-        assert_length(info.classes, 1)
-        assert_equal("ClassWithoutMethods", info.classes[0].name)
+        assert_single_class(info, "ClassWithoutMethods")
 
     def test_ignores_inner_classes_and_functions(self):
         info = pythoscope.collect_information(inner_classes_and_function)
 
-        assert_length(info.classes, 1)
-        assert_equal("OuterClass", info.classes[0].name)
-        assert_length(info.functions, 1)
-        assert_equal("outer_function", info.functions[0].name)
+        assert_single_class(info, "OuterClass")
+        assert_single_function(info, "outer_function")
 
     def test_collects_information_about_methods_of_a_class(self):
         info = pythoscope.collect_information(class_with_methods)
@@ -152,10 +146,8 @@ class TestCollector:
 
         for case in suite:
             info = pythoscope.collect_information(case)
-            assert_length(info.classes, 1)
-            assert_equal("InsideClass", info.classes[0].name)
-            assert_length(info.functions, 1)
-            assert_equal("inside_function", info.functions[0].name)
+            assert_single_class(info, "InsideClass")
+            assert_single_function(info, "inside_function")
 
     def test_collects_information_about_functions_and_classes_inside_with(self):
         # With statement was introduced in Python 2.5, so skip this test for
@@ -164,7 +156,5 @@ class TestCollector:
             raise SkipTest
 
         info = pythoscope.collect_information(definitions_inside_with)
-        assert_length(info.classes, 1)
-        assert_equal("InsideClass", info.classes[0].name)
-        assert_length(info.functions, 1)
-        assert_equal("inside_function", info.functions[0].name)
+        assert_single_class(info, "InsideClass")
+        assert_single_function(info, "inside_function")
