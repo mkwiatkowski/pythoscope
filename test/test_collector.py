@@ -26,3 +26,8 @@ class TestCollector:
 
         assert_length(info.functions, 1)
         assert_equal("a_function", info.functions[0].name)
+
+    def test_doesnt_count_methods_as_functions(self):
+        info = pythoscope.collect_information(new_style_class)
+
+        assert_length(info.functions, 0)
