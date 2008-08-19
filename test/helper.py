@@ -24,6 +24,10 @@ def assert_contains(haystack, needle):
     assert needle in haystack,\
            "%r should contain %r, but it didn't." % (haystack, needle)
 
+def assert_doesnt_contain(haystack, needle):
+    assert needle not in haystack,\
+           "%r should NOT contain %r, but it did." % (haystack, needle)
+
 def assert_single_class(info, name):
     assert_length(info.classes, 1)
     assert_equal(name, info.classes[0].name)

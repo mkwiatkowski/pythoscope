@@ -1,7 +1,7 @@
 from pythoscope.generator import generate_test_module
 from pythoscope.collector import Module, Class, Function
 
-from helper import assert_contains
+from helper import assert_contains, assert_doesnt_contain
 
 # Let nose know that this isn't a test function.
 generate_test_module.__test__ = False
@@ -40,3 +40,8 @@ class TestGenerator:
         module = Module(objects=[Class('SomeClass', ['__init__'])])
         result = generate_test_module(module)
         assert_contains(result, "def test_object_initialization(self):")
+
+    def test_ignores_empty_classes(self):
+        module = Module(objects=[Class('SomeClass', [])])
+        result = generate_test_module(module)
+        assert_doesnt_contain(result, "class TestSomeClass(unittest.TestCase):")
