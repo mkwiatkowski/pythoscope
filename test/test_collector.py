@@ -37,6 +37,16 @@ class OuterClass(object):
         pass
 """
 
+class_with_methods = """
+class ClassWithThreeMethods(object):
+    def first_method(self):
+        pass
+    def second_method(self, x):
+        pass
+    def third_method(self, x, y):
+        pass
+"""
+
 class TestCollector:
     def test_collects_information_about_top_level_classes(self):
         info = pythoscope.collect_information(new_style_class)
@@ -74,3 +84,9 @@ class TestCollector:
         assert_equal("OuterClass", info.classes[0].name)
         assert_length(info.functions, 1)
         assert_equal("outer_function", info.functions[0].name)
+
+    def test_collects_information_about_methods_of_a_class(self):
+        info = pythoscope.collect_information(class_with_methods)
+
+        assert_equal(["first_method", "second_method", "third_method"],
+                     info.classes[0].methods)
