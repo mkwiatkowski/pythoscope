@@ -45,3 +45,19 @@ class TestGenerator:
         module = Module(objects=[Class('SomeClass', [])])
         result = generate_test_module(module)
         assert_doesnt_contain(result, "class TestSomeClass(unittest.TestCase):")
+
+    def test_can_generate_nose_style_tests(self):
+        module = Module(objects=[Class('AClass', ['a_method']),
+                                 Function('a_function')])
+        result = generate_test_module(module, template='nose')
+
+        assert_doesnt_contain(result, "import unittest")
+        assert_contains(result, "from nose import SkipTest")
+
+        assert_contains(result, "class TestAClass:")
+        assert_contains(result, "class TestAFunction:")
+
+        assert_contains(result, "raise SkipTest")
+        assert_doesnt_contain(result, "assert False")
+
+        assert_doesnt_contain(result, "if __name__ == '__main__':\n    unittest.main()")
