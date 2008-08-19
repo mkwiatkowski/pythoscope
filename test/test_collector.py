@@ -56,6 +56,32 @@ indentation_error = """
     42
 """
 
+definitions_inside_try_except = """
+try:
+    def inside_function(): pass
+    class InsideClass(object): pass
+except:
+    pass
+"""
+
+definitions_inside_if = """
+if True:
+    def inside_function(): pass
+    class InsideClass(object): pass
+"""
+
+definitions_inside_while = """
+while True:
+    def inside_function(): pass
+    class InsideClass(object): pass
+"""
+
+definitions_inside_for = """
+for x in range(1):
+    def inside_function(): pass
+    class InsideClass(object): pass
+"""
+
 class TestCollector:
     def test_collects_information_about_top_level_classes(self):
         info = pythoscope.collect_information(new_style_class)
@@ -109,3 +135,14 @@ class TestCollector:
         info = pythoscope.collect_information(indentation_error)
 
         assert_length(info.errors, 1)
+
+    def test_collects_information_about_functions_and_classes_inside_other_blocks(self):
+        suite = [definitions_inside_try_except, definitions_inside_if,
+                 definitions_inside_while, definitions_inside_for]
+
+        for case in suite:
+            info = pythoscope.collect_information(case)
+            assert_length(info.classes, 1)
+            assert_equal("InsideClass", info.classes[0].name)
+            assert_length(info.functions, 1)
+            assert_equal("inside_function", info.functions[0].name)
