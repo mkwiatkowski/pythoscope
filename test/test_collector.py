@@ -92,6 +92,10 @@ with x:
     class InsideClass(object): pass
 """
 
+lambda_definition = """
+lambda_function = lambda x: not x
+"""
+
 class TestCollector:
     def test_collects_information_about_top_level_classes(self):
         info = pythoscope.collect_information(new_style_class)
@@ -158,3 +162,8 @@ class TestCollector:
         info = pythoscope.collect_information(definitions_inside_with)
         assert_single_class(info, "InsideClass")
         assert_single_function(info, "inside_function")
+
+    def test_collects_information_about_functions_defined_using_lambda(self):
+        info = pythoscope.collect_information(lambda_definition)
+
+        assert_single_function(info, "lambda_function")

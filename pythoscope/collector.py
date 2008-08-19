@@ -1,4 +1,5 @@
 import compiler
+import compiler.ast
 
 from compiler.visitor import ASTVisitor
 
@@ -42,6 +43,11 @@ class TopLevelVisitor(ASTVisitor):
 
     def visitFunction(self, node):
         self.objects.append(Function(node.name))
+
+    def visitAssign(self, node):
+        if len(node.nodes) == 1 and isinstance(node.nodes[0], compiler.ast.AssName) \
+           and isinstance(node.expr, compiler.ast.Lambda):
+            self.objects.append(Function(node.nodes[0].name))
 
 class ClassVisitor(ASTVisitor):
     def __init__(self):
