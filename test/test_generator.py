@@ -1,5 +1,5 @@
 from pythoscope.generator import generate_test_module
-from pythoscope.collector import Module
+from pythoscope.collector import Module, Class
 
 from helper import assert_contains
 
@@ -11,3 +11,10 @@ class TestGenerator:
         result = generate_test_module(Module())
         assert_contains(result, "import unittest")
         assert_contains(result, "if __name__ == '__main__':\n    unittest.main()")
+
+    def test_generates_test_class_for_each_production_class(self):
+        module = Module(objects=[Class('SomeClass', ['some_method']),
+                                 Class('AnotherClass', ['another_method'])])
+        result = generate_test_module(module)
+        assert_contains(result, "class TestSomeClass(unittest.TestCase):")
+        assert_contains(result, "class TestAnotherClass(unittest.TestCase):")
