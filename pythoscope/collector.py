@@ -4,7 +4,15 @@ from compiler.visitor import ASTVisitor
 
 class Module(object):
     def __init__(self, objects):
-        self.classes = objects
+        self.objects = objects
+
+    def _get_classes(self):
+        return [o for o in self.objects if isinstance(o, Class)]
+    classes = property(_get_classes)
+
+    def _get_functions(self):
+        return [o for o in self.objects if isinstance(o, Function)]
+    functions = property(_get_functions)
 
 class Class(object):
     def __init__(self, name, methods):
