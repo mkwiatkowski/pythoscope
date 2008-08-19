@@ -6,8 +6,8 @@ setup(
 
     author = 'Michal Kwiatkowski',
     author_email = 'constant.beta@gmail.com',
-    description = 'unit tests generator for Python',
-    license = 'GPLv3',
+    description = 'unit test generator for Python',
+    license = 'MIT',
     url = 'http://pythoscope.org',
 
     packages = ['pythoscope'],
@@ -16,4 +16,13 @@ setup(
 
     test_suite = 'nose.collector',
     tests_require = ['nose'],
+
+    classifiers = [
+        'Development Status :: 2 - Pre-Alpha',
+        'Environment :: Console',
+        'Intended Audience :: Developers',
+        'Programming Language :: Python',
+        'Topic :: Software Development :: Code Generators',
+        'Topic :: Software Development :: Testing',
+    ],
 )
