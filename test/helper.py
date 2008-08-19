@@ -20,6 +20,10 @@ def assert_length(collection, expected_length):
            "Expected collection to have %d elements, it had %d instead." %\
            (expected_length, actual_length)
 
+def assert_contains(haystack, needle):
+    assert needle in haystack,\
+           "%r should contain %r, but it didn't." % (haystack, needle)
+
 def assert_single_class(info, name):
     assert_length(info.classes, 1)
     assert_equal(name, info.classes[0].name)
@@ -27,3 +31,4 @@ def assert_single_class(info, name):
 def assert_single_function(info, name):
     assert_length(info.functions, 1)
     assert_equal(name, info.functions[0].name)
+

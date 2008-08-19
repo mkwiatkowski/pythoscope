@@ -11,6 +11,8 @@ setup(
     url = 'http://pythoscope.org',
 
     packages = ['pythoscope'],
+    package_data = {'pythoscope': ['templates/*.tpl']},
+    install_requires = ['Cheetah'],
 
     test_suite = 'nose.collector',
     tests_require = ['nose'],
