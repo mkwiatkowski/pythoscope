@@ -14,3 +14,9 @@ def read_file_contents(filename):
     contents = fd.read()
     fd.close()
     return contents
+
+def assert_length(collection, expected_length):
+    actual_length = len(collection)
+    assert expected_length == actual_length,\
+           "Expected collection to have %d elements, it had %d instead." %\
+           (expected_length, actual_length)
