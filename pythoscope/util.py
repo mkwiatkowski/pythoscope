@@ -1,3 +1,4 @@
+import os
 import re
 
 def camelize(name):
@@ -45,3 +46,11 @@ def read_file_contents(filename):
     contents = fd.read()
     fd.close()
     return contents
+
+def write_string_to_file(string, filename):
+    fd = file(filename, 'w')
+    fd.write(string)
+    fd.close()
+
+def python_sources_below(path):
+    return [os.path.join(path, entry) for entry in os.listdir(path) if entry.endswith(".py")]

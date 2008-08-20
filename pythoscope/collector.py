@@ -1,10 +1,11 @@
 import compiler
 import compiler.ast
+import os.path
 
 from compiler.visitor import ASTVisitor
 
 from store import Module, Class, Function
-from util import read_file_contents
+from util import read_file_contents, python_sources_below
 
 def descend(node, visitor_type):
     """Walk over the AST using a visitor of a given type and return the visitor
@@ -37,8 +38,24 @@ class ClassVisitor(ASTVisitor):
     def visitFunction(self, node):
         self.methods.append(node.name)
 
+def collect_information_from_paths(paths):
+    """Collects information from list of paths. Path can point to a Python module
+    file or to a directory. Directories are processed recursively.
+
+    Returns a list of modules.
+    """
+    modules = []
+    for path in paths:
+        if os.path.isdir(path):
+            modules.extend(collect_information_from_paths(python_sources_below(path)))
+        else:
+            modules.append(collect_information_from_module(path))
+    return modules
+
 def collect_information_from_module(path):
-    return collect_information_from_code(read_file_contents(path))
+    module = collect_information_from_code(read_file_contents(path))
+    module.path = path
+    return module
 
 def collect_information_from_code(code):
     try:
@@ -47,4 +64,4 @@ def collect_information_from_code(code):
         return Module(errors=[e])
     visitor = descend(tree, TopLevelVisitor)
 
-    return Module(visitor.objects)
+    return Module(objects=visitor.objects)

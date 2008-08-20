@@ -14,6 +14,10 @@ setup(
     package_data = {'pythoscope': ['templates/*.tpl']},
     install_requires = ['Cheetah'],
 
+    entry_points = {        
+        'console_scripts': ['pythoscope = pythoscope:main']
+    },
+
     test_suite = 'nose.collector',
     tests_require = ['nose', 'fixture'],
 

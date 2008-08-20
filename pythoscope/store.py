@@ -7,6 +7,10 @@ def method2testmethod(name):
         return "object_initialization"
     return name
 
+class ModuleNotFound(Exception):
+    def __init__(self, module):
+        self.module = module
+
 class Project(object):
     def __init__(self, modules=[], filepath=None):
         if filepath:
@@ -24,8 +28,15 @@ class Project(object):
         self.modules = pickle.load(fd)
         fd.close()
 
+    def __getitem__(self, module):
+        for mod in self.modules:
+            if mod.path == module:
+                return mod
+        raise ModuleNotFound(module)
+
 class Module(object):
-    def __init__(self, objects=[], errors=[]):
+    def __init__(self, path="<code>", objects=[], errors=[]):
+        self.path = path
         self.objects = objects
         self.errors = errors
 

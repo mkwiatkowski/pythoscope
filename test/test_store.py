@@ -6,7 +6,7 @@ from pythoscope.store import Project, Module, Class, Function
 
 class TestStore:
     def test_can_be_saved_and_restored_from_file(self):
-        modules = [Module([Class("AClass", ["amethod"]), Function("afunction")]),
+        modules = [Module(objects=[Class("AClass", ["amethod"]), Function("afunction")]),
                    Module(errors=["Syntax error"])]
         project = Project(modules)
         tmpdir = TempIO()
