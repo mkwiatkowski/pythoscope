@@ -1,9 +1,28 @@
+import pickle
+
 from util import underscore
 
 def method2testmethod(name):
     if name == '__init__':
         return "object_initialization"
     return name
+
+class Project(object):
+    def __init__(self, modules=[], filepath=None):
+        if filepath:
+            self._read_from_file(filepath)
+        else:
+            self.modules = modules
+
+    def save_to_file(self, filepath):
+        fd = open(filepath, 'w')
+        pickle.dump(self.modules, fd)
+        fd.close()
+
+    def _read_from_file(self, filepath):
+        fd = open(filepath)
+        self.modules = pickle.load(fd)
+        fd.close()
 
 class Module(object):
     def __init__(self, objects=[], errors=[]):

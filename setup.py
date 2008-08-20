@@ -15,7 +15,7 @@ setup(
     install_requires = ['Cheetah'],
 
     test_suite = 'nose.collector',
-    tests_require = ['nose'],
+    tests_require = ['nose', 'fixture'],
 
     classifiers = [
         'Development Status :: 2 - Pre-Alpha',
