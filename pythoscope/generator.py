@@ -26,10 +26,10 @@ def generate_test_module(module, template="unittest"):
     return str(Template.Template(file=template_path(template),
                                  searchList=[mapping]))
 
-def generate_test_modules(project, modnames, destdir):
+def generate_test_modules(project, modnames, destdir, template):
     os.makedirs(destdir)
     for modname in modnames:
         module = project[modname]
-        test_module = generate_test_module(module)
+        test_module = generate_test_module(module, template)
         test_path = os.path.join(destdir, module2testpath(module.path))
         write_string_to_file(test_module, test_path)
