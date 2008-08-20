@@ -1,10 +1,10 @@
 import os
 from fixture import TempIO
-from nose.tools import assert_equal
+from nose.tools import assert_equal, assert_raises
 
-from pythoscope.store import Project, Module, Class, Function
+from pythoscope.store import Project, Module, Class, Function, ModuleNotFound
 
-class TestStore:
+class TestProject:
     def test_can_be_saved_and_restored_from_file(self):
         modules = [Module(objects=[Class("AClass", ["amethod"]), Function("afunction")]),
                    Module(errors=["Syntax error"])]
@@ -21,3 +21,14 @@ class TestStore:
         assert_equal(["amethod"], project.modules[0].classes[0].methods)
         assert_equal("afunction", project.modules[0].functions[0].name)
         assert_equal(["Syntax error"], project.modules[1].errors)
+
+    def test_can_be_queried_for_modules_by_their_path(self):
+        paths = ["module.py", "sub/dir/module.py", "package/__init__.py"]
+        project = Project(modules=map(Module, paths))
+
+        for path in paths:
+            assert_equal(path, project[path].path)
+
+    def test_raises_module_not_found_exception_when_no_module_like_that_is_present(self):
+        project = Project()
+        assert_raises(ModuleNotFound, lambda: project["whatever"])
