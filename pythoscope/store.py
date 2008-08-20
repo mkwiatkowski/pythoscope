@@ -3,10 +3,6 @@ import re
 
 from util import underscore
 
-def method2testmethod(name):
-    if name == '__init__':
-        return "object_initialization"
-    return name
 
 class ModuleNotFound(Exception):
     def __init__(self, module):
@@ -60,7 +56,14 @@ class Class(object):
         self.methods = methods
 
     def test_methods(self):
-        return map(method2testmethod, self.methods)
+        return list(self._test_methods_generator())
+
+    def _test_methods_generator(self):
+        for method in self.methods:
+            if method == '__init__':
+                yield "object_initialization"
+            elif not method.startswith('_'):
+                yield method
 
 class Function(object):
     def __init__(self, name):

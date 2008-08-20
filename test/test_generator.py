@@ -61,3 +61,8 @@ class TestGenerator:
         assert_doesnt_contain(result, "assert False")
 
         assert_doesnt_contain(result, "if __name__ == '__main__':\n    unittest.main()")
+
+    def test_ignores_private_methods(self):
+        module = Module(objects=[Class('SomeClass', ['_semiprivate', '__private', '__eq__'])])
+        result = generate_test_module(module)
+        assert_doesnt_contain(result, "class TestSomeClass(unittest.TestCase):")
