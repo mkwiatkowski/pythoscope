@@ -38,9 +38,9 @@ class Module(object):
         self.objects = objects
         self.errors = errors
 
-    def _get_test_objects(self):
+    def _get_testable_objects(self):
         return [o for o in self.objects if o.is_testable()]
-    test_objects = property(_get_test_objects)
+    testable_objects = property(_get_testable_objects)
 
     def _get_classes(self):
         return [o for o in self.objects if isinstance(o, Class)]
@@ -63,10 +63,10 @@ class Class(object):
     def is_testable(self):
         return 'Exception' not in self.bases
 
-    def test_methods(self):
-        return list(self._test_methods_generator())
+    def testable_methods(self):
+        return list(self._testable_methods_generator())
 
-    def _test_methods_generator(self):
+    def _testable_methods_generator(self):
         for method in self.methods:
             if method == '__init__':
                 yield "object_initialization"
@@ -77,7 +77,7 @@ class Function(object):
     def __init__(self, name):
         self.name = name
 
-    def test_methods(self):
+    def testable_methods(self):
         return [underscore(self.name)]
 
     def is_testable(self):
