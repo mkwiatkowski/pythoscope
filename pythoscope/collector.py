@@ -15,13 +15,23 @@ def descend(node, visitor_type):
     compiler.walk(node, visitor)
     return visitor
 
+def derive_class_name(node):
+    if isinstance(node, compiler.ast.Name):
+        return node.name
+    return "<unknown>"
+
+def derive_class_names(nodes):
+    return map(derive_class_name, nodes)
+
 class TopLevelVisitor(ASTVisitor):
     def __init__(self):
         self.objects = []
 
     def visitClass(self, node):
         visitor = descend(node, ClassVisitor)
-        self.objects.append(Class(node.name, visitor.methods))
+        self.objects.append(Class(node.name,
+                                  visitor.methods,
+                                  derive_class_names(node.bases)))
 
     def visitFunction(self, node):
         self.objects.append(Function(node.name))

@@ -96,6 +96,21 @@ lambda_definition = """
 lambda_function = lambda x: not x
 """
 
+class_without_parents = """
+class ClassWithoutParents:
+    pass
+"""
+
+class_with_one_parent = """
+class ClassWithOneParent(object):
+    pass
+"""
+
+class_with_two_parents = """
+class ClassWithTwoParents(Mother, Father):
+    pass
+"""
+
 class TestCollector:
     def test_collects_information_about_top_level_classes(self):
         info = collect_information_from_code(new_style_class)
@@ -167,3 +182,11 @@ class TestCollector:
         info = collect_information_from_code(lambda_definition)
 
         assert_single_function(info, "lambda_function")
+
+    def test_collects_information_about_class_bases(self):
+        suite = [class_without_parents, class_with_one_parent, class_with_two_parents]
+        expected_results = [[], ["object"], ["Mother", "Father"]]
+
+        for case, expected in zip(suite, expected_results):
+            info = collect_information_from_code(case)
+            assert_equal(expected, info.classes[0].bases)

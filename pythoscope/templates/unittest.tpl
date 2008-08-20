@@ -1,6 +1,6 @@
 import unittest
 
-#for $object in $module.objects
+#for $object in $module.test_objects
 #if $object.test_methods
 class Test${camelize(object.name)}(unittest.TestCase):
     #for $method in $object.test_methods

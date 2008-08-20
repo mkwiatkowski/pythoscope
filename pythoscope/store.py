@@ -38,6 +38,10 @@ class Module(object):
         self.objects = objects
         self.errors = errors
 
+    def _get_test_objects(self):
+        return [o for o in self.objects if o.is_testable()]
+    test_objects = property(_get_test_objects)
+
     def _get_classes(self):
         return [o for o in self.objects if isinstance(o, Class)]
     classes = property(_get_classes)
@@ -51,9 +55,13 @@ class Module(object):
     locator = property(_get_locator)
 
 class Class(object):
-    def __init__(self, name, methods):
+    def __init__(self, name, methods, bases=[]):
         self.name = name
         self.methods = methods
+        self.bases = bases
+
+    def is_testable(self):
+        return 'Exception' not in self.bases
 
     def test_methods(self):
         return list(self._test_methods_generator())
@@ -71,3 +79,6 @@ class Function(object):
 
     def test_methods(self):
         return [underscore(self.name)]
+
+    def is_testable(self):
+        return True

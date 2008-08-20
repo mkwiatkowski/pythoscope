@@ -66,3 +66,8 @@ class TestGenerator:
         module = Module(objects=[Class('SomeClass', ['_semiprivate', '__private', '__eq__'])])
         result = generate_test_module(module)
         assert_doesnt_contain(result, "class TestSomeClass(unittest.TestCase):")
+
+    def test_ignores_exception_classes(self):
+        module = Module(objects=[Class('ExceptionClass', ['method'], bases=['Exception'])])
+        result = generate_test_module(module)
+        assert_doesnt_contain(result, "class TestExceptionClass(unittest.TestCase):")
