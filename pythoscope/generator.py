@@ -1,4 +1,5 @@
 import os
+import re
 
 from Cheetah import Template
 
@@ -11,8 +12,10 @@ def module2testpath(module):
     'test_module.py'
     >>> module2testpath("pythoscope/store.py")
     'test_pythoscope_store.py'
+    >>> module2testpath("pythoscope/__init__.py")
+    'test_pythoscope.py'
     """
-    return "test_" + module.replace("/", "_")
+    return "test_" + re.sub(r'/__init__.py$', '.py', module).replace("/", "_")
 
 def template_path(name):
     "Return a path to the given template."
