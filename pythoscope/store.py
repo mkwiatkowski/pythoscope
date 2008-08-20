@@ -10,6 +10,7 @@ def method2testmethod(name):
 
 class ModuleNotFound(Exception):
     def __init__(self, module):
+        Exception.__init__(self, "Couldn't find module %r." % module)
         self.module = module
 
 class Project(object):
