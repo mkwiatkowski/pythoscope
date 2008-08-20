@@ -32,3 +32,11 @@ class TestProject:
     def test_raises_module_not_found_exception_when_no_module_like_that_is_present(self):
         project = Project()
         assert_raises(ModuleNotFound, lambda: project["whatever"])
+
+    def test_can_be_queried_for_modules_by_their_locator(self):
+        paths = ["module.py", "sub/dir/module.py", "package/__init__.py"]
+        locators = ["module", "sub.dir.module", "package"]
+        project = Project(modules=map(Module, paths))
+
+        for path, locator in zip(paths, locators):
+            assert_equal(path, project[locator].path)

@@ -1,4 +1,5 @@
 import pickle
+import re
 
 from util import underscore
 
@@ -30,7 +31,7 @@ class Project(object):
 
     def __getitem__(self, module):
         for mod in self.modules:
-            if mod.path == module:
+            if module in [mod.path, mod.locator]:
                 return mod
         raise ModuleNotFound(module)
 
@@ -47,6 +48,10 @@ class Module(object):
     def _get_functions(self):
         return [o for o in self.objects if isinstance(o, Function)]
     functions = property(_get_functions)
+
+    def _get_locator(self):
+        return re.sub(r'(/__init__)?\.py$', '', self.path).replace("/", ".")
+    locator = property(_get_locator)
 
 class Class(object):
     def __init__(self, name, methods):
