@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='pythoscope',
-    version="0.1",
+    version="0.2",
 
     author = 'Michal Kwiatkowski',
     author_email = 'constant.beta@gmail.com',
