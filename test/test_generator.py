@@ -1,3 +1,4 @@
+import os
 from fixture import TempIO
 
 from nose.tools import assert_equal, assert_not_equal, assert_raises
@@ -108,8 +109,17 @@ class TestGenerator:
         assert_equal("# test", read_file_contents(existing_file))
 
     def test_overwrites_existing_files_with_force_option(self):
-        project = Project(modules=[Module("project.py")])
+        project = Project(modules=[Module("project.py", [Function("function")])])
         destdir = TempIO()
         existing_file = destdir.putfile("test_project.py", "# test")
         generate_test_modules(project, ["project"], destdir, 'unittest', force=True)
         assert_not_equal("# test", read_file_contents(existing_file))
+
+    def test_doesnt_generate_test_files_with_no_test_cases(self):
+        project = Project(modules=[Module("project.py")])
+        destdir = TempIO()
+        test_file = os.path.join(destdir, "test_project.py")
+
+        generate_test_modules(project, ["project"], destdir, 'unittest')
+
+        assert not os.path.exists(test_file)

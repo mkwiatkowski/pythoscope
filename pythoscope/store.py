@@ -54,6 +54,13 @@ class Module(object):
         return re.sub(r'(/__init__)?\.py$', '', self.path).replace("/", ".")
     locator = property(_get_locator)
 
+    def has_test_cases(self):
+        "Return True if the Module will spawn at least one test case."
+        for object in self.testable_objects:
+            if object.testable_methods:
+                return True
+        return False
+
 class Class(object):
     def __init__(self, name, methods, bases=[]):
         self.name = name
