@@ -101,8 +101,8 @@ def generate(appname, args):
 
 MAIN_USAGE = """Pythoscope usage:
 
-    %s generate [options] [module names...]
     %s collect [options] [files and directories...]
+    %s generate [options] [module names...]
 
 Pythoscope has two modes of operation. It can either collect
 information about a Python project or generate test cases
