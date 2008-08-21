@@ -29,7 +29,7 @@ def generate_test_module(module, template="unittest"):
     return str(Template.Template(file=template_path(template),
                                  searchList=[mapping]))
 
-def generate_test_modules(project, modnames, destdir, template):
+def generate_test_modules(project, modnames, destdir, template, force=False):
     if os.path.exists(destdir):
         if not os.path.isdir(destdir):
             raise GenerationError("Destination is not a directory.")
@@ -40,6 +40,6 @@ def generate_test_modules(project, modnames, destdir, template):
         module = project[modname]
         test_path = os.path.join(destdir, module2testpath(module.path))
 
-        if not os.path.exists(test_path):
+        if not os.path.exists(test_path) or force:
             test_module = generate_test_module(module, template)
             write_string_to_file(test_module, test_path)

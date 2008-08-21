@@ -1,6 +1,6 @@
 from fixture import TempIO
 
-from nose.tools import assert_equal, assert_raises
+from nose.tools import assert_equal, assert_not_equal, assert_raises
 
 from pythoscope.generator import generate_test_module, generate_test_modules,\
      GenerationError
@@ -96,3 +96,10 @@ class TestGenerator:
         existing_file = destdir.putfile("test_project.py", "# test")
         generate_test_modules(project, ["project"], destdir, 'unittest')
         assert_equal("# test", read_file_contents(existing_file))
+
+    def test_overwrites_existing_files_with_force_option(self):
+        project = Project(modules=[Module("project.py")])
+        destdir = TempIO()
+        existing_file = destdir.putfile("test_project.py", "# test")
+        generate_test_modules(project, ["project"], destdir, 'unittest', force=True)
+        assert_not_equal("# test", read_file_contents(existing_file))

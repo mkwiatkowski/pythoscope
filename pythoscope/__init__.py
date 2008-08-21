@@ -28,6 +28,10 @@ All test files will be written to a single directory.
 Options:
   -d PATH, --destdir=PATH    Destination directory for generated test
                              files. Default is "pythoscope-tests/".
+  -f, --force                Go ahead and overwrite any existing
+                             test files. Default is to skip generation
+                             of tests for files that would otherwise
+                             get overwriten.
   -h, --help                 Show this help message and exit.
   -t TEMPLATE_NAME, --template=TEMPLATE_NAME
                              Name of a template to use (see below for
@@ -44,18 +48,22 @@ Available templates:
 
 def generate(appname, args):
     try:
-        options, args = getopt.getopt(sys.argv[2:], "d:ht:", ["destdir=", "help", "template="])
+        options, args = getopt.getopt(sys.argv[2:], "d:fht:",
+                                      ["destdir=", "force", "help", "template="])
     except getopt.GetoptError, err:
         print "Error:", err, "\n"
         print GENERATE_USAGE % appname
         sys.exit(1)
 
-    template = "unittest"
     destdir = "pythoscope-tests"
+    force = False
+    template = "unittest"
 
     for opt, value in options:
         if opt in ("-d", "--destdir"):
             destdir = value
+        elif opt in ("-f", "--force"):
+            force = True
         elif opt in ("-h", "--help"):
             print GENERATE_USAGE % appname
             sys.exit()
@@ -63,7 +71,7 @@ def generate(appname, args):
             template = value
 
     project = Project(filepath=PROJECT_FILE)
-    generate_test_modules(project, args, destdir, template)
+    generate_test_modules(project, args, destdir, template, force)
 
 def main():
     appname, mode, args = os.path.basename(sys.argv[0]), sys.argv[1], sys.argv[2:]
