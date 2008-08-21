@@ -79,6 +79,11 @@ class TestGenerator:
         result = generate_test_module(module)
         assert_doesnt_contain(result, "class TestExceptionClass(unittest.TestCase):")
 
+    def test_ignores_unittest_classes(self):
+        module = Module(objects=[Class('TestClass', ['test_method'], bases=['unittest.TestCase'])])
+        result = generate_test_module(module)
+        assert_doesnt_contain(result, "class TestTestClass(unittest.TestCase):")
+
     def test_uses_existing_destination_directory(self):
         destdir = TempIO()
         generate_test_modules(Project(), [], destdir, 'unittest')

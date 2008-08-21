@@ -111,6 +111,11 @@ class ClassWithTwoParents(Mother, Father):
     pass
 """
 
+class_inheriting_from_unittest_testcase = """
+class TestClass(unittest.TestCase):
+    pass
+"""
+
 class TestCollector:
     def test_collects_information_about_top_level_classes(self):
         info = collect_information_from_code(new_style_class)
@@ -190,3 +195,8 @@ class TestCollector:
         for case, expected in zip(suite, expected_results):
             info = collect_information_from_code(case)
             assert_equal(expected, info.classes[0].bases)
+
+    def test_correctly_collects_information_about_bases_from_other_modules(self):
+        info = collect_information_from_code(class_inheriting_from_unittest_testcase)
+
+        assert_equal(["unittest.TestCase"], info.classes[0].bases)

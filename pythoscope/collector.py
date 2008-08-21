@@ -18,6 +18,8 @@ def descend(node, visitor_type):
 def derive_class_name(node):
     if isinstance(node, compiler.ast.Name):
         return node.name
+    elif isinstance(node, compiler.ast.Getattr):
+        return "%s.%s" % (derive_class_name(node.expr), node.attrname)
     return "<unknown>"
 
 def derive_class_names(nodes):

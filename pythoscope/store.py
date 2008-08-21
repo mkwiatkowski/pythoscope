@@ -61,7 +61,11 @@ class Class(object):
         self.bases = bases
 
     def is_testable(self):
-        return 'Exception' not in self.bases
+        ignored_superclasses = ['Exception', 'unittest.TestCase']
+        for klass in ignored_superclasses:
+            if klass in self.bases:
+                return False
+        return True
 
     def testable_methods(self):
         return list(self._testable_methods_generator())
