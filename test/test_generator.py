@@ -1,10 +1,11 @@
 from fixture import TempIO
 
-from nose.tools import assert_raises
+from nose.tools import assert_equal, assert_raises
 
 from pythoscope.generator import generate_test_module, generate_test_modules,\
      GenerationError
 from pythoscope.store import Project, Module, Class, Function
+from pythoscope.util import read_file_contents
 
 from helper import assert_contains, assert_doesnt_contain
 
@@ -88,3 +89,10 @@ class TestGenerator:
         destdir = tmpdir.putfile("file", "its content")
         assert_raises(GenerationError,
                       lambda: generate_test_modules(Project(), [], destdir, 'unittest'))
+
+    def test_doesnt_overwrite_existing_files(self):
+        project = Project(modules=[Module("project.py")])
+        destdir = TempIO()
+        existing_file = destdir.putfile("test_project.py", "# test")
+        generate_test_modules(project, ["project"], destdir, 'unittest')
+        assert_equal("# test", read_file_contents(existing_file))

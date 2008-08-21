@@ -35,8 +35,11 @@ def generate_test_modules(project, modnames, destdir, template):
             raise GenerationError("Destination is not a directory.")
     else:
         os.makedirs(destdir)
+
     for modname in modnames:
         module = project[modname]
-        test_module = generate_test_module(module, template)
         test_path = os.path.join(destdir, module2testpath(module.path))
-        write_string_to_file(test_module, test_path)
+
+        if not os.path.exists(test_path):
+            test_module = generate_test_module(module, template)
+            write_string_to_file(test_module, test_path)
