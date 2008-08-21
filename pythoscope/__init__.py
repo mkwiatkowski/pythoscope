@@ -99,10 +99,28 @@ def generate(appname, args):
     project = Project(filepath=PROJECT_FILE)
     generate_test_modules(project, args, destdir, template, force)
 
-def main():
-    appname, mode, args = os.path.basename(sys.argv[0]), sys.argv[1], sys.argv[2:]
+MAIN_USAGE = """Pythoscope usage:
 
-    if mode == 'collect':
-        collect(appname, args)
-    elif mode == 'generate':
-        generate(appname, args)
+    %s generate [options] [module names...]
+    %s collect [options] [files and directories...]
+
+Pythoscope has two modes of operation. It can either collect
+information about a Python project or generate test cases
+based on previously gahered info. Use the --help option in
+combination with a mode name to get help on this particular
+mode.
+"""
+
+def main():
+    appname = os.path.basename(sys.argv[0])
+
+    try:
+        mode, args = sys.argv[1], sys.argv[2:]
+
+        if mode == 'collect':
+            collect(appname, args)
+        elif mode == 'generate':
+            generate(appname, args)
+    except IndexError:
+        print MAIN_USAGE % (appname, appname)
+        sys.exit(1)
