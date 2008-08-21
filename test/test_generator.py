@@ -74,6 +74,11 @@ class TestGenerator:
         result = generate_test_module(module)
         assert_doesnt_contain(result, "class TestSomeClass(unittest.TestCase):")
 
+    def test_ignores_private_functions(self):
+        module = Module(objects=[Function('_function')])
+        result = generate_test_module(module)
+        assert_doesnt_contain(result, "class")
+
     def test_ignores_exception_classes(self):
         module = Module(objects=[Class('ExceptionClass', ['method'], bases=['Exception'])])
         result = generate_test_module(module)

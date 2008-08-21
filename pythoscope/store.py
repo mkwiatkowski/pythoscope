@@ -85,4 +85,4 @@ class Function(object):
         return [underscore(self.name)]
 
     def is_testable(self):
-        return True
+        return not self.name.startswith('_')
