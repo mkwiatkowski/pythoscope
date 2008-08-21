@@ -48,7 +48,7 @@ Available templates:
 
 def generate(appname, args):
     try:
-        options, args = getopt.getopt(sys.argv[2:], "d:fht:",
+        options, args = getopt.getopt(args, "d:fht:",
                                       ["destdir=", "force", "help", "template="])
     except getopt.GetoptError, err:
         print "Error:", err, "\n"
