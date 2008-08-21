@@ -1,10 +1,14 @@
-from pythoscope.generator import generate_test_module
-from pythoscope.store import Module, Class, Function
+import os
+from fixture import TempIO
+
+from pythoscope.generator import generate_test_module, generate_test_modules
+from pythoscope.store import Project, Module, Class, Function
 
 from helper import assert_contains, assert_doesnt_contain
 
-# Let nose know that this isn't a test function.
+# Let nose know that those aren't test functions.
 generate_test_module.__test__ = False
+generate_test_modules.__test__ = False
 
 class TestGenerator:
     def test_generates_unittest_boilerplate(self):
@@ -71,3 +75,8 @@ class TestGenerator:
         module = Module(objects=[Class('ExceptionClass', ['method'], bases=['Exception'])])
         result = generate_test_module(module)
         assert_doesnt_contain(result, "class TestExceptionClass(unittest.TestCase):")
+
+    def test_uses_existing_destination_directory(self):
+        destdir = TempIO()
+        generate_test_modules(Project(), [], destdir, 'unittest')
+        # Simply make sure it doesn't raise any exceptions.

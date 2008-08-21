@@ -27,7 +27,8 @@ def generate_test_module(module, template="unittest"):
                                  searchList=[mapping]))
 
 def generate_test_modules(project, modnames, destdir, template):
-    os.makedirs(destdir)
+    if not os.path.exists(destdir):
+        os.makedirs(destdir)
     for modname in modnames:
         module = project[modname]
         test_module = generate_test_module(module, template)
