@@ -121,6 +121,10 @@ def main():
             collect(appname, args)
         elif mode == 'generate':
             generate(appname, args)
+        else:
+            print "Error: unknown mode %r\n" % mode
+            print MAIN_USAGE % (appname, appname)
+            sys.exit(1)
     except IndexError:
         print MAIN_USAGE % (appname, appname)
         sys.exit(1)
