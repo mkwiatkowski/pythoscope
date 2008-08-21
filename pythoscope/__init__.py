@@ -8,7 +8,33 @@ from store import Project
 
 PROJECT_FILE = ".pythoscope"
 
+COLLECT_USAGE = """Pythoscope collector usage:
+
+    %s collect [options] [files and directories...]
+
+This command will collect information about all listed Python
+modules. Listed paths can point to a Python module file or to
+a directory. Directories are processed recursively. All
+information is saved to .pythoscope file in the current
+working directory.
+
+Options:
+  -h, --help                 Show this help message and exit.
+"""
+
 def collect(appname, args):
+    try:
+        options, args = getopt.getopt(args, "h", ["help"])
+    except getopt.GetoptError, err:
+        print "Error:", err, "\n"
+        print COLLECT_USAGE % appname
+        sys.exit(1)
+
+    for opt, value in options:
+        if opt in ("-h", "--help"):
+            print COLLECT_USAGE % appname
+            sys.exit()
+
     project = Project(modules=collect_information_from_paths(args))
     project.save_to_file(PROJECT_FILE)
 
