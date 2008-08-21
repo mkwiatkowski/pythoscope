@@ -1,7 +1,9 @@
-import os
 from fixture import TempIO
 
-from pythoscope.generator import generate_test_module, generate_test_modules
+from nose.tools import assert_raises
+
+from pythoscope.generator import generate_test_module, generate_test_modules,\
+     GenerationError
 from pythoscope.store import Project, Module, Class, Function
 
 from helper import assert_contains, assert_doesnt_contain
@@ -80,3 +82,9 @@ class TestGenerator:
         destdir = TempIO()
         generate_test_modules(Project(), [], destdir, 'unittest')
         # Simply make sure it doesn't raise any exceptions.
+
+    def test_raises_an_exception_if_destdir_is_a_file(self):
+        tmpdir = TempIO()
+        destdir = tmpdir.putfile("file", "its content")
+        assert_raises(GenerationError,
+                      lambda: generate_test_modules(Project(), [], destdir, 'unittest'))

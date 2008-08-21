@@ -5,6 +5,9 @@ from Cheetah import Template
 
 from util import camelize, write_string_to_file
 
+class GenerationError(Exception):
+    pass
+
 def module2testpath(module):
     """Convert a module locator to a proper test filename.
 
@@ -27,7 +30,10 @@ def generate_test_module(module, template="unittest"):
                                  searchList=[mapping]))
 
 def generate_test_modules(project, modnames, destdir, template):
-    if not os.path.exists(destdir):
+    if os.path.exists(destdir):
+        if not os.path.isdir(destdir):
+            raise GenerationError("Destination is not a directory.")
+    else:
         os.makedirs(destdir)
     for modname in modnames:
         module = project[modname]
