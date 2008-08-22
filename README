@@ -1,0 +1,42 @@
+Installation
+------------
+
+Easiest way to get Pythoscope is via setuptools::
+
+ $ easy_install  pythoscope
+
+You can also download a source package from
+http://pythoscope.org/local--files/download/pythoscope-0.2.1.tar.gz.
+or get a copy of a development branch using `bazaar <http://bazaar-vcs.org/>`_::
+
+  bzr branch lp:pythoscope
+
+Usage
+-----
+
+You can use the tool through a single **pythoscope** command. To analyze
+one of your projects, type::
+
+ $ pythoscope  collect  path/to/your/project/
+
+It's only doing static analysis, and doesn't import your modules or
+execute your code in any way, so you're perfectly safe to run it on
+anything you want. After that, a file named **.pythoscope** will be
+created in the current directory. To generate test stubs based on your
+project, select files you want to generate tests for::
+
+ $ pythoscope  generate  path/to/your/project/specific/file.py  path/to/your/project/other/*.py
+
+Test files will be saved into **pythoscope-tests/** directory. Test cases
+are aggregated into TestCase classes. Currently each production class
+and each production function gets its own TestCase class.
+
+Some of the classes and functions are ignored by the generator - all
+which name begins with an underscore, exception classes, and some
+others.
+
+Generator itself is configurable to some extent, see::
+
+ $ pythoscope  generate  --help
+
+for more information on available options.

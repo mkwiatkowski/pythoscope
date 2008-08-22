@@ -1,0 +1,14 @@
+Changelog
+=========
+
+0.2.1
+-----
+
+Contains a packaging bug fix, which prevented users from using the tests
+cases generator and running internal pythoscope tests.
+
+0.2
+---
+
+First release, featuring static code analysis and generation of test
+stubs.
