@@ -12,14 +12,18 @@ class ModuleNotFound(Exception):
 class Project(object):
     def __init__(self, filepath, modules=[]):
         self.filepath = filepath
-        self.modules = []
+        self._modules = {}
         self._read_from_file()
-        self.modules.extend(modules)
+        self.add_modules(modules)
 
     def save(self):
         fd = open(self.filepath, 'w')
-        pickle.dump(self.modules, fd)
+        pickle.dump(self._modules.values(), fd)
         fd.close()
+
+    def add_modules(self, modules):
+        for module in modules:
+            self._modules[module.path] = module
 
     def _read_from_file(self):
         """Try reading from the project file. The file may not exist for
@@ -27,7 +31,7 @@ class Project(object):
         """
         try:
             fd = open(self.filepath)
-            self.modules.extend(pickle.load(fd))
+            self.add_modules(pickle.load(fd))
             fd.close()
         except IOError:
             pass
@@ -38,8 +42,16 @@ class Project(object):
                 return mod
         raise ModuleNotFound(module)
 
+    def _get_modules(self):
+        return self._modules.values()
+    modules = property(_get_modules)
+
 class Module(object):
-    def __init__(self, path="<code>", objects=[], errors=[]):
+    def __init__(self, path=None, objects=[], errors=[]):
+        # Path has to be unique, otherwise project won't be able to
+        # differentiate between modules.
+        if path is None:
+            path = "<code %s>" % id(self)
         self.path = path
         self.objects = objects
         self.errors = errors

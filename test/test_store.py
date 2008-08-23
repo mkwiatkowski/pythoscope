@@ -4,6 +4,8 @@ from nose.tools import assert_equal, assert_raises
 
 from pythoscope.store import Project, Module, Class, Function, ModuleNotFound
 
+from helper import assert_length
+
 class TestProject:
     def test_can_be_saved_and_restored_from_file(self):
         tmpdir = TempIO()
@@ -40,3 +42,13 @@ class TestProject:
 
         for path, locator in zip(paths, locators):
             assert_equal(path, project[locator].path)
+
+    def test_replaces_old_module_objects_with_new_ones_during_add_modules(self):
+        modules = map(Module, ["module.py", "sub/dir/module.py", "other/module.py"])
+        new_module = Module("other/module.py")
+
+        project = Project('pfile', modules)
+        project.add_modules([new_module])
+
+        assert_length(project.modules, 3)
+        assert project["other/module.py"] is new_module
