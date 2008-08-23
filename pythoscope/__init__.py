@@ -4,7 +4,7 @@ import sys
 
 from collector import collect_information_from_paths
 from generator import generate_test_modules
-from store import Project
+from store import Project, ModuleNotFound
 
 PROJECT_FILE = ".pythoscope"
 
@@ -97,7 +97,10 @@ def generate(appname, args):
             template = value
 
     project = Project(PROJECT_FILE)
-    generate_test_modules(project, args, destdir, template, force)
+    try:
+        generate_test_modules(project, args, destdir, template, force)
+    except ModuleNotFound, err:
+        print "Error: Couldn't find information on module %r, try running 'collect' on it first." % err.module
 
 MAIN_USAGE = """Pythoscope usage:
 
