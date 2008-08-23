@@ -35,8 +35,8 @@ def collect(appname, args):
             print COLLECT_USAGE % appname
             sys.exit()
 
-    project = Project(modules=collect_information_from_paths(args))
-    project.save_to_file(PROJECT_FILE)
+    project = Project(PROJECT_FILE, modules=collect_information_from_paths(args))
+    project.save()
 
 GENERATE_USAGE = """Pythoscope generator usage:
 
@@ -96,7 +96,7 @@ def generate(appname, args):
         elif opt in ("-t", "--template"):
             template = value
 
-    project = Project(filepath=PROJECT_FILE)
+    project = Project(PROJECT_FILE)
     generate_test_modules(project, args, destdir, template, force)
 
 MAIN_USAGE = """Pythoscope usage:

@@ -92,31 +92,31 @@ class TestGenerator:
 
     def test_uses_existing_destination_directory(self):
         destdir = TempIO()
-        generate_test_modules(Project(), [], destdir, 'unittest')
+        generate_test_modules(Project('pfile'), [], destdir, 'unittest')
         # Simply make sure it doesn't raise any exceptions.
 
     def test_raises_an_exception_if_destdir_is_a_file(self):
         tmpdir = TempIO()
         destdir = tmpdir.putfile("file", "its content")
         assert_raises(GenerationError,
-                      lambda: generate_test_modules(Project(), [], destdir, 'unittest'))
+                      lambda: generate_test_modules(Project('pfile'), [], destdir, 'unittest'))
 
     def test_doesnt_overwrite_existing_files(self):
-        project = Project(modules=[Module("project.py")])
+        project = Project('pfile', modules=[Module("project.py")])
         destdir = TempIO()
         existing_file = destdir.putfile("test_project.py", "# test")
         generate_test_modules(project, ["project"], destdir, 'unittest')
         assert_equal("# test", read_file_contents(existing_file))
 
     def test_overwrites_existing_files_with_force_option(self):
-        project = Project(modules=[Module("project.py", [Function("function")])])
+        project = Project('pfile', modules=[Module("project.py", [Function("function")])])
         destdir = TempIO()
         existing_file = destdir.putfile("test_project.py", "# test")
         generate_test_modules(project, ["project"], destdir, 'unittest', force=True)
         assert_not_equal("# test", read_file_contents(existing_file))
 
     def test_doesnt_generate_test_files_with_no_test_cases(self):
-        project = Project(modules=[Module("project.py")])
+        project = Project('pfile', modules=[Module("project.py")])
         destdir = TempIO()
         test_file = os.path.join(destdir, "test_project.py")
 

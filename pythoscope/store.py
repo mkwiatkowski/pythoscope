@@ -10,21 +10,27 @@ class ModuleNotFound(Exception):
         self.module = module
 
 class Project(object):
-    def __init__(self, modules=[], filepath=None):
-        if filepath:
-            self._read_from_file(filepath)
-        else:
-            self.modules = modules
+    def __init__(self, filepath, modules=[]):
+        self.filepath = filepath
+        self.modules = []
+        self._read_from_file()
+        self.modules.extend(modules)
 
-    def save_to_file(self, filepath):
-        fd = open(filepath, 'w')
+    def save(self):
+        fd = open(self.filepath, 'w')
         pickle.dump(self.modules, fd)
         fd.close()
 
-    def _read_from_file(self, filepath):
-        fd = open(filepath)
-        self.modules = pickle.load(fd)
-        fd.close()
+    def _read_from_file(self):
+        """Try reading from the project file. The file may not exist for
+        projects that are analyzed the first time and that's OK.
+        """
+        try:
+            fd = open(self.filepath)
+            self.modules.extend(pickle.load(fd))
+            fd.close()
+        except IOError:
+            pass
 
     def __getitem__(self, module):
         for mod in self.modules:
