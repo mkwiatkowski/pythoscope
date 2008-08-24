@@ -18,7 +18,8 @@ def module2testpath(module):
     >>> module2testpath("pythoscope/__init__.py")
     'test_pythoscope.py'
     """
-    return "test_" + re.sub(r'/__init__.py$', '.py', module).replace("/", "_")
+    return "test_" + re.sub(r'%s__init__.py$' % os.path.sep, '.py', module).\
+        replace(os.path.sep, "_")
 
 def template_path(name):
     "Return a path to the given template."

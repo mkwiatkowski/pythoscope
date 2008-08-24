@@ -4,11 +4,11 @@ from fixture import TempIO
 from nose.tools import assert_equal, assert_not_equal, assert_raises
 
 from pythoscope.generator import generate_test_module, generate_test_modules,\
-     GenerationError
+     GenerationError, module2testpath
 from pythoscope.store import Project, Module, Class, Function
 from pythoscope.util import read_file_contents
 
-from helper import assert_contains, assert_doesnt_contain
+from helper import assert_contains, assert_doesnt_contain, CustomSeparator
 
 # Let nose know that those aren't test functions.
 generate_test_module.__test__ = False
@@ -123,3 +123,10 @@ class TestGenerator:
         generate_test_modules(project, ["project"], destdir, 'unittest')
 
         assert not os.path.exists(test_file)
+
+class TestGenerator(CustomSeparator):
+    def test_module2testpath_uses_system_specific_path_separator(self):
+        assert_equal("test_pythoscope_store.py",
+                     module2testpath("pythoscope#store.py"))
+        assert_equal("test_pythoscope.py",
+                     module2testpath("pythoscope#__init__.py"))

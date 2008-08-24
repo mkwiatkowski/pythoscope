@@ -36,3 +36,10 @@ def assert_single_function(info, name):
     assert_length(info.functions, 1)
     assert_equal(name, info.functions[0].name)
 
+class CustomSeparator:
+    def setUp(self):
+        self.old_sep = os.path.sep
+        os.path.sep = '#'
+
+    def tearDown(self):
+        os.path.sep = self.old_sep

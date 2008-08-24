@@ -4,7 +4,7 @@ from nose.tools import assert_equal, assert_raises
 
 from pythoscope.store import Project, Module, Class, Function, ModuleNotFound
 
-from helper import assert_length
+from helper import assert_length, CustomSeparator
 
 class TestProject:
     def test_can_be_saved_and_restored_from_file(self):
@@ -52,3 +52,8 @@ class TestProject:
 
         assert_length(project.modules, 3)
         assert project["other/module.py"] is new_module
+
+class TestStoreWithCustomSeparator(CustomSeparator):
+    def test_uses_system_specific_path_separator(self):
+        module = Module("some#path.py")
+        assert_equal("some.path", module.locator)

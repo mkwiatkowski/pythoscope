@@ -1,3 +1,4 @@
+import os
 import pickle
 import re
 
@@ -69,7 +70,8 @@ class Module(object):
     functions = property(_get_functions)
 
     def _get_locator(self):
-        return re.sub(r'(/__init__)?\.py$', '', self.path).replace("/", ".")
+        return re.sub(r'(%s__init__)?\.py$' % os.path.sep, '', self.path).\
+            replace(os.path.sep, ".")
     locator = property(_get_locator)
 
     def has_test_cases(self):
