@@ -15,7 +15,7 @@ class TestProject:
 
         project = Project(filepath, modules)
         project.save()
-        project = Project(filepath)
+        project = Project.from_file(filepath)
 
         assert_equal(2, len(project.modules))
         assert_equal(2, len(project['good_module'].objects))
@@ -26,19 +26,19 @@ class TestProject:
 
     def test_can_be_queried_for_modules_by_their_path(self):
         paths = ["module.py", "sub/dir/module.py", "package/__init__.py"]
-        project = Project('pfile', modules=map(Module, paths))
+        project = Project(modules=map(Module, paths))
 
         for path in paths:
             assert_equal(path, project[path].path)
 
     def test_raises_module_not_found_exception_when_no_module_like_that_is_present(self):
-        project = Project('pfile')
+        project = Project()
         assert_raises(ModuleNotFound, lambda: project["whatever"])
 
     def test_can_be_queried_for_modules_by_their_locator(self):
         paths = ["module.py", "sub/dir/module.py", "package/__init__.py"]
         locators = ["module", "sub.dir.module", "package"]
-        project = Project('pfile', modules=map(Module, paths))
+        project = Project(modules=map(Module, paths))
 
         for path, locator in zip(paths, locators):
             assert_equal(path, project[locator].path)
@@ -47,7 +47,7 @@ class TestProject:
         modules = map(Module, ["module.py", "sub/dir/module.py", "other/module.py"])
         new_module = Module("other/module.py")
 
-        project = Project('pfile', modules)
+        project = Project(modules=modules)
         project.add_modules([new_module])
 
         assert_length(project.modules, 3)

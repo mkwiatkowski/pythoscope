@@ -96,7 +96,7 @@ def generate(appname, args):
         elif opt in ("-t", "--template"):
             template = value
 
-    project = Project(PROJECT_FILE)
+    project = Project.from_file(PROJECT_FILE)
     try:
         generate_test_modules(project, args, destdir, template, force)
     except ModuleNotFound, err:
