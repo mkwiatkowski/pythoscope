@@ -124,7 +124,7 @@ class TestGenerator:
 
         assert not os.path.exists(test_file)
 
-class TestGenerator(CustomSeparator):
+class TestGeneratorWithCustomSeparator(CustomSeparator):
     def test_module2testpath_uses_system_specific_path_separator(self):
         assert_equal("test_pythoscope_store.py",
                      module2testpath("pythoscope#store.py"))
