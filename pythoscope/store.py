@@ -2,7 +2,7 @@ import os
 import pickle
 import re
 
-from util import underscore
+from util import underscore, read_file_contents, write_string_to_file
 
 
 class ModuleNotFound(Exception):
@@ -113,3 +113,69 @@ class Function(object):
 
     def is_testable(self):
         return not self.name.startswith('_')
+
+class TestModule(object):
+    def __init__(self, path, application_module):
+        self.path = path
+        self.application_module = application_module
+
+        self.imports = ""
+        self.test_cases = ""
+        self.main_snippet = ""
+        self._read_from_file()
+
+    def ensure_main_snippet(self, main_snippet, force=False):
+        """Make sure the main_snippet is present. Won't overwrite the snippet
+        unless force flag is set.
+        """
+        if not self.main_snippet or force:
+            self.main_snippet = main_snippet
+
+    def ensure_imports(self, required_imports):
+        "Make sure that all required imports are present."
+        for imp in required_imports:
+            self._ensure_import(imp)
+
+    def _ensure_import(self, import_desc):
+        if not self._contains_import(import_desc):
+            self._add_import(import_desc)
+
+    def _import_stmt(self, import_desc):
+        if isinstance(import_desc, tuple):
+            return 'from %s import %s' % import_desc
+        else:
+            return 'import %s' % import_desc
+
+    def _contains_import(self, import_desc):
+        return self._import_stmt(import_desc) in self.imports
+
+    def _add_import(self, import_desc):
+        if self.imports:
+            self.imports += "\n"
+        self.imports += self._import_stmt(import_desc)
+
+    def add_test_cases(self, test_cases):
+        if self.test_cases:
+            self.test_cases += "\n"
+        self.test_cases += test_cases
+
+    def _read_from_file(self):
+        try:
+            contents = read_file_contents(self.path)
+            # Divide contents into imports, test_cases and main_snippet.
+            regex = r"^(.*?)(class.+?)(if __name__ == '__main__':.*)?$"
+            match = re.match(regex, contents, re.DOTALL)
+            if match:
+                self.imports, self.test_cases, self.main_snippet = match.groups()
+                if self.main_snippet is None:
+                    self.main_snippet = ""
+        except IOError:
+            pass
+
+    def get_content(self):
+        return '%s\n\n%s\n\n%s\n' % (self.imports.strip(), self.test_cases.strip(), self.main_snippet.strip())
+
+    def save(self):
+        # Don't save the test file unless it has at least one test case.
+        if self.test_cases:
+            write_string_to_file(self.get_content(), self.path)

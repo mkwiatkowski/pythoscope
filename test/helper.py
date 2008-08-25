@@ -2,6 +2,8 @@ import os
 
 from nose.tools import assert_equal
 
+from pythoscope.generator import template2generator
+from pythoscope.store import TestModule
 from pythoscope.util import read_file_contents
 
 
@@ -43,3 +45,16 @@ class CustomSeparator:
 
     def tearDown(self):
         os.path.sep = self.old_sep
+
+class TestModuleInMemory(TestModule):
+    def _read_from_file(self):
+        pass
+    def save(self):
+        pass
+
+def generate_single_test_module(module, template='unittest'):
+    generator = template2generator[template]
+    test_module = TestModuleInMemory('whatever', module)
+    generator.update_test_module(test_module)
+    return test_module.get_content()
+generate_single_test_module.__test__ = False

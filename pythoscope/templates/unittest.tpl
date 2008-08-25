@@ -1,5 +1,3 @@
-import unittest
-
 #for $object in $module.testable_objects
 #if $object.testable_methods
 class Test${camelize(object.name)}(unittest.TestCase):
@@ -10,5 +8,3 @@ class Test${camelize(object.name)}(unittest.TestCase):
     #end for
 #end if
 #end for
-if __name__ == '__main__':
-    unittest.main()

@@ -1,5 +1,3 @@
-from nose import SkipTest
-
 #for $object in $module.testable_objects
 #if $object.testable_methods
 class Test${camelize(object.name)}:
