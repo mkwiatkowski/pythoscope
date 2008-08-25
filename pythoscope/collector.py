@@ -30,7 +30,7 @@ class TopLevelVisitor(ASTVisitor):
         self.objects = []
 
     def visitClass(self, node):
-        visitor = descend(node, ClassVisitor)
+        visitor = descend(node.code, ClassVisitor)
         self.objects.append(Class(node.name,
                                   visitor.methods,
                                   derive_class_names(node.bases)))
@@ -46,6 +46,10 @@ class TopLevelVisitor(ASTVisitor):
 class ClassVisitor(ASTVisitor):
     def __init__(self):
         self.methods = []
+
+    def visitClass(self, node):
+        # Ignore definitions of subclasses.
+        pass
 
     def visitFunction(self, node):
         self.methods.append(node.name)

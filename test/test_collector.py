@@ -116,6 +116,19 @@ class TestClass(unittest.TestCase):
     pass
 """
 
+class_with_inner_class = """
+class OuterClass(object):
+    def __init__(self):
+        pass
+    def outer_class_method(self):
+        pass
+    class InnerClass(object):
+        def __init__(self):
+            pass
+        def inner_class_method(self):
+            pass
+"""
+
 class TestCollector:
     def test_collects_information_about_top_level_classes(self):
         info = collect_information_from_code(new_style_class)
@@ -200,3 +213,9 @@ class TestCollector:
         info = collect_information_from_code(class_inheriting_from_unittest_testcase)
 
         assert_equal(["unittest.TestCase"], info.classes[0].bases)
+
+    def test_ignores_existance_of_any_inner_class_methods(self):
+        info = collect_information_from_code(class_with_inner_class)
+
+        assert_single_class(info, "OuterClass")
+        assert_equal(["__init__", "outer_class_method"], info.classes[0].methods)
