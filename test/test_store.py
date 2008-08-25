@@ -10,19 +10,19 @@ class TestProject:
     def test_can_be_saved_and_restored_from_file(self):
         tmpdir = TempIO()
         filepath = os.path.join(tmpdir, "project.pickle")
-        modules = [Module(objects=[Class("AClass", ["amethod"]), Function("afunction")]),
-                   Module(errors=["Syntax error"])]
+        modules = [Module(path='good_module.py', objects=[Class("AClass", ["amethod"]), Function("afunction")]),
+                   Module(path='bad_module.py', errors=["Syntax error"])]
 
         project = Project(filepath, modules)
         project.save()
         project = Project(filepath)
 
         assert_equal(2, len(project.modules))
-        assert_equal(2, len(project.modules[0].objects))
-        assert_equal("AClass", project.modules[0].classes[0].name)
-        assert_equal(["amethod"], project.modules[0].classes[0].methods)
-        assert_equal("afunction", project.modules[0].functions[0].name)
-        assert_equal(["Syntax error"], project.modules[1].errors)
+        assert_equal(2, len(project['good_module'].objects))
+        assert_equal("AClass", project['good_module'].classes[0].name)
+        assert_equal(["amethod"], project['good_module'].classes[0].methods)
+        assert_equal("afunction", project['good_module'].functions[0].name)
+        assert_equal(["Syntax error"], project['bad_module'].errors)
 
     def test_can_be_queried_for_modules_by_their_path(self):
         paths = ["module.py", "sub/dir/module.py", "package/__init__.py"]
