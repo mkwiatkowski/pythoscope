@@ -110,13 +110,6 @@ class TestGenerator:
         generate_test_modules(project, ["project"], destdir, 'unittest')
         assert_equal(existing_test_case, read_file_contents(existing_file))
 
-    def test_overwrites_existing_files_with_force_option(self):
-        existing_test_case = "# test"
-        project, destdir, existing_file = self._create_project_with_test_file(existing_test_case, [Function("function")])
-
-        generate_test_modules(project, ["project"], destdir, 'unittest', force=True)
-        assert_not_equal(existing_test_case, read_file_contents(existing_file))
-
     def test_doesnt_generate_test_files_with_no_test_cases(self):
         project = Project(modules=[Module("project.py")])
         destdir = TempIO()
@@ -157,8 +150,8 @@ class TestGenerator:
     def _create_project_with_test_module(self, objects, test_cases="", imports=""):
         module = Module("project.py", objects)
         destdir = TempIO()
-        test_module = TestModule(os.path.join(destdir, "test_project.py"),
-                                 module, imports, test_cases)
+        test_module = TestModule(path=os.path.join(destdir, "test_project.py"),
+                                 body=test_cases, imports=imports)
         project = Project(modules=[module, test_module])
         return project, destdir, test_module
 

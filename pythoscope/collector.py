@@ -96,9 +96,9 @@ def collect_information_from_test_code(code):
     regex = r"^(.*?)(class.+?)(if __name__ == '__main__':.*)?$"
     match = re.match(regex, code, re.DOTALL)
     if match:
-        imports, test_cases, main_snippet = match.groups()
+        imports, body, main_snippet = match.groups()
         if main_snippet is None:
             main_snippet = ""
 
-    return TestModule(imports=imports, test_cases=test_cases,
+    return TestModule(body=body, imports=imports,
                       main_snippet=main_snippet)
