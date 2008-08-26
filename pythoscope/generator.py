@@ -10,7 +10,9 @@ class GenerationError(Exception):
     pass
 
 class UnknownTemplate(Exception):
-    pass
+    def __init__(self, template):
+        Exception.__init__(self, "Couldn't find template %r." % template)
+        self.template = template
 
 def module2testpath(module):
     """Convert a module locator to a proper test filename.
