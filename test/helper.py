@@ -47,13 +47,8 @@ class CustomSeparator:
     def tearDown(self):
         os.path.sep = self.old_sep
 
-class TestModuleInMemory(TestModule):
-    def _save(self):
-        pass
-
 def generate_single_test_module(module, template='unittest'):
-    test_module = TestModuleInMemory('whatever')
-    project = Project(modules=[module, test_module])
+    project = Project(modules=[module])
     add_tests_to_project(project, [module.path], TempIO(), template, False)
-    return test_module.get_content()
+    return project._get_test_modules()[0].get_content()
 generate_single_test_module.__test__ = False

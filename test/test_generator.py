@@ -4,8 +4,7 @@ import re
 from fixture import TempIO
 from nose.tools import assert_equal, assert_not_equal, assert_raises
 
-from pythoscope.generator import add_tests_to_project, GenerationError,\
-     module2testpath
+from pythoscope.generator import add_tests_to_project, GenerationError
 from pythoscope.store import Project, Module, Class, Function, TestModule
 from pythoscope.util import read_file_contents
 
@@ -152,6 +151,30 @@ class TestGenerator:
         assert_length(project_test_cases, 1)
         assert_equal(project_test_cases[0].associated_modules, [module])
 
+    def test_creates_new_test_module_if_no_of_the_existing_match(self):
+        destdir = TempIO()
+        module = Module("project.py", objects=[Function("function")])
+        other_test = TestModule(os.path.join(destdir, "test_other.py"))
+        project = Project(modules=[module, other_test])
+
+        add_tests_to_project(project, ["project"], destdir, 'unittest')
+
+        project_test_cases = list(project.test_cases_iter())
+        assert_length(project_test_cases, 1)
+        assert_length(other_test.test_cases, 0)
+
+    def test_chooses_the_right_existing_test_module_for_new_test_case(self):
+        destdir = TempIO()
+        module = Module("project.py", objects=[Function("function")])
+        project_test = TestModule(os.path.join(destdir, "test_project.py"))
+        other_test = TestModule(os.path.join(destdir, "test_other.py"))
+        project = Project(modules=[module, other_test, project_test])
+
+        add_tests_to_project(project, ["project"], destdir, 'unittest')
+
+        assert_length(project_test.test_cases, 1)
+        assert_length(other_test.test_cases, 0)
+
     def _create_project_with_test_file(self, test_contents, objects=[]):
         project = Project(modules=[Module("project.py", objects)])
         destdir = TempIO()
@@ -165,10 +188,3 @@ class TestGenerator:
                                  body=test_cases, imports=imports)
         project = Project(modules=[module, test_module])
         return project, destdir, test_module
-
-class TestGeneratorWithCustomSeparator(CustomSeparator):
-    def test_module2testpath_uses_system_specific_path_separator(self):
-        assert_equal("test_pythoscope_store.py",
-                     module2testpath("pythoscope#store.py"))
-        assert_equal("test_pythoscope.py",
-                     module2testpath("pythoscope#__init__.py"))

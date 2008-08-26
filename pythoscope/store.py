@@ -12,7 +12,22 @@ class ModuleNotFound(Exception):
 
 def test_module_name_for_test_case(test_case):
     "Come up with a name for a test module which will contain given test case."
+    if test_case.associated_modules:
+        return module_path_to_test_path(test_case.associated_modules[0].path)
     return "test_foo.py" # TODO
+
+def module_path_to_test_path(module):
+    """Convert a module locator to a proper test filename.
+
+    >>> module_path_to_test_path("module.py")
+    'test_module.py'
+    >>> module_path_to_test_path("pythoscope/store.py")
+    'test_pythoscope_store.py'
+    >>> module_path_to_test_path("pythoscope/__init__.py")
+    'test_pythoscope.py'
+    """
+    return "test_" + re.sub(r'%s__init__.py$' % os.path.sep, '.py', module).\
+        replace(os.path.sep, "_")
 
 class Project(object):
     def from_file(cls, filepath):
@@ -75,14 +90,25 @@ class Project(object):
         """Find the best place for the new test case to be added. If there is
         no such place in existing test modules, a new one will be created.
         """
-        try:
-            return self._get_test_modules()[0]
-        except IndexError:
-            test_path = os.path.join(test_directory,
-                                     test_module_name_for_test_case(test_case))
-            test_module = TestModule(test_path)
-            self.add_module(test_module)
-            return test_module
+        return self._find_test_module(test_case) or \
+               self._create_test_module_for(test_case, test_directory)
+
+    def _create_test_module_for(self, test_case, test_directory):
+        test_path = os.path.join(test_directory,
+                                 test_module_name_for_test_case(test_case))
+        test_module = TestModule(test_path)
+        self.add_module(test_module)
+        return test_module
+
+    def _find_test_module(self, test_case):
+        """Find test module that will be good for the given test case.
+
+        Currently only module names are used as a criteria.
+        """
+        for module in test_case.associated_modules:
+            for test_module in self._get_test_modules():
+                if test_module.path.endswith(module_path_to_test_path(module.path)):
+                    return test_module
 
     def __getitem__(self, module):
         for mod in self.modules:

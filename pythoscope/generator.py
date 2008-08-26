@@ -14,19 +14,6 @@ class UnknownTemplate(Exception):
         Exception.__init__(self, "Couldn't find template %r." % template)
         self.template = template
 
-def module2testpath(module):
-    """Convert a module locator to a proper test filename.
-
-    >>> module2testpath("module.py")
-    'test_module.py'
-    >>> module2testpath("pythoscope/store.py")
-    'test_pythoscope_store.py'
-    >>> module2testpath("pythoscope/__init__.py")
-    'test_pythoscope.py'
-    """
-    return "test_" + re.sub(r'%s__init__.py$' % os.path.sep, '.py', module).\
-        replace(os.path.sep, "_")
-
 class TestGenerator(object):
     def from_template(cls, template):
         if template == 'unittest':
