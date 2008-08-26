@@ -120,6 +120,12 @@ class Function(object):
     def is_testable(self):
         return not self.name.startswith('_')
 
+def import_stmt(import_desc):
+    if isinstance(import_desc, tuple):
+        return 'from %s import %s' % import_desc
+    else:
+        return 'import %s' % import_desc
+
 class TestModule(Localizable):
     def __init__(self, path=None, application_module=None, imports="",
                  test_cases="", main_snippet=""):
@@ -147,28 +153,24 @@ class TestModule(Localizable):
         for imp in required_imports:
             self._ensure_import(imp)
 
-    def _ensure_import(self, import_desc):
-        if not self._contains_import(import_desc):
-            self._add_import(import_desc)
-
-    def _import_stmt(self, import_desc):
-        if isinstance(import_desc, tuple):
-            return 'from %s import %s' % import_desc
-        else:
-            return 'import %s' % import_desc
-
-    def _contains_import(self, import_desc):
-        return self._import_stmt(import_desc) in self.imports
-
-    def _add_import(self, import_desc):
-        if self.imports:
-            self.imports += "\n"
-        self.imports += self._import_stmt(import_desc)
-
     def add_test_cases(self, test_cases):
         if self.test_cases:
             self.test_cases += "\n"
         self.test_cases += test_cases
 
     def get_content(self):
-        return '%s\n\n%s\n\n%s\n' % (self.imports.strip(), self.test_cases.strip(), self.main_snippet.strip())
+        return '%s\n\n%s\n\n%s\n' % (self.imports.strip(),
+                                     self.test_cases.strip(),
+                                     self.main_snippet.strip())
+
+    def _ensure_import(self, import_desc):
+        if not self._contains_import(import_desc):
+            self._add_import(import_desc)
+
+    def _contains_import(self, import_desc):
+        return import_stmt(import_desc) in self.imports
+
+    def _add_import(self, import_desc):
+        if self.imports:
+            self.imports += "\n"
+        self.imports += import_stmt(import_desc)
