@@ -2,7 +2,7 @@ import os
 import pickle
 import re
 
-from util import underscore, write_string_to_file
+from util import max_by_not_zero, underscore, write_string_to_file
 
 
 class ModuleNotFound(Exception):
@@ -61,7 +61,6 @@ class Project(object):
 
     def add_module(self, module):
         self._modules[module.path] = module
-        # TODO: match test modules with application modules here.
 
     def add_test_cases(self, test_cases, test_directory, force):
         for test_case in test_cases:
@@ -106,9 +105,28 @@ class Project(object):
         Currently only module names are used as a criteria.
         """
         for module in test_case.associated_modules:
-            for test_module in self._get_test_modules():
-                if test_module.path.endswith(module_path_to_test_path(module.path)):
-                    return test_module
+            test_module = self._find_associate_test_module_by_name(module) or \
+                          self._find_associate_test_module_by_test_cases(module)
+            if test_module:
+                return test_module
+
+    def _find_associate_test_module_by_name(self, module):
+        """Try to find a test module with name corresponding to the name of
+        the application module.
+        """
+        for test_module in self._get_test_modules():
+            if test_module.path.endswith(module_path_to_test_path(module.path)):
+                return test_module
+
+    def _find_associate_test_module_by_test_cases(self, module):
+        """Try to find a test module with most test cases for the given
+        application module.
+        """
+        def test_cases_number(test_module):
+            return len(test_module.get_test_cases_for_module(module))
+        test_module = max_by_not_zero(test_cases_number, self._get_test_modules())
+        if test_module:
+            return test_module
 
     def __getitem__(self, module):
         for mod in self.modules:
@@ -220,6 +238,11 @@ class TestModule(Localizable):
         return '%s\n\n%s\n\n%s\n' % (self.imports.strip(),
                                      self._get_body(),
                                      self.main_snippet.strip())
+
+    def get_test_cases_for_module(self, module):
+        """Return all test cases that are associated with given module.
+        """
+        return [tc for tc in self.test_cases if module in tc.associated_modules]
 
     def _ensure_main_snippet(self, main_snippet, force=False):
         """Make sure the main_snippet is present. Won't overwrite the snippet

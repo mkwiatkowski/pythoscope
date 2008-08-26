@@ -54,3 +54,28 @@ def write_string_to_file(string, filename):
 
 def python_sources_below(path):
     return [os.path.join(path, entry) for entry in os.listdir(path) if entry.endswith(".py")]
+
+def max_by_not_zero(func, collection):
+    """Return the element of a collection for which func returns the highest
+    value, greater than 0.
+
+    Return None if there is no such value.
+
+    >>> max_by_not_zero(len, ["abc", "d", "ef"])
+    'abc'
+    >>> max_by_not_zero(lambda x: x, [0, 0, 0, 0]) is None
+    True
+    >>> max_by_not_zero(None, []) is None
+    True
+    """
+    if not collection:
+        return None
+
+    def annotate(element):
+        return (func(element), element)
+
+    highest = max(map(annotate, collection))
+    if highest and highest[0] > 0:
+        return highest[1]
+    else:
+        return None
