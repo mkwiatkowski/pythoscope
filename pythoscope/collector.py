@@ -1,11 +1,15 @@
 import compiler
 import compiler.ast
 import os.path
+import re
 
 from compiler.visitor import ASTVisitor
 
-from store import Module, Class, Function
+from store import Module, Class, Function, TestModule
 from util import read_file_contents, python_sources_below
+
+def is_test_module_path(path):
+    return re.search(r'(^test_)|(_test.py$)', path)
 
 def descend(node, visitor_type):
     """Walk over the AST using a visitor of a given type and return the visitor
@@ -24,6 +28,7 @@ def derive_class_name(node):
 
 def derive_class_names(nodes):
     return map(derive_class_name, nodes)
+
 
 class TopLevelVisitor(ASTVisitor):
     def __init__(self):
@@ -69,7 +74,12 @@ def collect_information_from_paths(paths):
     return modules
 
 def collect_information_from_module(path):
-    module = collect_information_from_code(read_file_contents(path))
+    if is_test_module_path(path):
+        collect_from_code = collect_information_from_test_code
+    else:
+        collect_from_code = collect_information_from_code
+
+    module = collect_from_code(read_file_contents(path))
     module.path = path
     return module
 
@@ -81,3 +91,14 @@ def collect_information_from_code(code):
     visitor = descend(tree, TopLevelVisitor)
 
     return Module(objects=visitor.objects)
+
+def collect_information_from_test_code(code):
+    regex = r"^(.*?)(class.+?)(if __name__ == '__main__':.*)?$"
+    match = re.match(regex, code, re.DOTALL)
+    if match:
+        imports, test_cases, main_snippet = match.groups()
+        if main_snippet is None:
+            main_snippet = ""
+
+    return TestModule(imports=imports, test_cases=test_cases,
+                      main_snippet=main_snippet)

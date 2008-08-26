@@ -39,6 +39,7 @@ class Project(object):
     def add_modules(self, modules):
         for module in modules:
             self._modules[module.path] = module
+            # TODO: match test modules with application modules here.
 
     def __getitem__(self, module):
         for mod in self.modules:
@@ -50,7 +51,14 @@ class Project(object):
         return self._modules.values()
     modules = property(_get_modules)
 
-class Module(object):
+class Localizable(object):
+    "Any object with a path attribute."
+    def _get_locator(self):
+        return re.sub(r'(%s__init__)?\.py$' % os.path.sep, '', self.path).\
+            replace(os.path.sep, ".")
+    locator = property(_get_locator)
+
+class Module(Localizable):
     def __init__(self, path=None, objects=[], errors=[]):
         # Path has to be unique, otherwise project won't be able to
         # differentiate between modules.
@@ -71,11 +79,6 @@ class Module(object):
     def _get_functions(self):
         return [o for o in self.objects if isinstance(o, Function)]
     functions = property(_get_functions)
-
-    def _get_locator(self):
-        return re.sub(r'(%s__init__)?\.py$' % os.path.sep, '', self.path).\
-            replace(os.path.sep, ".")
-    locator = property(_get_locator)
 
     def has_test_cases(self):
         "Return True if the Module will spawn at least one test case."
@@ -117,15 +120,20 @@ class Function(object):
     def is_testable(self):
         return not self.name.startswith('_')
 
-class TestModule(object):
-    def __init__(self, path, application_module):
+class TestModule(Localizable):
+    def __init__(self, path=None, application_module=None, imports="",
+                 test_cases="", main_snippet=""):
+        # Path has to be unique, otherwise project won't be able to
+        # differentiate between modules.
+        if path is None:
+            path = "<test %s>" % id(self)
+
         self.path = path
         self.application_module = application_module
 
-        self.imports = ""
-        self.test_cases = ""
-        self.main_snippet = ""
-        self._read_from_file()
+        self.imports = imports
+        self.test_cases = test_cases
+        self.main_snippet = main_snippet
 
     def ensure_main_snippet(self, main_snippet, force=False):
         """Make sure the main_snippet is present. Won't overwrite the snippet
@@ -161,19 +169,6 @@ class TestModule(object):
         if self.test_cases:
             self.test_cases += "\n"
         self.test_cases += test_cases
-
-    def _read_from_file(self):
-        try:
-            contents = read_file_contents(self.path)
-            # Divide contents into imports, test_cases and main_snippet.
-            regex = r"^(.*?)(class.+?)(if __name__ == '__main__':.*)?$"
-            match = re.match(regex, contents, re.DOTALL)
-            if match:
-                self.imports, self.test_cases, self.main_snippet = match.groups()
-                if self.main_snippet is None:
-                    self.main_snippet = ""
-        except IOError:
-            pass
 
     def get_content(self):
         return '%s\n\n%s\n\n%s\n' % (self.imports.strip(), self.test_cases.strip(), self.main_snippet.strip())

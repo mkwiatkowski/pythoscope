@@ -4,7 +4,11 @@ from nose.tools import assert_equal
 from nose.exc import SkipTest
 from helper import assert_length, assert_single_class, assert_single_function
 
-from pythoscope.collector import collect_information_from_code
+from pythoscope.collector import collect_information_from_code,\
+     collect_information_from_test_code
+
+# Let nose know that those aren't test functions.
+collect_information_from_test_code.__test__ = False
 
 new_style_class = """
 class AClass(object):
@@ -129,6 +133,19 @@ class OuterClass(object):
             pass
 """
 
+two_test_classes = """import unittest
+
+class FirstTestClass(unittest.TestCase):
+    def test_this(self):
+        pass
+    def test_that(self):
+        pass
+
+class TestMore:
+    def test_more(self):
+        pass
+"""
+
 class TestCollector:
     def test_collects_information_about_top_level_classes(self):
         info = collect_information_from_code(new_style_class)
@@ -219,3 +236,8 @@ class TestCollector:
 
         assert_single_class(info, "OuterClass")
         assert_equal(["__init__", "outer_class_method"], info.classes[0].methods)
+
+    def test_collects_information_about_test_modules(self):
+        info = collect_information_from_test_code(two_test_classes)
+
+        assert_equal("import unittest", info.imports.strip())

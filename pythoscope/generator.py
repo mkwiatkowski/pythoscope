@@ -3,7 +3,7 @@ import re
 
 from Cheetah import Template
 
-from store import TestModule
+from store import TestModule, ModuleNotFound
 from util import camelize
 
 class GenerationError(Exception):
@@ -61,5 +61,9 @@ def generate_test_modules(project, modnames, destdir, template, force=False):
     for modname in modnames:
         module = project[modname]
         test_path = os.path.join(destdir, module2testpath(module.path))
+        try:
+            test_module = project[test_path]
+        except ModuleNotFound:
+            test_module = TestModule(test_path, module)
 
-        test_generator.update_test_module(TestModule(test_path, module))
+        test_generator.update_test_module(test_module)
