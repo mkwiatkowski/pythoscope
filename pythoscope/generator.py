@@ -4,7 +4,7 @@ import re
 from Cheetah import Template
 
 from store import TestModule, ModuleNotFound
-from util import camelize
+from util import camelize, write_string_to_file
 
 class GenerationError(Exception):
     pass
@@ -22,6 +22,11 @@ def module2testpath(module):
     return "test_" + re.sub(r'%s__init__.py$' % os.path.sep, '.py', module).\
         replace(os.path.sep, "_")
 
+def save_test_module(test_module):
+    # Don't save the test file unless it has at least one test case.
+    if test_module.test_cases:
+        write_string_to_file(test_module.get_content(), test_module.path)
+
 class TestGenerator(object):
     def __init__(self, template, imports, main_snippet=""):
         self.template_path = os.path.join(os.path.dirname(__file__),
@@ -34,7 +39,7 @@ class TestGenerator(object):
         test_module.add_test_cases(test_cases)
         test_module.ensure_imports(self.imports)
         test_module.ensure_main_snippet(self.main_snippet)
-        test_module.save()
+        save_test_module(test_module)
 
     def _generate_test_cases(self, module):
         mapping = {'module': module, 'camelize': camelize}

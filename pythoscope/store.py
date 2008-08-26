@@ -2,7 +2,7 @@ import os
 import pickle
 import re
 
-from util import underscore, read_file_contents, write_string_to_file
+from util import underscore
 
 
 class ModuleNotFound(Exception):
@@ -172,8 +172,3 @@ class TestModule(Localizable):
 
     def get_content(self):
         return '%s\n\n%s\n\n%s\n' % (self.imports.strip(), self.test_cases.strip(), self.main_snippet.strip())
-
-    def save(self):
-        # Don't save the test file unless it has at least one test case.
-        if self.test_cases:
-            write_string_to_file(self.get_content(), self.path)
