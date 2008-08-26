@@ -1,8 +1,9 @@
 import os
 
+from fixture import TempIO
 from nose.tools import assert_equal
 
-from pythoscope.generator import template2generator
+from pythoscope.generator import add_tests_to_project
 from pythoscope.store import TestModule, Project
 from pythoscope.util import read_file_contents
 
@@ -51,9 +52,8 @@ class TestModuleInMemory(TestModule):
         pass
 
 def generate_single_test_module(module, template='unittest'):
-    generator = template2generator[template]
     test_module = TestModuleInMemory('whatever')
     project = Project(modules=[module, test_module])
-    generator.add_tests_for_module(module, project, 'whatever', False)
+    add_tests_to_project(project, [module.path], TempIO(), template, False)
     return test_module.get_content()
 generate_single_test_module.__test__ = False

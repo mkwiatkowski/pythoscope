@@ -4,7 +4,7 @@ import re
 from fixture import TempIO
 from nose.tools import assert_equal, assert_not_equal, assert_raises
 
-from pythoscope.generator import generate_test_modules, GenerationError,\
+from pythoscope.generator import add_tests_to_project, GenerationError,\
      module2testpath
 from pythoscope.store import Project, Module, Class, Function, TestModule
 from pythoscope.util import read_file_contents
@@ -13,7 +13,7 @@ from helper import assert_contains, assert_doesnt_contain, assert_length,\
      CustomSeparator, generate_single_test_module
 
 # Let nose know that those aren't test functions.
-generate_test_modules.__test__ = False
+add_tests_to_project.__test__ = False
 TestModule.__test__ = False
 
 class TestGenerator:
@@ -94,20 +94,20 @@ class TestGenerator:
 
     def test_uses_existing_destination_directory(self):
         destdir = TempIO()
-        generate_test_modules(Project(), [], destdir, 'unittest')
+        add_tests_to_project(Project(), [], destdir, 'unittest')
         # Simply make sure it doesn't raise any exceptions.
 
     def test_raises_an_exception_if_destdir_is_a_file(self):
         tmpdir = TempIO()
         destdir = tmpdir.putfile("file", "its content")
         assert_raises(GenerationError,
-                      lambda: generate_test_modules(Project(), [], destdir, 'unittest'))
+                      lambda: add_tests_to_project(Project(), [], destdir, 'unittest'))
 
     def test_doesnt_overwrite_existing_files(self):
         existing_test_case = "# test"
         project, destdir, existing_file = self._create_project_with_test_file(existing_test_case)
 
-        generate_test_modules(project, ["project"], destdir, 'unittest')
+        add_tests_to_project(project, ["project"], destdir, 'unittest')
         assert_equal(existing_test_case, read_file_contents(existing_file))
 
     def test_doesnt_generate_test_files_with_no_test_cases(self):
@@ -115,7 +115,7 @@ class TestGenerator:
         destdir = TempIO()
         test_file = os.path.join(destdir, "test_project.py")
 
-        generate_test_modules(project, ["project"], destdir, 'unittest')
+        add_tests_to_project(project, ["project"], destdir, 'unittest')
 
         assert not os.path.exists(test_file)
 
@@ -124,7 +124,7 @@ class TestGenerator:
         project, destdir, test_module = self._create_project_with_test_module([Function("function")],
                                                                               test_cases=existing_test_case)
 
-        generate_test_modules(project, ["project"], destdir, 'unittest')
+        add_tests_to_project(project, ["project"], destdir, 'unittest')
 
         assert_contains(test_module.get_content(), existing_test_case)
         assert_contains(test_module.get_content(), "class TestFunction(unittest.TestCase):")
@@ -137,7 +137,7 @@ class TestGenerator:
                                                                                   test_cases=existing_test_case,
                                                                                   imports=imp)
 
-            generate_test_modules(project, ["project"], destdir, 'unittest')
+            add_tests_to_project(project, ["project"], destdir, 'unittest')
 
             assert_length(re.findall(imp, test_module.get_content()), 1)
 
