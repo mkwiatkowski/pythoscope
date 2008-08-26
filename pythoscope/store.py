@@ -167,15 +167,17 @@ class TestModule(Localizable):
         self.imports = imports
         self.main_snippet = main_snippet
 
+        self.test_cases = []
+
     def add_test_case(self, test_case):
         self._ensure_imports(test_case.imports)
         self._ensure_main_snippet(test_case.main_snippet)
-        self._append_test_case_body(test_case.body)
+        self.test_cases.append(test_case)
         self._save()
 
     def get_content(self):
         return '%s\n\n%s\n\n%s\n' % (self.imports.strip(),
-                                     self.body.strip(),
+                                     self._get_body(),
                                      self.main_snippet.strip())
 
     def _ensure_main_snippet(self, main_snippet, force=False):
@@ -202,14 +204,15 @@ class TestModule(Localizable):
             self.imports += "\n"
         self.imports += import_stmt(import_desc)
 
-    def _append_test_case_body(self, body):
-        if self.body:
-            self.body += "\n"
-        self.body += body
+    def _get_body(self):
+        body = self.body.strip()
+        if body:
+            body += '\n\n'
+        return body + '\n'.join(map(lambda tc: tc.body.strip(), self.test_cases))
 
     def _save(self):
         # Don't save the test file unless it has at least one test case.
-        if self.body:
+        if self._get_body():
             write_string_to_file(self.get_content(), self.path)
 
 class TestCase(object):
