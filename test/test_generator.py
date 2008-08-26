@@ -141,6 +141,17 @@ class TestGenerator:
 
             assert_length(re.findall(imp, test_module.get_content()), 1)
 
+    def test_associates_test_cases_with_application_modules(self):
+        module = Module("project.py", objects=[Function("function")])
+        project = Project(modules=[module])
+        destdir = TempIO()
+
+        add_tests_to_project(project, ["project"], destdir, 'unittest')
+
+        project_test_cases = list(project.test_cases_iter())
+        assert_length(project_test_cases, 1)
+        assert_equal(project_test_cases[0].associated_modules, [module])
+
     def _create_project_with_test_file(self, test_contents, objects=[]):
         project = Project(modules=[Module("project.py", objects)])
         destdir = TempIO()

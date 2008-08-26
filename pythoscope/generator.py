@@ -65,7 +65,8 @@ class TestGenerator(object):
         mapping = {'module': module, 'camelize': camelize}
         test_body = str(Template.Template(file=self.template_path,
                                           searchList=[mapping]))
-        return [TestCase(test_body, self.imports, self.main_snippet)]
+        return [TestCase(test_body, self.imports, self.main_snippet,
+                         associated_modules=[module])]
 
 def add_tests_to_project(project, modnames, destdir, template, force=False):
     generator = TestGenerator.from_template(template)

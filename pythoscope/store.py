@@ -42,8 +42,11 @@ class Project(object):
 
     def add_modules(self, modules):
         for module in modules:
-            self._modules[module.path] = module
-            # TODO: match test modules with application modules here.
+            self.add_module(module)
+
+    def add_module(self, module):
+        self._modules[module.path] = module
+        # TODO: match test modules with application modules here.
 
     def add_test_cases(self, test_cases, test_directory, force):
         for test_case in test_cases:
@@ -56,18 +59,30 @@ class Project(object):
         elif force:
             self._replace_test_case(test_case)
 
+    def test_cases_iter(self):
+        "Iterate over all test cases present in a project."
+        for tmodule in self._get_test_modules():
+            for test_case in tmodule.test_cases:
+                yield test_case
+
     def _contains_test_case(self, test_case):
         return False # TODO
+
+    def _get_test_modules(self):
+        return [mod for mod in self.modules if isinstance(mod, TestModule)]
 
     def _find_place_for_test_case(self, test_case, test_directory):
         """Find the best place for the new test case to be added. If there is
         no such place in existing test modules, a new one will be created.
         """
-        for mod in self.modules:
-            if isinstance(mod, TestModule):
-                return mod
-        return TestModule(os.path.join(test_directory,
-                                       test_module_name_for_test_case(test_case)))
+        try:
+            return self._get_test_modules()[0]
+        except IndexError:
+            test_path = os.path.join(test_directory,
+                                     test_module_name_for_test_case(test_case))
+            test_module = TestModule(test_path)
+            self.add_module(test_module)
+            return test_module
 
     def __getitem__(self, module):
         for mod in self.modules:
@@ -222,8 +237,14 @@ class TestCase(object):
     Each test case contains a set of requirements its surrounding must meet,
     like the list of imports it needs, contents of the "if __name__ == '__main__'"
     snippet or specific setup and teardown instructions.
+
+    associated_modules is a list of Modules which this test cases exercises.
     """
-    def __init__(self, body, imports, main_snippet):
+    def __init__(self, body, imports, main_snippet, associated_modules=None):
+        if associated_modules is None:
+            associated_modules = []
+
         self.body = body
         self.imports = imports
         self.main_snippet = main_snippet
+        self.associated_modules = associated_modules
