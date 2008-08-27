@@ -46,14 +46,23 @@ class TestGenerator(object):
 
     def _add_tests_for_module(self, module, project, destdir, force):
         test_cases = self._generate_test_cases(module)
-        project.add_test_cases(test_cases, destdir, force)
+        if test_cases:
+            project.add_test_cases(test_cases, destdir, force)
 
     def _generate_test_cases(self, module):
-        mapping = {'module': module, 'camelize': camelize}
+        return filter(None,
+                      [self._generate_test_case(obj, module) \
+                       for obj in module.testable_objects])
+
+    def _generate_test_case(self, object, module):
+        mapping = {'object': object, 'camelize': camelize}
+        test_name = camelize(object.name)
         test_body = str(Template.Template(file=self.template_path,
                                           searchList=[mapping]))
-        return [TestCase(test_body, self.imports, self.main_snippet,
-                         associated_modules=[module])]
+        if test_body:
+            return TestCase(test_name, test_body, self.imports, self.main_snippet,
+                            associated_modules=[module])
+        
 
 def add_tests_to_project(project, modnames, destdir, template, force=False):
     generator = TestGenerator.from_template(template)

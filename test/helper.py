@@ -50,5 +50,8 @@ class CustomSeparator:
 def generate_single_test_module(module, template='unittest'):
     project = Project(modules=[module])
     add_tests_to_project(project, [module.path], TempIO(), template, False)
-    return project._get_test_modules()[0].get_content()
+    try:
+        return project._get_test_modules()[0].get_content()
+    except IndexError:
+        return "" # No test module was generated.
 generate_single_test_module.__test__ = False

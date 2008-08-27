@@ -17,7 +17,7 @@ TestModule.__test__ = False
 
 class TestGenerator:
     def test_generates_unittest_boilerplate(self):
-        result = generate_single_test_module(Module())
+        result = generate_single_test_module(Module(objects=[Function('function')]))
         assert_contains(result, "import unittest")
         assert_contains(result, "if __name__ == '__main__':\n    unittest.main()")
 

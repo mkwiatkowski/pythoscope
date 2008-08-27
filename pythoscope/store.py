@@ -80,7 +80,10 @@ class Project(object):
                 yield test_case
 
     def _contains_test_case(self, test_case):
-        return False # TODO
+        for tcase in self.test_cases_iter():
+            if tcase.name == test_case.name:
+                return True
+        return False
 
     def _get_test_modules(self):
         return [mod for mod in self.modules if isinstance(mod, TestModule)]
@@ -272,7 +275,7 @@ class TestModule(Localizable):
         body = self.body.strip()
         if body:
             body += '\n\n'
-        return body + '\n'.join(map(lambda tc: tc.body.strip(), self.test_cases))
+        return body + '\n\n'.join(map(lambda tc: tc.body.strip(), self.test_cases))
 
     def _save(self):
         # Don't save the test file unless it has at least one test case.
@@ -289,10 +292,11 @@ class TestCase(object):
 
     associated_modules is a list of Modules which this test cases exercises.
     """
-    def __init__(self, body, imports, main_snippet, associated_modules=None):
+    def __init__(self, name, body, imports, main_snippet, associated_modules=None):
         if associated_modules is None:
             associated_modules = []
 
+        self.name = name
         self.body = body
         self.imports = imports
         self.main_snippet = main_snippet
