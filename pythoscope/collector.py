@@ -99,6 +99,10 @@ def collect_information_from_test_code(code):
         imports, body, main_snippet = match.groups()
         if main_snippet is None:
             main_snippet = ""
+    else:
+        # If we can't recognize it, put everything into body.
+        imports = main_snippet = ""
+        body = code
 
     return TestModule(body=body, imports=imports,
                       main_snippet=main_snippet)

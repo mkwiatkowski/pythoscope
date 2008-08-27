@@ -146,6 +146,8 @@ class TestMore:
         pass
 """
 
+strange_test_code = "# Tests will be here someday"
+
 class TestCollector:
     def test_collects_information_about_top_level_classes(self):
         info = collect_information_from_code(new_style_class)
@@ -241,3 +243,8 @@ class TestCollector:
         info = collect_information_from_test_code(two_test_classes)
 
         assert_equal("import unittest", info.imports.strip())
+
+    def test_puts_unrecognized_chunks_of_test_code_into_test_module_body(self):
+        info = collect_information_from_test_code(strange_test_code)
+
+        assert_equal(strange_test_code, info.body)
