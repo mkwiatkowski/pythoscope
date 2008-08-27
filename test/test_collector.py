@@ -148,6 +148,15 @@ class TestMore:
 
 strange_test_code = "# Tests will be here someday"
 
+nose_style_test_functions = """import nose
+
+def test_this():
+    pass
+
+def test_that():
+    pass
+"""
+
 class TestCollector:
     def test_collects_information_about_top_level_classes(self):
         info = collect_information_from_code(new_style_class)
@@ -248,3 +257,11 @@ class TestCollector:
         info = collect_information_from_test_code(strange_test_code)
 
         assert_equal(strange_test_code, info.body)
+
+    def test_recognizes_nose_style_test_code(self):
+        info = collect_information_from_test_code(nose_style_test_functions)
+
+        assert_equal("import nose", info.imports.strip())
+        assert_equal("def test_this():\n    pass\n\ndef test_that():\n    pass",
+                     info.body.strip())
+        assert_equal("", info.main_snippet.strip())

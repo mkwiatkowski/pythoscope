@@ -93,7 +93,7 @@ def collect_information_from_code(code):
     return Module(objects=visitor.objects)
 
 def collect_information_from_test_code(code):
-    regex = r"^(.*?)(class.+?)(if __name__ == '__main__':.*)?$"
+    regex = r"^(.*?)((?:class|def) .+?)(if __name__ == '__main__':.*)?$"
     match = re.match(regex, code, re.DOTALL)
     if match:
         imports, body, main_snippet = match.groups()
