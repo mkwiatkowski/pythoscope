@@ -5,6 +5,12 @@ import re
 from util import max_by_not_zero, underscore, write_string_to_file
 
 
+class ModuleNeedsAnalysis(Exception):
+    def __init__(self, module, path):
+        Exception.__init__(self, "Destination test module %r wasn't analyzed." % module)
+        self.module = module
+        self.path = path
+
 class ModuleNotFound(Exception):
     def __init__(self, module):
         Exception.__init__(self, "Couldn't find module %r." % module)
@@ -96,8 +102,13 @@ class Project(object):
                self._create_test_module_for(test_case, test_directory)
 
     def _create_test_module_for(self, test_case, test_directory):
-        test_path = os.path.join(test_directory,
-                                 test_module_name_for_test_case(test_case))
+        """Create a new TestModule for a given test case. If the test module
+        already existed, will raise an ModuleNeedsAnalysis exception.
+        """
+        test_name = test_module_name_for_test_case(test_case)
+        test_path = os.path.join(test_directory, test_name)
+        if os.path.exists(test_path):
+            raise ModuleNeedsAnalysis(test_name, test_path)
         test_module = TestModule(test_path)
         self.add_module(test_module)
         return test_module

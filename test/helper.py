@@ -48,6 +48,8 @@ class CustomSeparator:
         os.path.sep = self.old_sep
 
 def generate_single_test_module(module, template='unittest'):
+    """Return test module contents generated for given module.
+    """
     project = Project(modules=[module])
     add_tests_to_project(project, [module.path], TempIO(), template, False)
     try:

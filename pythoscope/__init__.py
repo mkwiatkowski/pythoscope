@@ -99,6 +99,9 @@ def generate(appname, args):
     project = Project.from_file(PROJECT_FILE)
     try:
         add_tests_to_project(project, args, destdir, template, force)
+    except ModuleNeedsAnalysis, err:
+        print "Error: Tried to generate tests for test module %r located at %r, " \
+              "but it hasn't been analyzed yet. Run 'collect' on it first." % (err.module, err.path)
     except ModuleNotFound, err:
         print "Error: Couldn't find information on module %r, try running 'collect' on it first." % err.module
     except UnknownTemplate, err:

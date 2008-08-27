@@ -5,7 +5,8 @@ from fixture import TempIO
 from nose.tools import assert_equal, assert_not_equal, assert_raises
 
 from pythoscope.generator import add_tests_to_project, GenerationError
-from pythoscope.store import Project, Module, Class, Function, TestModule
+from pythoscope.store import Project, Module, Class, Function, TestModule,\
+     ModuleNeedsAnalysis
 from pythoscope.util import read_file_contents
 
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
@@ -91,100 +92,82 @@ class TestGenerator:
         result = generate_single_test_module(module)
         assert_doesnt_contain(result, "class TestTestClass(unittest.TestCase):")
 
+class TestGeneratorWithDestDir:
+    def setUp(self):
+        self.destdir = TempIO()
+        self.empty_module = Module("project.py")
+        self.module_with_function = Module("project.py", [Function("function")])
+        self.test_module = TestModule(path=os.path.join(self.destdir, "test_project.py"))
+        self.other_test_module = TestModule(os.path.join(self.destdir, "test_other.py"))
+
     def test_uses_existing_destination_directory(self):
-        destdir = TempIO()
-        add_tests_to_project(Project(), [], destdir, 'unittest')
+        add_tests_to_project(Project(), [], self.destdir, 'unittest')
         # Simply make sure it doesn't raise any exceptions.
 
     def test_raises_an_exception_if_destdir_is_a_file(self):
-        tmpdir = TempIO()
-        destdir = tmpdir.putfile("file", "its content")
+        destfile = self.destdir.putfile("file", "its content")
         assert_raises(GenerationError,
-                      lambda: add_tests_to_project(Project(), [], destdir, 'unittest'))
+                      lambda: add_tests_to_project(Project(), [], destfile, 'unittest'))
 
-    def test_doesnt_overwrite_existing_files(self):
-        existing_test_case = "# test"
-        project, destdir, existing_file = self._create_project_with_test_file(existing_test_case)
+    def test_doesnt_overwrite_existing_files_which_werent_analyzed(self):
+        TEST_CONTENTS = "# test"
+        project = Project(modules=[self.module_with_function])
+        existing_file = self.destdir.putfile("test_project.py", TEST_CONTENTS)
 
-        add_tests_to_project(project, ["project"], destdir, 'unittest')
-        assert_equal(existing_test_case, read_file_contents(existing_file))
+        assert_raises(ModuleNeedsAnalysis,
+                      lambda: add_tests_to_project(project, ["project"], self.destdir, 'unittest'))
+        assert_equal(TEST_CONTENTS, read_file_contents(existing_file))
 
     def test_doesnt_generate_test_files_with_no_test_cases(self):
-        project = Project(modules=[Module("project.py")])
-        destdir = TempIO()
-        test_file = os.path.join(destdir, "test_project.py")
+        project = Project(modules=[self.empty_module])
+        test_file = os.path.join(self.destdir, "test_project.py")
 
-        add_tests_to_project(project, ["project"], destdir, 'unittest')
+        add_tests_to_project(project, ["project"], self.destdir, 'unittest')
 
         assert not os.path.exists(test_file)
 
     def test_appends_new_test_classes_to_existing_test_files(self):
-        existing_test_case = "class TestSomething: pass\n\n"
-        project, destdir, test_module = self._create_project_with_test_module([Function("function")],
-                                                                              test_cases=existing_test_case)
+        TEST_CONTENTS = "class TestSomething: pass\n\n"
+        self.test_module.body = TEST_CONTENTS
+        project = Project(modules=[self.module_with_function, self.test_module])
 
-        add_tests_to_project(project, ["project"], destdir, 'unittest')
+        add_tests_to_project(project, ["project"], self.destdir, 'unittest')
 
-        assert_contains(test_module.get_content(), existing_test_case)
-        assert_contains(test_module.get_content(), "class TestFunction(unittest.TestCase):")
+        assert_contains(self.test_module.get_content(), TEST_CONTENTS)
+        assert_contains(self.test_module.get_content(), "class TestFunction(unittest.TestCase):")
 
     def test_adds_imports_to_existing_test_files_only_if_they_arent_present(self):
         imports = ["import unittest", "from nose import SkipTest"]
-        existing_test_case = "class TestSomething: pass\n\n"
         for imp in imports:
-            project, destdir, test_module = self._create_project_with_test_module([Function("function")],
-                                                                                  test_cases=existing_test_case,
-                                                                                  imports=imp)
+            self.test_module.imports = imp
+            project = Project(modules=[self.module_with_function, self.test_module])
 
-            add_tests_to_project(project, ["project"], destdir, 'unittest')
+            add_tests_to_project(project, ["project"], self.destdir, 'unittest')
 
-            assert_length(re.findall(imp, test_module.get_content()), 1)
+            assert_length(re.findall(imp, self.test_module.get_content()), 1)
 
     def test_associates_test_cases_with_application_modules(self):
-        module = Module("project.py", objects=[Function("function")])
-        project = Project(modules=[module])
-        destdir = TempIO()
+        project = Project(modules=[self.module_with_function])
 
-        add_tests_to_project(project, ["project"], destdir, 'unittest')
+        add_tests_to_project(project, ["project"], self.destdir, 'unittest')
 
         project_test_cases = list(project.test_cases_iter())
         assert_length(project_test_cases, 1)
-        assert_equal(project_test_cases[0].associated_modules, [module])
+        assert_equal(project_test_cases[0].associated_modules, [self.module_with_function])
 
     def test_creates_new_test_module_if_no_of_the_existing_match(self):
-        destdir = TempIO()
-        module = Module("project.py", objects=[Function("function")])
-        other_test = TestModule(os.path.join(destdir, "test_other.py"))
-        project = Project(modules=[module, other_test])
+        project = Project(modules=[self.module_with_function, self.other_test_module])
 
-        add_tests_to_project(project, ["project"], destdir, 'unittest')
+        add_tests_to_project(project, ["project"], self.destdir, 'unittest')
 
         project_test_cases = list(project.test_cases_iter())
         assert_length(project_test_cases, 1)
-        assert_length(other_test.test_cases, 0)
+        assert_length(self.other_test_module.test_cases, 0)
 
     def test_chooses_the_right_existing_test_module_for_new_test_case(self):
-        destdir = TempIO()
-        module = Module("project.py", objects=[Function("function")])
-        project_test = TestModule(os.path.join(destdir, "test_project.py"))
-        other_test = TestModule(os.path.join(destdir, "test_other.py"))
-        project = Project(modules=[module, other_test, project_test])
+        project = Project(modules=[self.module_with_function, self.other_test_module, self.test_module])
 
-        add_tests_to_project(project, ["project"], destdir, 'unittest')
+        add_tests_to_project(project, ["project"], self.destdir, 'unittest')
 
-        assert_length(project_test.test_cases, 1)
-        assert_length(other_test.test_cases, 0)
-
-    def _create_project_with_test_file(self, test_contents, objects=[]):
-        project = Project(modules=[Module("project.py", objects)])
-        destdir = TempIO()
-        existing_file = destdir.putfile("test_project.py", test_contents)
-        return project, destdir, existing_file
-
-    def _create_project_with_test_module(self, objects, test_cases="", imports=""):
-        module = Module("project.py", objects)
-        destdir = TempIO()
-        test_module = TestModule(path=os.path.join(destdir, "test_project.py"),
-                                 body=test_cases, imports=imports)
-        project = Project(modules=[module, test_module])
-        return project, destdir, test_module
+        assert_length(self.test_module.test_cases, 1)
+        assert_length(self.other_test_module.test_cases, 0)
