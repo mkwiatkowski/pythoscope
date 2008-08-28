@@ -2,3 +2,5 @@ include pythoscope/templates/*.tpl
 include test/helper.py
 include test/__init__.py
 include test/data/*.py
+include lib2to3/pgen2/*.py
+include lib2to3/*.txt

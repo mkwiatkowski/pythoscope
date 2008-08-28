@@ -1,63 +1,48 @@
-import compiler
-import compiler.ast
 import os.path
 import re
 
-from compiler.visitor import ASTVisitor
-
+from astvisitor import parse, ParseError, ASTVisitor
 from store import Module, Class, Function, TestModule
 from util import read_file_contents, python_sources_below
+
 
 def is_test_module_path(path):
     return re.search(r'(^test_)|(_test.py$)', path)
 
-def descend(node, visitor_type):
+def descend(tree, visitor_type):
     """Walk over the AST using a visitor of a given type and return the visitor
     object once done.
     """
     visitor = visitor_type()
-    compiler.walk(node, visitor)
+    visitor.visit(tree)
     return visitor
-
-def derive_class_name(node):
-    if isinstance(node, compiler.ast.Name):
-        return node.name
-    elif isinstance(node, compiler.ast.Getattr):
-        return "%s.%s" % (derive_class_name(node.expr), node.attrname)
-    return "<unknown>"
-
-def derive_class_names(nodes):
-    return map(derive_class_name, nodes)
-
 
 class TopLevelVisitor(ASTVisitor):
     def __init__(self):
+        ASTVisitor.__init__(self)
         self.objects = []
 
-    def visitClass(self, node):
-        visitor = descend(node.code, ClassVisitor)
-        self.objects.append(Class(node.name,
-                                  visitor.methods,
-                                  derive_class_names(node.bases)))
+    def visit_class(self, name, bases, children):
+        visitor = descend(children, ClassVisitor)
+        self.objects.append(Class(name, visitor.methods, bases))
 
-    def visitFunction(self, node):
-        self.objects.append(Function(node.name))
+    def visit_function(self, name, args, children):
+        self.objects.append(Function(name))
 
-    def visitAssign(self, node):
-        if len(node.nodes) == 1 and isinstance(node.nodes[0], compiler.ast.AssName) \
-           and isinstance(node.expr, compiler.ast.Lambda):
-            self.objects.append(Function(node.nodes[0].name))
+    def visit_lambda_assign(self, name):
+        self.objects.append(Function(name))
 
 class ClassVisitor(ASTVisitor):
     def __init__(self):
+        ASTVisitor.__init__(self)
         self.methods = []
 
-    def visitClass(self, node):
+    def visit_class(self, name, bases, children):
         # Ignore definitions of subclasses.
         pass
 
-    def visitFunction(self, node):
-        self.methods.append(node.name)
+    def visit_function(self, name, args, children):
+        self.methods.append(name)
 
 def collect_information_from_paths(paths):
     """Collects information from list of paths. Path can point to a Python module
@@ -85,8 +70,8 @@ def collect_information_from_module(path):
 
 def collect_information_from_code(code):
     try:
-        tree = compiler.parse(code)
-    except SyntaxError, e:
+        tree = parse(code)
+    except ParseError, e:
         return Module(errors=[e])
     visitor = descend(tree, TopLevelVisitor)
 

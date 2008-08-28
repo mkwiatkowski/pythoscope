@@ -40,3 +40,9 @@ Generator itself is configurable to some extent, see::
  $ pythoscope  generate  --help
 
 for more information on available options.
+
+License
+-------
+
+All Pythoscope source code is licensed under an MIT license (see LICENSE file).
+All files under lib2to3/ are licensed under PSF license.

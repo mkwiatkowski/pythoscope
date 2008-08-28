@@ -11,8 +11,9 @@ setup(
     license = 'MIT',
     url = 'http://pythoscope.org',
 
-    packages = ['pythoscope'],
-    package_data = {'pythoscope': ['templates/*.tpl']},
+    packages = ['pythoscope', 'lib2to3'],
+    package_data = {'pythoscope': ['templates/*.tpl'],
+                    'lib2to3': ['*.txt']},
     install_requires = ['Cheetah'],
 
     entry_points = {        
