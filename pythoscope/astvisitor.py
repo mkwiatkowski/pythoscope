@@ -7,9 +7,29 @@ from lib2to3.pgen2.parse import ParseError
 
 
 def parse(code):
-    drv = driver.Driver(pygram.python_grammar, pytree.convert)
-    return drv.parse_string(code, True)
+    """String -> AST
 
+    Parse the string and return its AST representation. May raise
+    a ParseError exception.
+    """
+    added_newline = False
+    if not code.endswith("\n"):
+        code += "\n"
+        added_newline = True
+    drv = driver.Driver(pygram.python_grammar, pytree.convert)
+    result = drv.parse_string(code, True)
+    result.added_newline = added_newline
+    return result
+
+def regenerate(tree):
+    """AST -> String
+
+    Regenerate the source code from the AST tree.
+    """
+    if tree.added_newline:
+        return str(tree)[:-1]
+    else:
+        return str(tree)
 
 class ASTError(Exception):
     pass
@@ -19,6 +39,9 @@ def is_leaf_of_type(leaf, *types):
 
 def is_node_of_type(node, *types):
     return isinstance(node, pytree.Node) and pytree.type_repr(node.type) in types
+
+def leaf_value(leaf):
+    return leaf.value
 
 def remove_commas(nodes):
     def isnt_comma(node):
@@ -68,12 +91,29 @@ def derive_arguments(node):
     else:
         return [derive_argument(node)]
 
+def derive_import_name(node):
+    if is_leaf_of_type(node, token.NAME):
+        return node.value
+    elif is_node_of_type(node, 'dotted_name'):
+        return "".join(map(leaf_value, node.children))
+
+def derive_import_names(node):
+    if node is None:
+        return None
+    elif is_node_of_type(node, 'dotted_as_names', 'import_as_names'):
+        return map(derive_import_name,
+                   remove_commas(node.children))
+    else:
+        return [derive_import_name(node)]
+
+
 class ASTVisitor(object):
     DEFAULT_PATTERNS = [
         ('_visit_all', "file_input< nodes=any* >"),
         ('_visit_all', "suite< nodes=any* >"),
         ('_visit_class', "classdef< 'class' name=NAME ['(' bases=any ')'] ':' children=any >"),
         ('_visit_function', "funcdef< 'def' name=NAME parameters< '(' [args=any] ')' > ':' children=any >"),
+        ('_visit_import', "import_name< 'import' names=any > | import_from< 'from' import_from=any 'import' names=any >"),
         ('_visit_lambda_assign', "expr_stmt< name=NAME '=' lambdef< 'lambda' any ':' any > >"),
     ]
 
@@ -119,6 +159,9 @@ class ASTVisitor(object):
     def visit_function(self, name, args, children):
         self.visit(children)
 
+    def visit_import(self, names, import_from):
+        pass
+
     def visit_lambda_assign(self, name):
         pass
 
@@ -135,5 +178,11 @@ class ASTVisitor(object):
                             args=derive_arguments(results.get('args', [])),
                             children=results['children'])
 
+    def _visit_import(self, results):
+        self.visit_import(names=derive_import_names(results['names']),
+                          import_from=derive_import_name(results.get('import_from')))
+
     def _visit_lambda_assign(self, results):
         self.visit_lambda_assign(name=results['name'].value)
+
+
