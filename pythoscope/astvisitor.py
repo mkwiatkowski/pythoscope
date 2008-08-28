@@ -26,7 +26,7 @@ def regenerate(tree):
 
     Regenerate the source code from the AST tree.
     """
-    if tree.added_newline:
+    if hasattr(tree, 'added_newline') and tree.added_newline:
         return str(tree)[:-1]
     else:
         return str(tree)
@@ -115,6 +115,7 @@ class ASTVisitor(object):
         ('_visit_function', "funcdef< 'def' name=NAME parameters< '(' [args=any] ')' > ':' children=any >"),
         ('_visit_import', "import_name< 'import' names=any > | import_from< 'from' import_from=any 'import' names=any >"),
         ('_visit_lambda_assign', "expr_stmt< name=NAME '=' lambdef< 'lambda' any ':' any > >"),
+        ('_visit_main_snippet', "if_stmt< 'if' comparison< '__name__' '==' (\"'__main__'\" | '\"__main__\"' ) > ':' body=any >"),
     ]
 
     def __init__(self):
@@ -165,6 +166,9 @@ class ASTVisitor(object):
     def visit_lambda_assign(self, name):
         pass
 
+    def visit_main_snippet(self, body):
+        pass
+
     def _visit_all(self, results):
         self.visit(results['nodes'])
 
@@ -185,4 +189,5 @@ class ASTVisitor(object):
     def _visit_lambda_assign(self, results):
         self.visit_lambda_assign(name=results['name'].value)
 
-
+    def _visit_main_snippet(self, results):
+        self.visit_main_snippet(body=results['body'])

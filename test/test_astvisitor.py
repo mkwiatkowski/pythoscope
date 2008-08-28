@@ -9,7 +9,7 @@ class TestParser:
         tree = parse("42 # answer")
         assert_equal("42 # answer", regenerate(tree))
 
-class TestASTVisitor:
+class TestASTVisitorImports:
     def test_handles_simple_imports(self):
         code = "import unittest"
         def assertions(names, import_from):
@@ -67,7 +67,36 @@ class TestASTVisitor:
         self._test_import(code, assertions)        
 
     def _test_import(self, code, method):
+        method_called = [False]
         class TestVisitor(ASTVisitor):
             def visit_import(self, names, import_from):
                 method(names, import_from)
+                method_called[0] = True
+
         TestVisitor().visit(parse(code))
+        assert method_called[0], "visit_import wasn't called at all"
+
+class TestASTVisitorMainSnippet:
+    def test_detects_the_main_snippet(self):
+        code = "import unittest\n\nif __name__ == '__main__':\n    unittest.main()\n"
+        def assertions(body):
+            assert_equal("\n    unittest.main()\n", body)
+
+        self._test_main_snippet(code, assertions)
+
+    def test_detects_main_snippet_with_different_quotes(self):
+        code = 'import unittest\n\nif __name__ == "__main__":\n    unittest.main()\n'
+        def assertions(body):
+            assert_equal("\n    unittest.main()\n", body)
+
+        self._test_main_snippet(code, assertions)
+
+    def _test_main_snippet(self, code, method):
+        method_called = [False]
+        class TestVisitor(ASTVisitor):
+            def visit_main_snippet(self, body):
+                method(regenerate(body))
+                method_called[0] = True
+
+        TestVisitor().visit(parse(code))
+        assert method_called[0], "visit_main_snippet wasn't called at all"
