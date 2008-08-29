@@ -135,6 +135,9 @@ def derive_arguments(node):
 def derive_import_name(node):
     if is_leaf_of_type(node, token.NAME):
         return node.value
+    elif is_node_of_type(node, 'dotted_as_name'):
+        return (derive_import_name(node.children[0]),
+                derive_import_name(node.children[2]))
     elif is_node_of_type(node, 'dotted_name'):
         return "".join(map(leaf_value, node.children))
 

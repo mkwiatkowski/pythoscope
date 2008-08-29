@@ -64,7 +64,23 @@ class TestASTVisitorImports:
             assert_equal(["assert_equal"], names)
             assert_equal("nose.tools", import_from)
 
-        self._test_import(code, assertions)        
+        self._test_import(code, assertions)
+
+    def test_handles_imports_with_as(self):
+        code = "import unittest as test"
+        def assertions(names, import_from):
+            assert_equal([("unittest", "test")], names)
+            assert_equal(None, import_from)
+
+        self._test_import(code, assertions)
+
+    def test_handles_multiple_imports_with_as(self):
+        code = "import X as Y, A as B"
+        def assertions(names, import_from):
+            assert_equal([("X", "Y"), ("A", "B")], names)
+            assert_equal(None, import_from)
+
+        self._test_import(code, assertions)
 
     def _test_import(self, code, method):
         method_called = [False]
