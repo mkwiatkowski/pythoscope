@@ -2,6 +2,9 @@ from pythoscope.store import Project, Module, TestModule, TestCase
 
 from helper import assert_length
 
+# Let nose know that this isn't a test class.
+TestModule.__test__ = False
+
 class TestProject:
     def setUp(self):
         self._old_test_module_save = TestModule._save
@@ -17,7 +20,7 @@ class TestProject:
         self.existing_test_case.associated_modules = [module]
         self.project.add_modules([module, irrelevant_test_module])
 
-        new_test_case = TestCase("new", "", "", "", associated_modules=[module])
+        new_test_case = TestCase("new", associated_modules=[module])
         self.project.add_test_case(new_test_case, None, False)
 
         assert new_test_case in self.test_module.test_cases
@@ -25,13 +28,13 @@ class TestProject:
     def test_doesnt_overwrite_existing_test_cases_by_default(self):
         self._create_test_module()
 
-        test_case = TestCase("existing", "", "", "")
+        test_case = TestCase("existing")
         self.project.add_test_case(test_case, "", False)
 
         assert_length(list(self.project.test_cases_iter()), 1)
 
     def _create_test_module(self):
-        self.existing_test_case = TestCase("existing", "", "", "")
+        self.existing_test_case = TestCase("existing")
         self.test_module = TestModule()
         self.test_module.add_test_case(self.existing_test_case)
         self.project = Project(modules=[self.test_module])

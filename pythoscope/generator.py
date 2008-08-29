@@ -3,6 +3,7 @@ import re
 
 from Cheetah import Template
 
+from astvisitor import parse
 from store import TestModule, TestCase, ModuleNotFound
 from util import camelize
 
@@ -19,7 +20,7 @@ class TestGenerator(object):
         if template == 'unittest':
             return cls(template='unittest',
                        imports=['unittest'],
-                       main_snippet="if __name__ == '__main__':\n    unittest.main()\n")
+                       main_snippet=parse("if __name__ == '__main__':\n    unittest.main()\n"))
         elif template == 'nose':
             return cls(template='nose',
                        imports=[('nose', 'SkipTest')])
@@ -59,8 +60,12 @@ class TestGenerator(object):
         test_name = camelize(object.name)
         test_body = str(Template.Template(file=self.template_path,
                                           searchList=[mapping]))
+        test_code = parse(test_body)
         if test_body:
-            return TestCase(test_name, test_body, self.imports, self.main_snippet,
+            return TestCase(name=test_name,
+                            code=test_code,
+                            imports=self.imports,
+                            main_snippet=self.main_snippet,
                             associated_modules=[module])
         
 

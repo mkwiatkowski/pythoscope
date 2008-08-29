@@ -4,7 +4,48 @@ from lib2to3.patcomp import compile_pattern
 from lib2to3.pgen2 import driver
 from lib2to3.pgen2 import token
 from lib2to3.pgen2.parse import ParseError
+from lib2to3.pygram import python_symbols as syms
+from lib2to3.pytree import Node, Leaf
 
+
+__all__ = ["EmptyCode", "Newline", "clone", "create_import", "parse",
+           "regenerate", "ASTError", "ASTVisitor"]
+
+EmptyCode = lambda: Node(syms.file_input, [])
+Newline = lambda: Leaf(token.NEWLINE, "\n")
+
+def clone(tree):
+    """Clone the tree, preserving its add_newline attribute.
+    """
+    if tree is None:
+        return None
+
+    new_tree = tree.clone()
+    if hasattr(tree, 'added_newline') and tree.added_newline:
+        new_tree.added_newline = True
+    return new_tree
+
+def create_import(import_desc):
+    """Create an AST representing import statement from given description.
+
+    >>> regenerate(create_import("unittest"))
+    'import unittest\\n'
+    >>> regenerate(create_import(("nose", "SkipTest")))
+    'from nose import SkipTest\\n'
+    """
+    if isinstance(import_desc, tuple):
+        package, name = import_desc
+        return Node(syms.import_from,
+                    [Leaf(token.NAME, 'from'),
+                     Leaf(token.NAME, package, prefix=" "),
+                     Leaf(token.NAME, 'import', prefix=" "),
+                     Leaf(token.NAME, name, prefix=" "),
+                     Newline()])
+    else:
+        return Node(syms.import_name,
+                    [Leaf(token.NAME, 'import'),
+                     Leaf(token.NAME, import_desc, prefix=" "),
+                     Newline()])
 
 def parse(code):
     """String -> AST
@@ -35,10 +76,10 @@ class ASTError(Exception):
     pass
         
 def is_leaf_of_type(leaf, *types):
-    return isinstance(leaf, pytree.Leaf) and leaf.type in types
+    return isinstance(leaf, Leaf) and leaf.type in types
 
 def is_node_of_type(node, *types):
-    return isinstance(node, pytree.Node) and pytree.type_repr(node.type) in types
+    return isinstance(node, Node) and pytree.type_repr(node.type) in types
 
 def leaf_value(leaf):
     return leaf.value
@@ -131,9 +172,9 @@ class ASTVisitor(object):
     def visit(self, tree):
         """Main entry point of the ASTVisitor class. 
         """
-        if isinstance(tree, pytree.Leaf):
+        if isinstance(tree, Leaf):
             self.visit_leaf(tree)
-        elif isinstance(tree, pytree.Node):
+        elif isinstance(tree, Node):
             self.visit_node(tree)
         elif isinstance(tree, list):
             for subtree in tree:

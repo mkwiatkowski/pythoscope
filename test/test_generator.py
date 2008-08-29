@@ -4,6 +4,7 @@ import re
 from fixture import TempIO
 from nose.tools import assert_equal, assert_not_equal, assert_raises
 
+from pythoscope.astvisitor import parse
 from pythoscope.generator import add_tests_to_project, GenerationError
 from pythoscope.store import Project, Module, Class, Function, TestModule,\
      ModuleNeedsAnalysis
@@ -12,7 +13,7 @@ from pythoscope.util import read_file_contents
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
      CustomSeparator, generate_single_test_module
 
-# Let nose know that those aren't test functions.
+# Let nose know that those aren't test functions/classes.
 add_tests_to_project.__test__ = False
 TestModule.__test__ = False
 
@@ -92,6 +93,11 @@ class TestGenerator:
         result = generate_single_test_module(module)
         assert_doesnt_contain(result, "class TestTestClass(unittest.TestCase):")
 
+    def test_generates_content_in_right_order(self):
+        result = generate_single_test_module(Module(objects=[Function('function')]))
+
+        assert re.match(r"import unittest.*?class TestFunction.*?if __name__ == '__main__'", result, re.DOTALL)
+
 class TestGeneratorWithDestDir:
     def setUp(self):
         self.destdir = TempIO()
@@ -128,7 +134,7 @@ class TestGeneratorWithDestDir:
 
     def test_appends_new_test_classes_to_existing_test_files(self):
         TEST_CONTENTS = "class TestSomething: pass\n\n"
-        self.test_module.body = TEST_CONTENTS
+        self.test_module.code = parse(TEST_CONTENTS)
         project = Project(modules=[self.module_with_function, self.test_module])
 
         add_tests_to_project(project, ["project"], self.destdir, 'unittest')
@@ -137,14 +143,14 @@ class TestGeneratorWithDestDir:
         assert_contains(self.test_module.get_content(), "class TestFunction(unittest.TestCase):")
 
     def test_adds_imports_to_existing_test_files_only_if_they_arent_present(self):
-        imports = ["import unittest", "from nose import SkipTest"]
+        imports = ["unittest", ("nose", "SkipTest")]
         for imp in imports:
-            self.test_module.imports = imp
+            self.test_module.imports = [imp]
             project = Project(modules=[self.module_with_function, self.test_module])
 
             add_tests_to_project(project, ["project"], self.destdir, 'unittest')
 
-            assert_length(re.findall(imp, self.test_module.get_content()), 1)
+            assert_equal([imp], self.test_module.imports)
 
     def test_associates_test_cases_with_application_modules(self):
         project = Project(modules=[self.module_with_function])

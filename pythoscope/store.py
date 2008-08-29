@@ -2,6 +2,7 @@ import os
 import pickle
 import re
 
+from astvisitor import EmptyCode, Newline, clone, create_import, regenerate
 from util import max_by_not_zero, underscore, write_string_to_file
 
 
@@ -221,14 +222,9 @@ class Function(object):
     def is_testable(self):
         return not self.name.startswith('_')
 
-def import_stmt(import_desc):
-    if isinstance(import_desc, tuple):
-        return 'from %s import %s' % import_desc
-    else:
-        return 'import %s' % import_desc
-
 class TestModule(Localizable):
-    def __init__(self, path=None, body="", imports="", main_snippet=""):
+    def __init__(self, path=None, code=EmptyCode(), imports=[], main_snippet=None,
+                 test_cases=[]):
         # Path has to be unique, otherwise project won't be able to
         # differentiate between modules.
         if path is None:
@@ -236,22 +232,20 @@ class TestModule(Localizable):
 
         self.path = path
 
-        self.body = body
-        self.imports = imports
-        self.main_snippet = main_snippet
+        self.code = clone(code)
+        self.imports = imports[:]
+        self.main_snippet = clone(main_snippet)
 
-        self.test_cases = []
+        self.test_cases = test_cases[:]
 
     def add_test_case(self, test_case):
         self._ensure_imports(test_case.imports)
         self._ensure_main_snippet(test_case.main_snippet)
-        self.test_cases.append(test_case)
+        self._add_test_case(test_case)
         self._save()
 
     def get_content(self):
-        return '%s\n\n%s\n\n%s\n' % (self.imports.strip(),
-                                     self._get_body(),
-                                     self.main_snippet.strip())
+        return regenerate(self.code)
 
     def get_test_cases_for_module(self, module):
         """Return all test cases that are associated with given module.
@@ -262,7 +256,14 @@ class TestModule(Localizable):
         """Make sure the main_snippet is present. Won't overwrite the snippet
         unless force flag is set.
         """
-        if not self.main_snippet or force:
+        if not main_snippet:
+            return
+
+        if not self.main_snippet:
+            self.main_snippet = main_snippet
+            self.code.append_child(main_snippet)
+        elif force:
+            self.main_snippet.replace(main_snippet)
             self.main_snippet = main_snippet
 
     def _ensure_imports(self, imports):
@@ -271,26 +272,37 @@ class TestModule(Localizable):
             self._ensure_import(imp)
 
     def _ensure_import(self, import_desc):
+        # Add an extra newline separating imports from the code.
+        if not self.imports:
+            self.code.insert_child(0, Newline())
         if not self._contains_import(import_desc):
             self._add_import(import_desc)
 
     def _contains_import(self, import_desc):
-        return import_stmt(import_desc) in self.imports
+        return import_desc in self.imports
 
     def _add_import(self, import_desc):
-        if self.imports:
-            self.imports += "\n"
-        self.imports += import_stmt(import_desc)
+        self.imports.append(import_desc)
+        self.code.insert_child(0, create_import(import_desc))
 
-    def _get_body(self):
-        body = self.body.strip()
-        if body:
-            body += '\n\n'
-        return body + '\n\n'.join(map(lambda tc: tc.body.strip(), self.test_cases))
+    def _add_test_case(self, test_case):
+        self.test_cases.append(test_case)
+        # If the main_snippet exists we have to put the new test case
+        # before it. If it doesn't we put the test case at the end.
+        if self.main_snippet:
+            self._insert_before_main_snippet(test_case.code)
+        else:
+            self.code.append_child(test_case.code)
+
+    def _insert_before_main_snippet(self, code):
+        for i, child in enumerate(self.code.children):
+            if child == self.main_snippet:
+                self.code.insert_child(i, code)
+                break
 
     def _save(self):
         # Don't save the test file unless it has at least one test case.
-        if self._get_body():
+        if self.test_cases:
             write_string_to_file(self.get_content(), self.path)
 
 class TestCase(object):
@@ -303,12 +315,12 @@ class TestCase(object):
 
     associated_modules is a list of Modules which this test cases exercises.
     """
-    def __init__(self, name, body, imports, main_snippet, associated_modules=None):
+    def __init__(self, name, code=EmptyCode(), imports=[], main_snippet=None, associated_modules=None):
         if associated_modules is None:
             associated_modules = []
 
         self.name = name
-        self.body = body
+        self.code = code
         self.imports = imports
         self.main_snippet = main_snippet
         self.associated_modules = associated_modules

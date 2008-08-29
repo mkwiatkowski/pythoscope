@@ -2,7 +2,7 @@ import os.path
 import re
 
 from astvisitor import parse, ParseError, ASTVisitor
-from store import Module, Class, Function, TestModule
+from store import Module, Class, Function, TestModule, TestCase
 from util import read_file_contents, python_sources_below
 
 
@@ -77,17 +77,35 @@ def collect_information_from_code(code):
 
     return Module(objects=visitor.objects)
 
-def collect_information_from_test_code(code):
-    regex = r"^(.*?)((?:class|def) .+?)(if __name__ == '__main__':.*)?$"
-    match = re.match(regex, code, re.DOTALL)
-    if match:
-        imports, body, main_snippet = match.groups()
-        if main_snippet is None:
-            main_snippet = ""
-    else:
-        # If we can't recognize it, put everything into body.
-        imports = main_snippet = ""
-        body = code
+class TestModuleVisitor(ASTVisitor):
+    def __init__(self):
+        ASTVisitor.__init__(self)
+        self.imports = []
+        self.test_cases = []
+        self.main_snippet = None
 
-    return TestModule(body=body, imports=imports,
-                      main_snippet=main_snippet)
+    def visit_class(self, name, bases, children):
+        self.test_cases.append((name, children))
+
+    def visit_import(self, names, import_from):
+        if import_from:
+            self.imports.append((import_from, names))
+        else:
+            self.imports.extend(names)
+
+    def visit_main_snippet(self, body):
+        self.main_snippet = body
+
+def collect_information_from_test_code(code):
+    try:
+        tree = parse(code)
+    except ParseError, e:
+        return Module(errors=[e])
+    visitor = descend(tree, TestModuleVisitor)
+
+    test_cases = [TestCase(name, code, visitor.imports, visitor.main_snippet)
+                  for name, code in visitor.test_cases]
+    test_module = TestModule(code=tree, imports=visitor.imports,
+                             main_snippet=visitor.main_snippet,
+                             test_cases=test_cases)
+    return test_module

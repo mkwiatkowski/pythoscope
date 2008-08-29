@@ -6,6 +6,7 @@ from helper import assert_length, assert_single_class, assert_single_function
 
 from pythoscope.collector import collect_information_from_code,\
      collect_information_from_test_code
+from pythoscope.astvisitor import regenerate
 
 # Let nose know that those aren't test functions.
 collect_information_from_test_code.__test__ = False
@@ -251,17 +252,16 @@ class TestCollector:
     def test_collects_information_about_test_modules(self):
         info = collect_information_from_test_code(two_test_classes)
 
-        assert_equal("import unittest", info.imports.strip())
+        assert_equal(["unittest"], info.imports)
 
-    def test_puts_unrecognized_chunks_of_test_code_into_test_module_body(self):
+    def test_recognizes_unrecognized_chunks_of_test_code(self):
         info = collect_information_from_test_code(strange_test_code)
 
-        assert_equal(strange_test_code, info.body)
+        assert_equal(strange_test_code, regenerate(info.code))
 
     def test_recognizes_nose_style_test_code(self):
         info = collect_information_from_test_code(nose_style_test_functions)
 
-        assert_equal("import nose", info.imports.strip())
-        assert_equal("def test_this():\n    pass\n\ndef test_that():\n    pass",
-                     info.body.strip())
-        assert_equal("", info.main_snippet.strip())
+        assert_equal(["nose"], info.imports)
+        assert_equal(nose_style_test_functions, regenerate(info.code))
+        assert_equal(None, info.main_snippet)
