@@ -155,8 +155,8 @@ class ASTVisitor(object):
     DEFAULT_PATTERNS = [
         ('_visit_all', "file_input< nodes=any* >"),
         ('_visit_all', "suite< nodes=any* >"),
-        ('_visit_class', "classdef< 'class' name=NAME ['(' bases=any ')'] ':' children=any >"),
-        ('_visit_function', "funcdef< 'def' name=NAME parameters< '(' [args=any] ')' > ':' children=any >"),
+        ('_visit_class', "body=classdef< 'class' name=NAME ['(' bases=any ')'] ':' any >"),
+        ('_visit_function', "body=funcdef< 'def' name=NAME parameters< '(' [args=any] ')' > ':' any >"),
         ('_visit_import', "import_name< 'import' names=any > | import_from< 'from' import_from=any 'import' names=any >"),
         ('_visit_lambda_assign', "expr_stmt< name=NAME '=' lambdef< 'lambda' any ':' any > >"),
         ('_visit_main_snippet', "if_stmt< 'if' comparison< '__name__' '==' (\"'__main__'\" | '\"__main__\"' ) > ':' body=any >"),
@@ -198,11 +198,11 @@ class ASTVisitor(object):
             # For unknown nodes simply descend to their list of children.
             self.visit(node.children)
 
-    def visit_class(self, name, bases, children):
-        self.visit(children)
+    def visit_class(self, name, bases, body):
+        self.visit(body.children)
 
-    def visit_function(self, name, args, children):
-        self.visit(children)
+    def visit_function(self, name, args, body):
+        self.visit(body.children)
 
     def visit_import(self, names, import_from):
         pass
@@ -219,12 +219,12 @@ class ASTVisitor(object):
     def _visit_class(self, results):
         self.visit_class(name=results['name'].value,
                          bases=derive_class_names(results.get('bases')),
-                         children=results['children'])
+                         body=results['body'])
 
     def _visit_function(self, results):
         self.visit_function(name=results['name'].value,
                             args=derive_arguments(results.get('args', [])),
-                            children=results['children'])
+                            body=results['body'])
 
     def _visit_import(self, results):
         self.visit_import(names=derive_import_names(results['names']),

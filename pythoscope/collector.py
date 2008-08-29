@@ -22,11 +22,11 @@ class TopLevelVisitor(ASTVisitor):
         ASTVisitor.__init__(self)
         self.objects = []
 
-    def visit_class(self, name, bases, children):
-        visitor = descend(children, ClassVisitor)
+    def visit_class(self, name, bases, body):
+        visitor = descend(body.children, ClassVisitor)
         self.objects.append(Class(name, visitor.methods, bases))
 
-    def visit_function(self, name, args, children):
+    def visit_function(self, name, args, body):
         self.objects.append(Function(name))
 
     def visit_lambda_assign(self, name):
@@ -37,11 +37,11 @@ class ClassVisitor(ASTVisitor):
         ASTVisitor.__init__(self)
         self.methods = []
 
-    def visit_class(self, name, bases, children):
+    def visit_class(self, name, bases, body):
         # Ignore definitions of subclasses.
         pass
 
-    def visit_function(self, name, args, children):
+    def visit_function(self, name, args, body):
         self.methods.append(name)
 
 def collect_information_from_paths(paths):
@@ -84,8 +84,8 @@ class TestModuleVisitor(ASTVisitor):
         self.test_cases = []
         self.main_snippet = None
 
-    def visit_class(self, name, bases, children):
-        self.test_cases.append((name, children))
+    def visit_class(self, name, bases, body):
+        self.test_cases.append((name, body))
 
     def visit_import(self, names, import_from):
         if import_from:
