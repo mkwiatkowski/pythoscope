@@ -4,8 +4,12 @@ import re
 from Cheetah import Template
 
 from astvisitor import parse
-from store import TestModule, TestCase, ModuleNotFound
+from store import TestModule, TestClass, TestMethod, ModuleNotFound
 from util import camelize
+
+
+def method_name_to_test_method_name(name):
+    return "test_%s" % name
 
 class GenerationError(Exception):
     pass
@@ -60,14 +64,19 @@ class TestGenerator(object):
         test_name = camelize(object.name)
         test_body = str(Template.Template(file=self.template_path,
                                           searchList=[mapping]))
-        test_code = parse(test_body)
         if test_body:
-            return TestCase(name=test_name,
-                            code=test_code,
-                            imports=self.imports,
-                            main_snippet=self.main_snippet,
-                            associated_modules=[module])
-        
+            methods = []
+            for name in object.get_testable_methods():
+                methods.append(TestMethod(name=method_name_to_test_method_name(name),
+                                          klass=test_name,
+                                          # TODO: generate method code for real
+                                          code=None))
+            return TestClass(name=test_name,
+                             code=parse(test_body),
+                             methods=methods,
+                             imports=self.imports,
+                             main_snippet=self.main_snippet,
+                             associated_modules=[module])
 
 def add_tests_to_project(project, modnames, destdir, template, force=False):
     generator = TestGenerator.from_template(template)

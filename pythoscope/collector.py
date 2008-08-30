@@ -2,7 +2,7 @@ import os.path
 import re
 
 from astvisitor import parse, ParseError, ASTVisitor
-from store import Module, Class, Function, TestModule, TestCase
+from store import Module, Class, Function, TestModule, TestClass, TestMethod
 from util import read_file_contents, python_sources_below
 
 
@@ -77,15 +77,28 @@ def collect_information_from_code(code):
 
     return Module(objects=visitor.objects)
 
+class TestClassVisitor(ASTVisitor):
+    def __init__(self):
+        ASTVisitor.__init__(self)
+        self.methods = []
+
+    def visit_class(self, name, bases, body):
+        # Ignore definitions of subclasses.
+        pass
+
+    def visit_function(self, name, args, body):
+        self.methods.append((name, body))
+
 class TestModuleVisitor(ASTVisitor):
     def __init__(self):
         ASTVisitor.__init__(self)
         self.imports = []
-        self.test_cases = []
+        self.test_classes = []
         self.main_snippet = None
 
     def visit_class(self, name, bases, body):
-        self.test_cases.append((name, body))
+        visitor = descend(body.children, TestClassVisitor)
+        self.test_classes.append((name, visitor.methods, body))
 
     def visit_import(self, names, import_from):
         if import_from:
@@ -103,9 +116,14 @@ def collect_information_from_test_code(code):
         return Module(errors=[e])
     visitor = descend(tree, TestModuleVisitor)
 
-    test_cases = [TestCase(name, code, visitor.imports, visitor.main_snippet)
-                  for name, code in visitor.test_cases]
+    test_classes = []
+    for name, methods, code in visitor.test_classes:
+        klass = TestClass(name, code, visitor.imports, visitor.main_snippet)
+        methods = [TestMethod(name, klass, code) for name, code in methods]
+        klass.methods = methods
+        test_classes.append(klass)
+
     test_module = TestModule(code=tree, imports=visitor.imports,
                              main_snippet=visitor.main_snippet,
-                             test_cases=test_cases)
+                             test_cases=test_classes)
     return test_module
