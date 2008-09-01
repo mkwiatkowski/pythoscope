@@ -4,7 +4,7 @@ import sys
 
 from collector import collect_information_from_paths
 from generator import add_tests_to_project, UnknownTemplate
-from store import Project, ModuleNotFound
+from store import Project, ModuleNotFound, ModuleNeedsAnalysis
 
 PROJECT_FILE = ".pythoscope"
 
