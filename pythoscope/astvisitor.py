@@ -159,7 +159,7 @@ class ASTVisitor(object):
         ('_visit_function', "body=funcdef< 'def' name=NAME parameters< '(' [args=any] ')' > ':' any >"),
         ('_visit_import', "import_name< 'import' names=any > | import_from< 'from' import_from=any 'import' names=any >"),
         ('_visit_lambda_assign', "expr_stmt< name=NAME '=' lambdef< 'lambda' any ':' any > >"),
-        ('_visit_main_snippet', "if_stmt< 'if' comparison< '__name__' '==' (\"'__main__'\" | '\"__main__\"' ) > ':' body=any >"),
+        ('_visit_main_snippet', "body=if_stmt< 'if' comparison< '__name__' '==' (\"'__main__'\" | '\"__main__\"' ) > ':' any >"),
     ]
 
     def __init__(self):

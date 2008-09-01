@@ -96,14 +96,14 @@ class TestASTVisitorMainSnippet:
     def test_detects_the_main_snippet(self):
         code = "import unittest\n\nif __name__ == '__main__':\n    unittest.main()\n"
         def assertions(body):
-            assert_equal("\n    unittest.main()\n", body)
+            assert_equal("\nif __name__ == '__main__':\n    unittest.main()\n", body)
 
         self._test_main_snippet(code, assertions)
 
     def test_detects_main_snippet_with_different_quotes(self):
         code = 'import unittest\n\nif __name__ == "__main__":\n    unittest.main()\n'
         def assertions(body):
-            assert_equal("\n    unittest.main()\n", body)
+            assert_equal('\nif __name__ == "__main__":\n    unittest.main()\n', body)
 
         self._test_main_snippet(code, assertions)
 

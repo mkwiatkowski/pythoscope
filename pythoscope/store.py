@@ -359,18 +359,21 @@ class TestClass(_TestCase):
         self.main_snippet = main_snippet
         self.associated_modules = associated_modules
 
+        # Code of methods passed to the constructor is already contained
+        # within the class code.
         self.methods = []
         for method in methods:
-            self.add_test_case(method)
+            self.add_test_case(method, False)
 
-    def add_test_case(self, test_case):
+    def add_test_case(self, test_case, append_code=True):
         if not isinstance(test_case, TestMethod):
             raise TypeError("Only TestMethods can be addd to TestClasses.")
         if test_case.klass:
             raise TypeError("This TestMethod already belong to another test class.")
         test_case.klass = self
         self.methods.append(test_case)
-        self.code.append_child(test_case.code)
+        if append_code:
+            self.code.append_child(test_case.code)
 
 class TestMethod(_TestCase):
     def __init__(self, name, klass=None, code=None):

@@ -60,8 +60,8 @@ class TestGenerator(object):
                        for obj in module.testable_objects])
 
     def _generate_test_case(self, object, module):
-        mapping = {'object': object, 'camelize': camelize}
-        test_name = camelize(object.name)
+        test_name = "Test" + camelize(object.name)
+        mapping = {'object': object, 'test_name': test_name}
         test_body = str(Template.Template(file=self.template_path,
                                           searchList=[mapping]))
         if test_body:
