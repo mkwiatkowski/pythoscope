@@ -1,8 +1,6 @@
-from nose.tools import assert_equal
-
 from pythoscope.store import Project, Module, TestModule, TestClass, TestMethod
 
-from helper import assert_length
+from helper import assert_length, assert_equal_sets
 
 # Let nose know that those aren't test classes.
 TestModule.__test__ = False
@@ -43,5 +41,5 @@ class TestProject:
         test_class = TestClass("TestSomethingNew")
         self.project.add_test_case(test_class, "", False)
 
-        assert_equal([self.existing_test_class, test_class],
-                     list(self.project.test_cases_iter()))
+        assert_equal_sets([self.existing_test_class, test_class],
+                          list(self.project.test_cases_iter()))

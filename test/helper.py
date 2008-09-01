@@ -5,7 +5,7 @@ from nose.tools import assert_equal
 
 from pythoscope.generator import add_tests_to_project
 from pythoscope.store import TestModule, Project
-from pythoscope.util import read_file_contents
+from pythoscope.util import read_file_contents, set
 
 
 DATA_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data'))
@@ -38,6 +38,9 @@ def assert_single_class(info, name):
 def assert_single_function(info, name):
     assert_length(info.functions, 1)
     assert_equal(name, info.functions[0].name)
+
+def assert_equal_sets(collection1, collection2):
+    assert_equal(set(collection1), set(collection2))
 
 class CustomSeparator:
     def setUp(self):

@@ -1,6 +1,13 @@
 import os
 import re
 
+# Portability code.
+try:
+    set = set
+except NameError:
+    from sets import Set as set
+
+
 def camelize(name):
     """Covert name into CamelCase.
 
