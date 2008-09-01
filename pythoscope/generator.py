@@ -68,7 +68,6 @@ class TestGenerator(object):
             methods = []
             for name in object.get_testable_methods():
                 methods.append(TestMethod(name=method_name_to_test_method_name(name),
-                                          klass=test_name,
                                           # TODO: generate method code for real
                                           code=None))
             return TestClass(name=test_name,

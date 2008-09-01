@@ -1,3 +1,5 @@
+from nose.tools import assert_equal
+
 from pythoscope.store import Project, Module, TestModule, TestClass, TestMethod
 
 from helper import assert_length
@@ -12,11 +14,15 @@ class TestProject:
         self._old_test_module_save = TestModule._save
         TestModule._save = lambda self: None
 
+        self.existing_test_class = TestClass("TestSomething")
+        self.test_module = TestModule()
+        self.test_module.add_test_case(self.existing_test_class)
+        self.project = Project(modules=[self.test_module])
+
     def tearDown(self):
         TestModule._save = self._old_test_module_save
 
     def test_attaches_test_class_to_test_module_with_most_test_cases_for_associated_module(self):
-        self._create_test_module()
         module = Module()
         irrelevant_test_module = TestModule()
         self.existing_test_class.associated_modules = [module]
@@ -27,16 +33,15 @@ class TestProject:
 
         assert new_test_class in self.test_module.test_cases
 
-    def test_doesnt_overwrite_existing_test_classs_by_default(self):
-        self._create_test_module()
-
-        test_class = TestClass("existing")
+    def test_doesnt_overwrite_existing_test_classes_by_default(self):
+        test_class = TestClass("TestSomething")
         self.project.add_test_case(test_class, "", False)
 
         assert_length(list(self.project.test_cases_iter()), 1)
 
-    def _create_test_module(self):
-        self.existing_test_class = TestClass("existing")
-        self.test_module = TestModule()
-        self.test_module.add_test_case(self.existing_test_class)
-        self.project = Project(modules=[self.test_module])
+    def test_adds_new_test_classes_to_existing_test_module(self):
+        test_class = TestClass("TestSomethingNew")
+        self.project.add_test_case(test_class, "", False)
+
+        assert_equal([self.existing_test_class, test_class],
+                     list(self.project.test_cases_iter()))

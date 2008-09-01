@@ -87,7 +87,7 @@ class TestClassVisitor(ASTVisitor):
         pass
 
     def visit_function(self, name, args, body):
-        self.methods.append((name, body))
+        self.methods.append(TestMethod(name=name, code=body))
 
 class TestModuleVisitor(ASTVisitor):
     def __init__(self):
@@ -98,7 +98,9 @@ class TestModuleVisitor(ASTVisitor):
 
     def visit_class(self, name, bases, body):
         visitor = descend(body.children, TestClassVisitor)
-        self.test_classes.append((name, visitor.methods, body))
+        self.test_classes.append(TestClass(name=name,
+                                           methods=visitor.methods,
+                                           code=body))
 
     def visit_import(self, names, import_from):
         if import_from:
@@ -116,14 +118,12 @@ def collect_information_from_test_code(code):
         return Module(errors=[e])
     visitor = descend(tree, TestModuleVisitor)
 
-    test_classes = []
-    for name, methods, code in visitor.test_classes:
-        klass = TestClass(name, code, visitor.imports, visitor.main_snippet)
-        methods = [TestMethod(name, klass, code) for name, code in methods]
-        klass.methods = methods
-        test_classes.append(klass)
+    for test_class in visitor.test_classes:
+        test_class.imports = visitor.imports
+        test_class.main_snippet = visitor.main_snippet
 
-    test_module = TestModule(code=tree, imports=visitor.imports,
+    test_module = TestModule(code=tree,
+                             imports=visitor.imports,
                              main_snippet=visitor.main_snippet,
-                             test_cases=test_classes)
+                             test_cases=visitor.test_classes)
     return test_module

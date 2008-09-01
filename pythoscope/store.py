@@ -346,10 +346,8 @@ class TestClass(_TestCase):
 
     associated_modules is a list of Modules which this test class exercises.
     """
-    def __init__(self, name, code=None, methods=None, imports=None,
+    def __init__(self, name, code=None, methods=[], imports=None,
                  main_snippet=None, test_module=None, associated_modules=None):
-        if methods is None:
-            methods = []
         if imports is None:
             imports = []
         if associated_modules is None:
@@ -357,10 +355,13 @@ class TestClass(_TestCase):
 
         _TestCase.__init__(self, name, code)
         self.test_module = test_module
-        self.methods = methods
         self.imports = imports
         self.main_snippet = main_snippet
         self.associated_modules = associated_modules
+
+        self.methods = []
+        for method in methods:
+            self.add_test_case(method)
 
     def add_test_case(self, test_case):
         if not isinstance(test_case, TestMethod):
