@@ -2,8 +2,10 @@ from pythoscope.store import Project, Module, TestModule, TestClass, TestMethod
 
 from helper import assert_length
 
-# Let nose know that this isn't a test class.
+# Let nose know that those aren't test classes.
 TestModule.__test__ = False
+TestClass.__test__ = False
+TestMethod.__test__ = False
 
 class TestProject:
     def setUp(self):

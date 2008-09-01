@@ -2,7 +2,7 @@ import os
 import pickle
 import re
 
-from astvisitor import EmptyCode, Newline, clone, create_import, regenerate
+from astvisitor import EmptyCode, Newline, create_import, regenerate
 from util import max_by_not_zero, underscore, write_string_to_file
 
 
@@ -99,8 +99,12 @@ class Project(object):
         """Find the best place for the new test case to be added. If there is
         no such place in existing test modules, a new one will be created.
         """
-        return self._find_test_module(test_case) or \
-               self._create_test_module_for(test_case, test_directory)
+        if isinstance(test_case, TestClass):
+            return self._find_test_module(test_case) or \
+                   self._create_test_module_for(test_case, test_directory)
+        elif isinstance(test_case, TestMethod):
+            return self._find_test_class(test_case) or \
+                   self._create_test_class_for(test_case)
 
     def _create_test_module_for(self, test_case, test_directory):
         """Create a new TestModule for a given test case. If the test module
@@ -142,6 +146,16 @@ class Project(object):
         test_module = max_by_not_zero(test_cases_number, self._get_test_modules())
         if test_module:
             return test_module
+
+    def _find_test_class(self, test_method):
+        """Find a test class that will be good for the given test method.
+        """
+        pass # TODO
+
+    def _create_test_class_for(self, test_method):
+        """Create a new test class for given test method.
+        """
+        pass # TODO
 
     def __getitem__(self, module):
         for mod in self.modules:
@@ -223,22 +237,28 @@ class Function(object):
         return not self.name.startswith('_')
 
 class TestModule(Localizable):
-    def __init__(self, path=None, code=EmptyCode(), imports=[], main_snippet=None,
-                 test_cases=[]):
+    def __init__(self, path=None, code=None, imports=None, main_snippet=None,
+                 test_cases=None):
         # Path has to be unique, otherwise project won't be able to
         # differentiate between modules.
         if path is None:
             path = "<test %s>" % id(self)
+        if code is None:
+            code = EmptyCode()
+        if imports is None:
+            imports = []
+        if test_cases is None:
+            test_cases = []
 
         self.path = path
-
-        self.code = clone(code)
-        self.imports = imports[:]
-        self.main_snippet = clone(main_snippet)
-
-        self.test_cases = test_cases[:]
+        self.code = code
+        self.imports = imports
+        self.main_snippet = main_snippet
+        self.test_cases = test_cases
 
     def add_test_case(self, test_case):
+        if not isinstance(test_case, TestClass):
+            raise TypeError("Only TestClasses can be added to TestModules.")
         self._ensure_imports(test_case.imports)
         self._ensure_main_snippet(test_case.main_snippet)
         self._add_test_case(test_case)
@@ -310,7 +330,9 @@ class TestModule(Localizable):
             write_string_to_file(self.get_content(), self.path)
 
 class _TestCase(object):
-    def __init__(self, name, code=EmptyCode()):
+    def __init__(self, name, code=None):
+        if code is None:
+            code = EmptyCode()
         self.name = name
         self.code = code
 
@@ -324,18 +346,32 @@ class TestClass(_TestCase):
 
     associated_modules is a list of Modules which this test class exercises.
     """
-    def __init__(self, name, code=EmptyCode(), methods=[], imports=[],
-                 main_snippet=None, associated_modules=None):
+    def __init__(self, name, code=None, methods=None, imports=None,
+                 main_snippet=None, test_module=None, associated_modules=None):
+        if methods is None:
+            methods = []
+        if imports is None:
+            imports = []
         if associated_modules is None:
             associated_modules = []
 
         _TestCase.__init__(self, name, code)
+        self.test_module = test_module
         self.methods = methods
         self.imports = imports
         self.main_snippet = main_snippet
         self.associated_modules = associated_modules
 
+    def add_test_case(self, test_case):
+        if not isinstance(test_case, TestMethod):
+            raise TypeError("Only TestMethods can be addd to TestClasses.")
+        if test_case.klass:
+            raise TypeError("This TestMethod already belong to another test class.")
+        test_case.klass = self
+        self.methods.append(test_case)
+        self.code.append_child(test_case.code)
+
 class TestMethod(_TestCase):
-    def __init__(self, name, klass, code=EmptyCode()):
+    def __init__(self, name, klass=None, code=None):
         _TestCase.__init__(self, name, code)
         self.klass = klass
