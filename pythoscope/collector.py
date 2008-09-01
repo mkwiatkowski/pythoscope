@@ -7,7 +7,16 @@ from util import read_file_contents, python_sources_below
 
 
 def is_test_module_path(path):
-    return re.search(r'(^test_)|(_test.py$)', path)
+    """Return True if given path points to a test module.
+
+    >>> is_test_module_path("module.py")
+    False
+    >>> is_test_module_path("test_module.py")
+    True
+    >>> is_test_module_path("pythoscope-tests%stest_module.py" % os.path.sep)
+    True
+    """
+    return re.search(r'((^|%s)test_)|(_test.py$)' % re.escape(os.path.sep), path) is not None
 
 def descend(tree, visitor_type):
     """Walk over the AST using a visitor of a given type and return the visitor
