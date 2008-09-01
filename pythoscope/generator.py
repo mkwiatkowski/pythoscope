@@ -8,7 +8,9 @@ from store import TestModule, TestClass, TestMethod, ModuleNotFound
 from util import camelize
 
 
-def method_name_to_test_method_name(name):
+def name2testname(name):
+    if name[0].isupper():
+        return "Test%s" % name
     return "test_%s" % name
 
 class GenerationError(Exception):
@@ -60,14 +62,14 @@ class TestGenerator(object):
                        for obj in module.testable_objects])
 
     def _generate_test_case(self, object, module):
-        test_name = "Test" + camelize(object.name)
+        test_name = name2testname(camelize(object.name))
         mapping = {'object': object, 'test_name': test_name}
         test_body = str(Template.Template(file=self.template_path,
                                           searchList=[mapping]))
         if test_body:
             methods = []
             for name in object.get_testable_methods():
-                methods.append(TestMethod(name=method_name_to_test_method_name(name),
+                methods.append(TestMethod(name=name2testname(name),
                                           # TODO: generate method code for real
                                           code=None))
             return TestClass(name=test_name,
