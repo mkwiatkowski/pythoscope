@@ -1,16 +1,17 @@
 import os
 import pickle
 import re
+import time
 
 from astvisitor import EmptyCode, Newline, create_import, regenerate
 from util import max_by_not_zero, underscore, write_string_to_file
 
 
 class ModuleNeedsAnalysis(Exception):
-    def __init__(self, module, path):
-        Exception.__init__(self, "Destination test module %r wasn't analyzed." % module)
-        self.module = module
+    def __init__(self, path, out_of_sync=False):
+        Exception.__init__(self, "Destination test module %r needs analysis." % path)
         self.path = path
+        self.out_of_sync = out_of_sync
 
 class ModuleNotFound(Exception):
     def __init__(self, module):
@@ -108,12 +109,12 @@ class Project(object):
 
     def _create_test_module_for(self, test_case, test_directory):
         """Create a new TestModule for a given test case. If the test module
-        already existed, will raise an ModuleNeedsAnalysis exception.
+        already existed, will raise a ModuleNeedsAnalysis exception.
         """
         test_name = test_module_name_for_test_case(test_case)
         test_path = os.path.join(test_directory, test_name)
         if os.path.exists(test_path):
-            raise ModuleNeedsAnalysis(test_name, test_path)
+            raise ModuleNeedsAnalysis(test_path)
         test_module = TestModule(test_path)
         self.add_module(test_module)
         return test_module
@@ -168,19 +169,38 @@ class Project(object):
     modules = property(_get_modules)
 
 class Localizable(object):
-    "Any object with a path attribute."
+    """An object which has a corresponding file.
+
+    Each Localizable has a 'path' attribute and an information when it was
+    created, to be in sync with its file system counterpart.
+    """
+    def __init__(self, path, created=None):
+        # Path has to be unique, otherwise Project won't be able to
+        # differentiate between modules.
+        if path is None:
+            path  = "<%s %s>" % (str(self.__class__), id(self))
+        if created is None:
+            created = time.time()
+        self.path = path
+        self.created = created
+
     def _get_locator(self):
         return re.sub(r'(%s__init__)?\.py$' % os.path.sep, '', self.path).\
             replace(os.path.sep, ".")
     locator = property(_get_locator)
 
+    def is_out_of_sync(self):
+        """Is the object out of sync with its file.
+        """
+        try:
+            return os.path.getmtime(self.path) > self.created
+        except OSError:
+            # File may not exist, in which case we're safe.
+            return False
+
 class Module(Localizable):
     def __init__(self, path=None, objects=[], errors=[]):
-        # Path has to be unique, otherwise project won't be able to
-        # differentiate between modules.
-        if path is None:
-            path = "<code %s>" % id(self)
-        self.path = path
+        Localizable.__init__(self, path)
         self.objects = objects
         self.errors = errors
 
@@ -239,10 +259,8 @@ class Function(object):
 class TestModule(Localizable):
     def __init__(self, path=None, code=None, imports=None, main_snippet=None,
                  test_cases=None):
-        # Path has to be unique, otherwise project won't be able to
-        # differentiate between modules.
-        if path is None:
-            path = "<test %s>" % id(self)
+        Localizable.__init__(self, path)
+
         if code is None:
             code = EmptyCode()
         if imports is None:
@@ -250,7 +268,6 @@ class TestModule(Localizable):
         if test_cases is None:
             test_cases = []
 
-        self.path = path
         self.code = code
         self.imports = imports
         self.main_snippet = main_snippet
@@ -325,6 +342,8 @@ class TestModule(Localizable):
                 break
 
     def _save(self):
+        if self.is_out_of_sync():
+            raise ModuleNeedsAnalysis(self.path, out_of_sync=True)
         # Don't save the test file unless it has at least one test case.
         if self.test_cases:
             write_string_to_file(self.get_content(), self.path)

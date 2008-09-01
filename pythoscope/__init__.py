@@ -35,7 +35,8 @@ def collect(appname, args):
             print COLLECT_USAGE % appname
             sys.exit()
 
-    project = Project(PROJECT_FILE, modules=collect_information_from_paths(args))
+    project = Project.from_file(PROJECT_FILE)
+    project.add_modules(collect_information_from_paths(args))
     project.save()
 
 GENERATE_USAGE = """Pythoscope generator usage:
@@ -99,9 +100,14 @@ def generate(appname, args):
     project = Project.from_file(PROJECT_FILE)
     try:
         add_tests_to_project(project, args, destdir, template, force)
+        project.save()
     except ModuleNeedsAnalysis, err:
-        print "Error: Tried to generate tests for test module %r located at %r, " \
-              "but it hasn't been analyzed yet. Run 'collect' on it first." % (err.module, err.path)
+        if err.out_of_sync:
+            print "Error: Tried to generate tests for test module located at %r, " \
+                  "but it has been modified since last analysis. Run 'collect' on it again." % err.path
+        else:
+            print "Error: Tried to generate tests for test module located at %r, " \
+                  "but it hasn't been analyzed yet. Run 'collect' on it first." % err.path
     except ModuleNotFound, err:
         print "Error: Couldn't find information on module %r, try running 'collect' on it first." % err.module
     except UnknownTemplate, err:

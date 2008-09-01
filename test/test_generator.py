@@ -1,5 +1,6 @@
 import os
 import re
+import time
 
 from fixture import TempIO
 from nose.tools import assert_equal, assert_not_equal, assert_raises
@@ -117,8 +118,20 @@ class TestGeneratorWithDestDir:
 
     def test_doesnt_overwrite_existing_files_which_werent_analyzed(self):
         TEST_CONTENTS = "# test"
+        # File exists, but project does NOT contain corresponding TestModule.
         project = Project(modules=[self.module_with_function])
         existing_file = self.destdir.putfile("test_project.py", TEST_CONTENTS)
+
+        assert_raises(ModuleNeedsAnalysis,
+                      lambda: add_tests_to_project(project, ["project"], self.destdir, 'unittest'))
+        assert_equal(TEST_CONTENTS, read_file_contents(existing_file))
+
+    def test_doesnt_overwrite_existing_files_which_were_modified_since_last_analysis(self):
+        TEST_CONTENTS = "# test"
+        # File exists, and project contains corresponding, but outdated, TestModule.
+        project = Project(modules=[self.module_with_function, self.test_module])
+        existing_file = self.destdir.putfile("test_project.py", TEST_CONTENTS)
+        self.test_module.created = time.time() - 3600
 
         assert_raises(ModuleNeedsAnalysis,
                       lambda: add_tests_to_project(project, ["project"], self.destdir, 'unittest'))
