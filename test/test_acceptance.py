@@ -26,6 +26,14 @@ class TestStaticAnalysis:
 
 class TestAppendingTestClasses:
     def test_appends_test_classes_to_existing_test_modules(self):
+        self._test_appending("appending_test_cases_module_modified.py",
+                             "appending_test_cases_output_expected.py")
+
+    def test_appends_test_methods_to_existing_test_classes(self):
+        self._test_appending("appending_test_cases_module_added_method.py",
+                             "appending_test_cases_added_method_output_expected.py")
+
+    def _test_appending(self, modified_input, expected_output):
         project_path = TempIO()
         module_path = project_path.putfile("module.py", read_data("appending_test_cases_module_initial.py"))
         test_module_path = project_path.putfile("test_module.py", read_data("appending_test_cases_output_initial.py"))
@@ -36,7 +44,7 @@ class TestAppendingTestClasses:
                           modules=collect_information_from_paths(["module.py", "test_module.py"]))
 
         # Modify the application module and analyze it again.
-        project_path.putfile("module.py", read_data("appending_test_cases_module_modified.py"))
+        project_path.putfile("module.py", read_data(modified_input))
         project.add_modules(collect_information_from_paths(["module.py"]))
 
         # Regenerate the tests.
@@ -44,5 +52,5 @@ class TestAppendingTestClasses:
 
         assert_length(project._get_test_modules(), 1)
         result = read_file_contents(test_module_path)
-        expected_result = read_data("appending_test_cases_output_expected.py")
+        expected_result = read_data(expected_output)
         assert_equal(expected_result, result)

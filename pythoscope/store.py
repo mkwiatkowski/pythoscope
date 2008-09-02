@@ -3,7 +3,8 @@ import pickle
 import re
 import time
 
-from astvisitor import EmptyCode, Newline, create_import, regenerate
+from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
+     get_starting_whitespace, is_node_of_type, regenerate
 from util import max_by_not_zero, underscore, write_string_to_file
 
 
@@ -75,11 +76,14 @@ class Project(object):
             self.add_test_case(test_case, test_directory, force)
 
     def add_test_case(self, test_case, test_directory, force):
-        if not self._contains_test_case(test_case):
+        existing_test_case = self._find_test_case_by_name(test_case.name)
+        if not existing_test_case:
             place = self._find_place_for_test_case(test_case, test_directory)
             place.add_test_case(test_case)
         elif force:
             self._replace_test_case(test_case)
+        elif isinstance(test_case, TestClass) and isinstance(existing_test_case, TestClass):
+            self._merge_test_classes(existing_test_case, test_case)
 
     def test_cases_iter(self):
         "Iterate over all test cases present in a project."
@@ -87,11 +91,17 @@ class Project(object):
             for test_case in tmodule.test_cases:
                 yield test_case
 
-    def _contains_test_case(self, test_case):
+    def _merge_test_classes(self, test_class, other_test_class):
+        """Merge other_test_case into test_case.
+        """
+        for method in other_test_class.methods:
+            if not test_class.contains_method(method):
+                test_class.add_test_case(method)
+
+    def _find_test_case_by_name(self, name):
         for tcase in self.test_cases_iter():
-            if tcase.name == test_case.name:
-                return True
-        return False
+            if tcase.name == name:
+                return tcase
 
     def _get_test_modules(self):
         return [mod for mod in self.modules if isinstance(mod, TestModule)]
@@ -198,6 +208,12 @@ class Localizable(object):
             # File may not exist, in which case we're safe.
             return False
 
+    def write(self, new_content):
+        """Overwrite the file with new contents and update its created time.
+        """
+        write_string_to_file(new_content, self.path)
+        self.created = time.time()
+
 class Module(Localizable):
     def __init__(self, path=None, objects=[], errors=[]):
         Localizable.__init__(self, path)
@@ -258,28 +274,37 @@ class Function(object):
 
 class TestModule(Localizable):
     def __init__(self, path=None, code=None, imports=None, main_snippet=None,
-                 test_cases=None):
+                 test_cases=[]):
         Localizable.__init__(self, path)
 
         if code is None:
             code = EmptyCode()
         if imports is None:
             imports = []
-        if test_cases is None:
-            test_cases = []
 
         self.code = code
         self.imports = imports
         self.main_snippet = main_snippet
-        self.test_cases = test_cases
 
-    def add_test_case(self, test_case):
+        # Code of classes passed to the constructor is already contained
+        # within the module code.
+        self.test_cases = []
+        for test_case in test_cases:
+            self.add_test_case(test_case, False)
+
+    def add_test_case(self, test_case, append_code=True):
         if not isinstance(test_case, TestClass):
             raise TypeError("Only TestClasses can be added to TestModules.")
+
+        test_case.test_module = self
+        self.test_cases.append(test_case)
+
         self._ensure_imports(test_case.imports)
         self._ensure_main_snippet(test_case.main_snippet)
-        self._add_test_case(test_case)
-        self._save()
+
+        if append_code:
+            self._append_class_code(test_case)
+            self._save()
 
     def get_content(self):
         return regenerate(self.code)
@@ -326,8 +351,7 @@ class TestModule(Localizable):
         self.imports.append(import_desc)
         self.code.insert_child(0, create_import(import_desc))
 
-    def _add_test_case(self, test_case):
-        self.test_cases.append(test_case)
+    def _append_class_code(self, test_case):
         # If the main_snippet exists we have to put the new test case
         # before it. If it doesn't we put the test case at the end.
         if self.main_snippet:
@@ -346,7 +370,7 @@ class TestModule(Localizable):
             raise ModuleNeedsAnalysis(self.path, out_of_sync=True)
         # Don't save the test file unless it has at least one test case.
         if self.test_cases:
-            write_string_to_file(self.get_content(), self.path)
+            self.write(self.get_content())
 
 class _TestCase(object):
     def __init__(self, name, code=None):
@@ -387,12 +411,35 @@ class TestClass(_TestCase):
     def add_test_case(self, test_case, append_code=True):
         if not isinstance(test_case, TestMethod):
             raise TypeError("Only TestMethods can be addd to TestClasses.")
-        if test_case.klass:
-            raise TypeError("This TestMethod already belong to another test class.")
+
         test_case.klass = self
         self.methods.append(test_case)
+
         if append_code:
-            self.code.append_child(test_case.code)
+            self._append_method_code(test_case.code)
+            self.test_module._save()
+
+    def _append_method_code(self, code):
+        """Append to the right node, so that indentation level of the
+        new method is good.
+        """
+        if self.code.children and is_node_of_type(self.code.children[-1], 'suite'):
+            suite = self.code.children[-1]
+            # Prefix the definition with the right amount of whitespace.
+            node = find_last_leaf(suite.children[-2])
+            ident = get_starting_whitespace(suite)
+            # There's no need to have extra newlines.
+            if node.prefix.endswith("\n") and ident.startswith("\n"):
+                node.prefix += ident.lstrip("\n")
+            else:
+                node.prefix += ident
+            # Insert before the class contents dedent.
+            suite.insert_child(-1, code)
+        else:
+            self.code.append_child(code)
+
+    def contains_method(self, method):
+       return method.name in [m.name for m in self.methods]
 
 class TestMethod(_TestCase):
     def __init__(self, name, klass=None, code=None):

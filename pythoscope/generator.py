@@ -3,7 +3,7 @@ import re
 
 from Cheetah import Template
 
-from astvisitor import parse
+from astvisitor import descend, parse, ASTVisitor
 from store import TestModule, TestClass, TestMethod, ModuleNotFound
 from util import camelize
 
@@ -20,6 +20,20 @@ class UnknownTemplate(Exception):
     def __init__(self, template):
         Exception.__init__(self, "Couldn't find template %r." % template)
         self.template = template
+
+def localize_method_code(code, method_name):
+    """Return part of the code tree that corresponds to the given method
+    definition.
+    """
+    class LocalizeMethodVisitor(ASTVisitor):
+        def __init__(self):
+            ASTVisitor.__init__(self)
+            self.method_body = None
+        def visit_function(self, name, args, body):
+            if name == method_name:
+                self.method_body = body
+
+    return descend(code.children, LocalizeMethodVisitor).method_body
 
 class TestGenerator(object):
     def from_template(cls, template):
@@ -66,14 +80,16 @@ class TestGenerator(object):
         mapping = {'object': object, 'test_name': test_name}
         test_body = str(Template.Template(file=self.template_path,
                                           searchList=[mapping]))
+        test_code = parse(test_body)
         if test_body:
             methods = []
             for name in object.get_testable_methods():
-                methods.append(TestMethod(name=name2testname(name),
-                                          # TODO: generate method code for real
-                                          code=None))
+                method_name = name2testname(name)
+                methods.append(TestMethod(name=method_name,
+                                          code=localize_method_code(test_code,
+                                                                    method_name)))
             return TestClass(name=test_name,
-                             code=parse(test_body),
+                             code=test_code,
                              methods=methods,
                              imports=self.imports,
                              main_snippet=self.main_snippet,

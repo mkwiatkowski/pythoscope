@@ -43,3 +43,20 @@ class TestProject:
 
         assert_equal_sets([self.existing_test_class, test_class],
                           list(self.project.test_cases_iter()))
+
+    def test_adds_new_test_methods_to_existing_test_classes(self):
+        test_method = TestMethod("test_new_method")
+        test_class = TestClass("TestSomething", methods=[test_method])
+        self.project.add_test_case(test_class, "", False)
+
+        assert_length(list(self.project.test_cases_iter()), 1)
+        assert list(self.project.test_cases_iter())[0] is test_method.klass
+        assert test_method.klass is not test_class
+
+    def test_after_adding_new_test_case_to_class_its_module_is_saved(self):
+        saved = []
+        TestModule._save = lambda self: saved.append(True)
+
+        self.existing_test_class.add_test_case(TestMethod("test_something_new"))
+
+        assert saved

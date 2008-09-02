@@ -1,7 +1,7 @@
 import os.path
 import re
 
-from astvisitor import parse, ParseError, ASTVisitor
+from astvisitor import descend, parse, ParseError, ASTVisitor
 from store import Module, Class, Function, TestModule, TestClass, TestMethod
 from util import read_file_contents, python_sources_below
 
@@ -17,14 +17,6 @@ def is_test_module_path(path):
     True
     """
     return re.search(r'((^|%s)test_)|(_test.py$)' % re.escape(os.path.sep), path) is not None
-
-def descend(tree, visitor_type):
-    """Walk over the AST using a visitor of a given type and return the visitor
-    object once done.
-    """
-    visitor = visitor_type()
-    visitor.visit(tree)
-    return visitor
 
 class TopLevelVisitor(ASTVisitor):
     def __init__(self):

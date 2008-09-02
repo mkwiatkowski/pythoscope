@@ -47,6 +47,29 @@ def create_import(import_desc):
                      Leaf(token.NAME, import_desc, prefix=" "),
                      Newline()])
 
+def descend(tree, visitor_type):
+    """Walk over the AST using a visitor of a given type and return the visitor
+    object once done.
+    """
+    visitor = visitor_type()
+    visitor.visit(tree)
+    return visitor
+
+def find_last_leaf(node):
+    if isinstance(node, Leaf):
+        return node
+    else:
+        return find_last_leaf(node.children[-1])
+
+def get_starting_whitespace(code):
+    whitespace = ""
+    for child in code.children:
+        if is_leaf_of_type(child, token.NEWLINE, token.INDENT):
+            whitespace += child.value
+        else:
+            break
+    return whitespace
+
 def parse(code):
     """String -> AST
 
