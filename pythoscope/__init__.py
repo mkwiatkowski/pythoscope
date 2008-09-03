@@ -8,9 +8,9 @@ from store import Project, ModuleNotFound, ModuleNeedsAnalysis
 
 PROJECT_FILE = ".pythoscope"
 
-COLLECT_USAGE = """Pythoscope collector usage:
+INSPECT_USAGE = """Pythoscope inspector usage:
 
-    %s collect [options] [files and directories...]
+    %s inspect [options] [files and directories...]
 
 This command will collect information about all listed Python
 modules. Listed paths can point to a Python module file or to
@@ -22,17 +22,17 @@ Options:
   -h, --help                 Show this help message and exit.
 """
 
-def collect(appname, args):
+def inspect(appname, args):
     try:
         options, args = getopt.getopt(args, "h", ["help"])
     except getopt.GetoptError, err:
         print "Error:", err, "\n"
-        print COLLECT_USAGE % appname
+        print INSPECT_USAGE % appname
         sys.exit(1)
 
     for opt, value in options:
         if opt in ("-h", "--help"):
-            print COLLECT_USAGE % appname
+            print INSPECT_USAGE % appname
             sys.exit()
 
     project = Project.from_file(PROJECT_FILE)
@@ -104,18 +104,18 @@ def generate(appname, args):
     except ModuleNeedsAnalysis, err:
         if err.out_of_sync:
             print "Error: Tried to generate tests for test module located at %r, " \
-                  "but it has been modified since last analysis. Run 'collect' on it again." % err.path
+                  "but it has been modified since last analysis. Run 'inspect' on it again." % err.path
         else:
             print "Error: Tried to generate tests for test module located at %r, " \
-                  "but it hasn't been analyzed yet. Run 'collect' on it first." % err.path
+                  "but it hasn't been analyzed yet. Run 'inspect' on it first." % err.path
     except ModuleNotFound, err:
-        print "Error: Couldn't find information on module %r, try running 'collect' on it first." % err.module
+        print "Error: Couldn't find information on module %r, try running 'inspect' on it first." % err.module
     except UnknownTemplate, err:
         print "Error: Couldn't find template named %r. Available templates are 'nose' and 'unittest'." % err.template
 
 MAIN_USAGE = """Pythoscope usage:
 
-    %s collect [options] [files and directories...]
+    %s inspect [options] [files and directories...]
     %s generate [options] [module names...]
 
 Pythoscope has two modes of operation. It can either collect
@@ -131,8 +131,8 @@ def main():
     try:
         mode, args = sys.argv[1], sys.argv[2:]
 
-        if mode == 'collect':
-            collect(appname, args)
+        if mode == 'inspect':
+            inspect(appname, args)
         elif mode == 'generate':
             generate(appname, args)
         else:

@@ -17,7 +17,7 @@ Usage
 You can use the tool through a single **pythoscope** command. To analyze
 one of your projects, type::
 
- $ pythoscope  collect  path/to/your/project/
+ $ pythoscope  inspect  path/to/your/project/
 
 It's only doing static analysis, and doesn't import your modules or
 execute your code in any way, so you're perfectly safe to run it on
