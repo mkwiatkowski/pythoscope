@@ -1,9 +1,7 @@
 import os
 import re
 
-from Cheetah import Template
-
-from astvisitor import descend, parse, ASTVisitor
+from astvisitor import EmptyCode, descend, parse, ASTVisitor
 from store import TestModule, TestClass, TestMethod, ModuleNotFound
 from util import camelize
 
@@ -36,23 +34,17 @@ def localize_method_code(code, method_name):
     return descend(code.children, LocalizeMethodVisitor).method_body
 
 class TestGenerator(object):
+    imports = []
+    main_snippet = EmptyCode()
+
     def from_template(cls, template):
         if template == 'unittest':
-            return cls(template='unittest',
-                       imports=['unittest'],
-                       main_snippet=parse("if __name__ == '__main__':\n    unittest.main()\n"))
+            return UnittestTestGenerator()
         elif template == 'nose':
-            return cls(template='nose',
-                       imports=[('nose', 'SkipTest')])
+            return NoseTestGenerator()
         else:
             raise UnknownTemplate(template)
     from_template = classmethod(from_template)
-
-    def __init__(self, template, imports, main_snippet=""):
-        self.template_path = os.path.join(os.path.dirname(__file__),
-                                          "templates/%s.tpl" % template)
-        self.imports = imports
-        self.main_snippet = main_snippet
 
     def add_tests_to_project(self, project, modnames, destdir, force=False):
         if os.path.exists(destdir):
@@ -76,24 +68,44 @@ class TestGenerator(object):
                        for obj in module.testable_objects])
 
     def _generate_test_case(self, object, module):
-        test_name = name2testname(camelize(object.name))
-        mapping = {'object': object, 'test_name': test_name}
-        test_body = str(Template.Template(file=self.template_path,
-                                          searchList=[mapping]))
-        test_code = parse(test_body)
-        if test_body:
-            methods = []
-            for name in object.get_testable_methods():
-                method_name = name2testname(name)
-                methods.append(TestMethod(name=method_name,
-                                          code=localize_method_code(test_code,
-                                                                    method_name)))
-            return TestClass(name=test_name,
+        class_name = name2testname(camelize(object.name))
+        methods_names = map(name2testname, object.get_testable_methods())
+
+        # Don't generate empty test classes.
+        if methods_names:
+            test_body = self.create_test_class(class_name, methods_names)
+            test_code = parse(test_body)
+            def methodname2testmethod(method_name):
+                return TestMethod(name=method_name,
+                                  code=localize_method_code(test_code,
+                                                            method_name))
+            return TestClass(name=class_name,
                              code=test_code,
-                             methods=methods,
+                             methods=map(methodname2testmethod, methods_names),
                              imports=self.imports,
                              main_snippet=self.main_snippet,
                              associated_modules=[module])
+
+class UnittestTestGenerator(TestGenerator):
+    imports = ['unittest']
+    main_snippet = parse("if __name__ == '__main__':\n    unittest.main()\n")
+
+    def create_test_class(self, class_name, methods_names):
+        result = "class %s(unittest.TestCase):\n" % class_name
+        for method_name in methods_names:
+            result += "    def %s(self):\n" % method_name
+            result += "        assert False # TODO: implement your test here\n\n"
+        return result
+
+class NoseTestGenerator(TestGenerator):
+    imports=[('nose', 'SkipTest')]
+
+    def create_test_class(self, class_name, methods_names):
+        result = "class %s:\n" % class_name
+        for method_name in methods_names:
+            result += "    def %s(self):\n" % method_name
+            result += "        raise SkipTest # TODO: implement your test here\n\n"
+        return result
 
 def add_tests_to_project(project, modnames, destdir, template, force=False):
     generator = TestGenerator.from_template(template)

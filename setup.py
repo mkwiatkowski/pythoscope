@@ -12,9 +12,9 @@ setup(
     url = 'http://pythoscope.org',
 
     packages = ['pythoscope', 'lib2to3'],
-    package_data = {'pythoscope': ['templates/*.tpl'],
+    package_data = {'pythoscope': [],
                     'lib2to3': ['*.txt']},
-    install_requires = ['Cheetah'],
+    install_requires = [],
 
     entry_points = {        
         'console_scripts': ['pythoscope = pythoscope:main']
