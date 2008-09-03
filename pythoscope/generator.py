@@ -58,6 +58,9 @@ class TestGenerator(object):
             self._add_tests_for_module(module, project, destdir, force)
 
     def _add_tests_for_module(self, module, project, destdir, force):
+        # Don't generate tests for test modules.
+        if isinstance(module, TestModule):
+            return
         test_cases = self._generate_test_cases(module)
         if test_cases:
             project.add_test_cases(test_cases, destdir, force)

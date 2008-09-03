@@ -99,6 +99,10 @@ class TestGenerator:
 
         assert re.match(r"import unittest.*?class TestFunction.*?if __name__ == '__main__'", result, re.DOTALL)
 
+    def test_ignores_test_modules(self):
+        result = generate_single_test_module(TestModule())
+        assert_equal("", result)
+
 class TestGeneratorWithDestDir:
     def setUp(self):
         self.destdir = TempIO()
