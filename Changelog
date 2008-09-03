@@ -1,6 +1,17 @@
 Changelog
 =========
 
+0.2.2
+-----
+
+* Fixed the inner classes bug (`#260924 <https://bugs.launchpad.net/pythoscope/+bug/260924>`_).
+* Collector appends new data to .pythoscope file instead of overwriting it.
+* Test modules are being analyzed as well.
+* Using lib2to3 for static code analysis instead of stdlib's compiler module.
+* Generator can append test cases to existing test modules. Preserves comments and original whitespace.
+* Cheetah is no longer a dependency.
+* Renamed 'collect' command to 'inspect'.
+
 0.2.1
 -----
 
