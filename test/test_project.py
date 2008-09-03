@@ -1,3 +1,5 @@
+from nose.tools import assert_equal
+
 from pythoscope.store import Project, Module, TestModule, TestClass, TestMethod
 
 from helper import assert_length, assert_equal_sets
@@ -60,3 +62,40 @@ class TestProject:
         self.existing_test_class.add_test_case(TestMethod("test_something_new"))
 
         assert saved
+
+    def test_doesnt_overwrite_existing_test_methods_by_default(self):
+        test_method = TestMethod("test_method")
+        test_class = TestClass("TestSomething", methods=[test_method])
+        self.project.add_test_case(test_class, "", False)
+
+        assert_equal([test_method],
+                     list(self.project.test_cases_iter())[0].methods)
+
+        # Let's try adding the same method again.
+        new_test_method = TestMethod("test_method")
+        new_test_class = TestClass("TestSomething", methods=[new_test_method])
+        self.project.add_test_case(new_test_class, "", False)
+
+        assert_equal([test_method],
+                     list(self.project.test_cases_iter())[0].methods)
+
+    def test_overwrites_existing_test_methods_with_force_option(self):
+        test_method = TestMethod("test_method")
+        test_class = TestClass("TestSomething", methods=[test_method])
+        self.project.add_test_case(test_class, "", False)
+
+        assert_equal([test_method],
+                     list(self.project.test_cases_iter())[0].methods)
+
+        # Let's try adding the same method again with a force option
+        # set to True.
+        new_test_method = TestMethod("test_method")
+        new_test_class = TestClass("TestSomething", methods=[new_test_method])
+        self.project.add_test_case(new_test_class, "", True)
+
+        # The class is still the same.
+        assert_equal([self.existing_test_class],
+                     list(self.project.test_cases_iter()))
+        # But the method got replaced.
+        assert_equal([new_test_method],
+                     list(self.project.test_cases_iter())[0].methods)

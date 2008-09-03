@@ -80,10 +80,10 @@ class Project(object):
         if not existing_test_case:
             place = self._find_place_for_test_case(test_case, test_directory)
             place.add_test_case(test_case)
-        elif force:
-            self._replace_test_case(test_case)
         elif isinstance(test_case, TestClass) and isinstance(existing_test_case, TestClass):
-            self._merge_test_classes(existing_test_case, test_case)
+            self._merge_test_classes(existing_test_case, test_case, force)
+        elif force:
+            existing_test_case.replace_itself_with(test_case)
 
     def test_cases_iter(self):
         "Iterate over all test cases present in a project."
@@ -91,12 +91,15 @@ class Project(object):
             for test_case in tmodule.test_cases:
                 yield test_case
 
-    def _merge_test_classes(self, test_class, other_test_class):
+    def _merge_test_classes(self, test_class, other_test_class, force):
         """Merge other_test_case into test_case.
         """
         for method in other_test_class.methods:
-            if not test_class.contains_method(method):
+            existing_test_method = test_class.find_method_by_name(method.name)
+            if not existing_test_method:
                 test_class.add_test_case(method)
+            elif force:
+                test_class.replace_test_case(existing_test_method, method)
 
     def _find_test_case_by_name(self, name):
         for tcase in self.test_cases_iter():
@@ -306,6 +309,25 @@ class TestModule(Localizable):
             self._append_class_code(test_case)
             self._save()
 
+    def replace_test_case(self, old_test_case, new_test_case):
+        if not isinstance(new_test_case, TestClass):
+            raise TypeError("Only TestClasses can be added to TestModules.")
+        if old_test_case not in self.test_cases:
+            raise ValueError("Given test case is not part of this test module.")
+
+        # Don't remove imports or main_snippet or we may unintentionally
+        # break something.
+        self.test_cases.remove(old_test_case)
+
+        # The easiest way to get the new code inside the AST is to call
+        # replace() on the old test case code.
+        # It is destructive, but since we're discarding the old test case
+        # anyway, it doesn't matter.
+        old_test_case.code.replace(new_test_case.code)
+
+        self.add_test_case(new_test_case, False)
+        self._save()
+
     def get_content(self):
         return regenerate(self.code)
 
@@ -410,7 +432,7 @@ class TestClass(_TestCase):
 
     def add_test_case(self, test_case, append_code=True):
         if not isinstance(test_case, TestMethod):
-            raise TypeError("Only TestMethods can be addd to TestClasses.")
+            raise TypeError("Only TestMethods can be added to TestClasses.")
 
         test_case.klass = self
         self.methods.append(test_case)
@@ -418,6 +440,26 @@ class TestClass(_TestCase):
         if append_code:
             self._append_method_code(test_case.code)
             self.test_module._save()
+
+    def replace_itself_with(self, new_test_class):
+        self.test_module.replace_test_case(self, new_test_class)
+
+    def replace_test_case(self, old_test_case, new_test_case):
+        if not isinstance(new_test_case, TestMethod):
+            raise TypeError("Only TestMethods can be added to TestClasses.")
+        if old_test_case not in self.methods:
+            raise ValueError("Given test method is not part of this test class.")
+
+        self.methods.remove(old_test_case)
+
+        # The easiest way to get the new code inside the AST is to call
+        # replace() on the old test case code.
+        # It is destructive, but since we're discarding the old test case
+        # anyway, it doesn't matter.
+        old_test_case.code.replace(new_test_case.code)
+
+        self.add_test_case(new_test_case, False)
+        self.test_module._save()
 
     def _append_method_code(self, code):
         """Append to the right node, so that indentation level of the
@@ -438,10 +480,15 @@ class TestClass(_TestCase):
         else:
             self.code.append_child(code)
 
-    def contains_method(self, method):
-       return method.name in [m.name for m in self.methods]
+    def find_method_by_name(self, name):
+        for method in self.methods:
+            if method.name == name:
+                return method
 
 class TestMethod(_TestCase):
     def __init__(self, name, klass=None, code=None):
         _TestCase.__init__(self, name, code)
         self.klass = klass
+
+    def replace_itself_with(self, new_test_method):
+        self.klass.replace_test_case(self, new_test_method)
