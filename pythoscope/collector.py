@@ -100,7 +100,7 @@ class TestModuleVisitor(ASTVisitor):
     def visit_class(self, name, bases, body):
         visitor = descend(body.children, TestClassVisitor)
         self.test_classes.append(TestClass(name=name,
-                                           methods=visitor.methods,
+                                           test_cases=visitor.methods,
                                            code=body))
 
     def visit_import(self, names, import_from):

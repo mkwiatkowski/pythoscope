@@ -256,9 +256,9 @@ class TestCollector:
         assert_equal(["FirstTestClass", "TestMore"],
                      map(lambda c: c.name, info.test_classes))
         assert_equal(["test_this", "test_that"],
-                     map(lambda c: c.name, info.test_classes[0].methods))
+                     map(lambda c: c.name, info.test_classes[0].test_cases))
         assert_equal(["test_more"],
-                     map(lambda c: c.name, info.test_classes[1].methods))
+                     map(lambda c: c.name, info.test_classes[1].test_cases))
 
     def test_recognizes_unrecognized_chunks_of_test_code(self):
         info = collect_information_from_test_code(strange_test_code)
