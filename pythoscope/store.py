@@ -38,40 +38,47 @@ def module_path_to_test_path(module):
     return "test_" + re.sub(r'%s__init__.py$' % os.path.sep, '.py', module).\
         replace(os.path.sep, "_")
 
+def get_pythoscope_path(project_path):
+    return os.path.join(project_path, ".pythoscope")
+
+def get_pickle_path(project_path):
+    return os.path.join(get_pythoscope_path(project_path), "project.pickle")
+
 class Project(object):
     """Object representing the whole project under Pythoscope wings.
 
     No modifications are final until you call save().
     """
 
-    def from_directory(cls, dirpath):
-        """Read the project information from the pythoscope directory.
+    def from_directory(cls, project_path):
+        """Read the project information from the .pythoscope/ directory of
+        the given project.
 
         The pickle file may not exist for project that is analyzed the
         first time and that's OK.
         """
-        picklepath = os.path.join(dirpath, "project.pickle")
         try:
-            fd = open(picklepath)
+            fd = open(get_pickle_path(project_path))
             project = pickle.load(fd)
             fd.close()
-            # Update project's picklepath, as the file could've been renamed.
-            project.picklepath = picklepath
             # Mark all test modules as unchanged.
             for test_module in project._get_test_modules():
                 test_module.changed = False
         except IOError:
-            project = Project(picklepath)
+            project = Project(project_path)
         return project
     from_directory = classmethod(from_directory)
 
-    def __init__(self, picklepath=None, modules=[]):
-        self.picklepath = picklepath
+    def __init__(self, path=None, modules=[]):
+        self.path = path
         self._modules = {}
         self.add_modules(modules)
 
+    def _get_pickle_path(self):
+        return get_pickle_path(self.path)
+
     def save(self):
-        fd = open(self.picklepath, 'w')
+        fd = open(self._get_pickle_path(), 'w')
         pickle.dump(self, fd)
         fd.close()
 

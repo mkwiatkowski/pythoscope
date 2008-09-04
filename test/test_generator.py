@@ -106,6 +106,7 @@ class TestGenerator:
 class TestGeneratorWithDestDir:
     def setUp(self):
         self.destdir = TempIO()
+        self.destdir.mkdir(".pythoscope")
         self.empty_module = Module("project.py")
         self.module_with_function = Module("project.py", [Function("function")])
         self.test_module = TestModule(path=os.path.join(self.destdir, "test_project.py"))
@@ -123,7 +124,7 @@ class TestGeneratorWithDestDir:
     def test_doesnt_overwrite_existing_files_which_werent_analyzed(self):
         TEST_CONTENTS = "# test"
         # File exists, but project does NOT contain corresponding TestModule.
-        project = Project(os.path.join(self.destdir, "pickle"),
+        project = Project(self.destdir,
                           modules=[self.module_with_function])
         existing_file = self.destdir.putfile("test_project.py", TEST_CONTENTS)
 
@@ -137,7 +138,7 @@ class TestGeneratorWithDestDir:
     def test_doesnt_overwrite_existing_files_which_were_modified_since_last_analysis(self):
         TEST_CONTENTS = "# test"
         # File exists, and project contains corresponding, but outdated, TestModule.
-        project = Project(os.path.join(self.destdir, "pickle"),
+        project = Project(self.destdir,
                           modules=[self.module_with_function, self.test_module])
         existing_file = self.destdir.putfile("test_project.py", TEST_CONTENTS)
         self.test_module.created = time.time() - 3600

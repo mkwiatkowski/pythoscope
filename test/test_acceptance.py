@@ -35,12 +35,13 @@ class TestAppendingTestClasses:
 
     def _test_appending(self, modified_input, expected_output):
         project_path = TempIO()
+        project_path.mkdir(".pythoscope")
         module_path = project_path.putfile("module.py", read_data("appending_test_cases_module_initial.py"))
         test_module_path = project_path.putfile("test_module.py", read_data("appending_test_cases_output_initial.py"))
 
         # Analyze the project with an existing test module.
         os.chdir(project_path)
-        project = Project(os.path.join(project_path, ".pythoscope"),
+        project = Project(project_path,
                           modules=collect_information_from_paths(["module.py", "test_module.py"]))
 
         # Modify the application module and analyze it again.

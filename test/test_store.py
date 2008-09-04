@@ -10,11 +10,11 @@ from helper import assert_length, CustomSeparator
 class TestProject:
     def test_can_be_saved_and_restored_from_file(self):
         tmpdir = TempIO()
-        filepath = os.path.join(tmpdir, "project.pickle")
+        tmpdir.mkdir(".pythoscope")
         modules = [Module(path='good_module.py', objects=[Class("AClass", ["amethod"]), Function("afunction")]),
                    Module(path='bad_module.py', errors=["Syntax error"])]
 
-        project = Project(filepath, modules)
+        project = Project(tmpdir, modules)
         project.save()
         project = Project.from_directory(tmpdir)
 

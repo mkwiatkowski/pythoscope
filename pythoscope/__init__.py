@@ -4,34 +4,34 @@ import sys
 
 from collector import collect_information_from_paths
 from generator import add_tests_to_project, UnknownTemplate
-from store import Project, ModuleNotFound, ModuleNeedsAnalysis
+from store import Project, ModuleNotFound, ModuleNeedsAnalysis, \
+     get_pythoscope_path
 
-
-PYTHOSCOPE_DIRECTORY = ".pythoscope"
 
 class PythoscopeDirectoryMissing(Exception):
     pass
 
-def find_pythoscope_directory(path):
-    """Try to find a pythoscope directory for a given path.
+def find_project_directory(path):
+    """Try to find a pythoscope project directory for a given path,
+    i.e. the closest directory that contains .pythoscope/ subdirectory.
 
     Will go up the directory tree and return the first matching path.
     """
     path = os.path.realpath(path)
 
     if not os.path.isdir(path):
-        return find_pythoscope_directory(os.path.dirname(path))
+        return find_project_directory(os.path.dirname(path))
 
-    pythoscope_path = os.path.join(path, PYTHOSCOPE_DIRECTORY)
+    pythoscope_path = get_pythoscope_path(path)
     parent_path = os.path.join(path, os.path.pardir)
 
     # We reached the root.
     if os.path.samefile(path, parent_path):
         raise PythoscopeDirectoryMissing()
     elif os.path.isdir(pythoscope_path):
-        return pythoscope_path
+        return path
     else:
-        return find_pythoscope_directory(os.path.join(path, os.path.pardir))
+        return find_project_directory(os.path.join(path, os.path.pardir))
 
 INIT_USAGE = """Pythoscope initialization usage:
 
@@ -69,7 +69,7 @@ def init(appname, args):
         project_path = args[0]
     else:
         project_path = "."
-    pythoscope_path = os.path.join(project_path, PYTHOSCOPE_DIRECTORY)
+    pythoscope_path = get_pythoscope_path(project_path)
 
     try:
         os.makedirs(pythoscope_path)
@@ -108,7 +108,7 @@ def inspect(appname, args):
         args = ["."]
 
     try:
-        project = Project.from_directory(find_pythoscope_directory(args[0]))
+        project = Project.from_directory(find_project_directory(args[0]))
         project.add_modules(collect_information_from_paths(args))
         project.save()
     except PythoscopeDirectoryMissing, err:
@@ -174,7 +174,7 @@ def generate(appname, args):
             template = value
 
     try:
-        project = Project.from_directory(find_pythoscope_directory(args[0]))
+        project = Project.from_directory(find_project_directory(args[0]))
         add_tests_to_project(project, args, destdir, template, force)
         project.save()
     except IndexError:
