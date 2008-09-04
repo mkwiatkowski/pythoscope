@@ -192,14 +192,19 @@ def generate(appname, args):
 
 MAIN_USAGE = """Pythoscope usage:
 
+    %s init [options] [directory]
     %s inspect [options] [files and directories...]
     %s generate [options] [module names...]
 
-Pythoscope has two modes of operation. It can either collect
-information about a Python project or generate test cases
-based on previously gahered info. Use the --help option in
-combination with a mode name to get help on this particular
-mode.
+Pythoscope has two main modes of operation. It can either
+collect information about a Python project or generate test
+cases based on previously gathered info. Use the --help
+option in combination with a mode name to get help on this
+particular command.
+
+However, before any of those two modes can be used, you
+have to use the 'init' command to initialize the .pythoscope
+directory.
 """
 
 def main():
@@ -216,8 +221,8 @@ def main():
             generate(appname, args)
         else:
             print "Error: unknown command %r\n" % mode
-            print MAIN_USAGE % (appname, appname)
+            print MAIN_USAGE % (appname, appname, appname)
             sys.exit(1)
     except IndexError:
-        print MAIN_USAGE % (appname, appname)
+        print MAIN_USAGE % (appname, appname, appname)
         sys.exit(1)
