@@ -84,6 +84,8 @@ This command will collect information about all listed Python
 modules. Listed paths can point to a Python module file or to
 a directory. Directories are processed recursively.
 
+If you don't list any locations, current directory will be used.
+
 Options:
   -h, --help                 Show this help message and exit.
 """
@@ -101,12 +103,14 @@ def inspect(appname, args):
             print INSPECT_USAGE % appname
             sys.exit()
 
+    # Use the current directory as default.
+    if not args:
+        args = ["."]
+
     try:
         project = Project.from_directory(find_pythoscope_directory(args[0]))
         project.add_modules(collect_information_from_paths(args))
         project.save()
-    except IndexError:
-        print "Error: You must provide at least one argument to inspect."
     except PythoscopeDirectoryMissing, err:
         print "Error: Can't find .pythoscope/ directory for this project. " \
               "Use the 'init' command first."
