@@ -450,11 +450,13 @@ class TestModule(Localizable, TestSuite):
         elif force:
             self.main_snippet.replace(main_snippet)
             self.main_snippet = main_snippet
+        self.save()
 
     def _ensure_imports(self, imports):
         "Make sure that all required imports are present."
         for imp in imports:
             self._ensure_import(imp)
+        self.save()
 
     def _ensure_import(self, import_desc):
         # Add an extra newline separating imports from the code.
