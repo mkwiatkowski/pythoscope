@@ -39,28 +39,31 @@ def module_path_to_test_path(module):
         replace(os.path.sep, "_")
 
 class Project(object):
-    def from_file(cls, filepath):
-        """Try reading from the project file. The file may not exist for
-        projects that are analyzed the first time and that's OK.
+    def from_directory(cls, dirpath):
+        """Read the project information from the pythoscope directory.
+
+        The pickle file may not exist for project that is analyzed the
+        first time and that's OK.
         """
+        picklepath = os.path.join(dirpath, "project.pickle")
         try:
-            fd = open(filepath)
+            fd = open(picklepath)
             project = pickle.load(fd)
-            # Update project's filepath, as the file could've been renamed.
-            project.filepath = filepath
+            # Update project's picklepath, as the file could've been renamed.
+            project.picklepath = picklepath
             fd.close()
         except IOError:
-            project = Project(filepath)
+            project = Project(picklepath)
         return project
-    from_file = classmethod(from_file)
+    from_directory = classmethod(from_directory)
 
-    def __init__(self, filepath=None, modules=[]):
-        self.filepath = filepath
+    def __init__(self, picklepath=None, modules=[]):
+        self.picklepath = picklepath
         self._modules = {}
         self.add_modules(modules)
 
     def save(self):
-        fd = open(self.filepath, 'w')
+        fd = open(self.picklepath, 'w')
         pickle.dump(self, fd)
         fd.close()
 

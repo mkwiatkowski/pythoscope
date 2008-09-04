@@ -6,7 +6,75 @@ from collector import collect_information_from_paths
 from generator import add_tests_to_project, UnknownTemplate
 from store import Project, ModuleNotFound, ModuleNeedsAnalysis
 
-PROJECT_FILE = ".pythoscope"
+
+PYTHOSCOPE_DIRECTORY = ".pythoscope"
+
+class PythoscopeDirectoryMissing(Exception):
+    pass
+
+def find_pythoscope_directory(path):
+    """Try to find a pythoscope directory for a given path.
+
+    Will go up the directory tree and return the first matching path.
+    """
+    path = os.path.realpath(path)
+
+    if not os.path.isdir(path):
+        return find_pythoscope_directory(os.path.dirname(path))
+
+    pythoscope_path = os.path.join(path, PYTHOSCOPE_DIRECTORY)
+    parent_path = os.path.join(path, os.path.pardir)
+
+    # We reached the root.
+    if os.path.samefile(path, parent_path):
+        raise PythoscopeDirectoryMissing()
+    elif os.path.isdir(pythoscope_path):
+        return pythoscope_path
+    else:
+        return find_pythoscope_directory(os.path.join(path, os.path.pardir))
+
+INIT_USAGE = """Pythoscope initialization usage:
+
+    %s init [options] [directory]
+
+This command will initialize given project directory for
+further Pythoscope usage. This is required before using other
+Pythoscope commands.
+
+Initialization creates .pythoscope/ directory in the project
+directory, which will store all information related to test
+generation. No analysis is done at this point.
+
+If you don't provide a directory argument, current directory
+will be used.
+
+Options:
+  -h, --help                 Show this help message and exit.
+"""
+
+def init(appname, args):
+    try:
+        options, args = getopt.getopt(args, "h", ["help"])
+    except getopt.GetoptError, err:
+        print "Error:", err, "\n"
+        print INIT_USAGE % appname
+        sys.exit(1)
+
+    for opt, value in options:
+        if opt in ("-h", "--help"):
+            print INIT_USAGE % appname
+            sys.exit()
+
+    if args:
+        project_path = args[0]
+    else:
+        project_path = "."
+    pythoscope_path = os.path.join(project_path, PYTHOSCOPE_DIRECTORY)
+
+    try:
+        os.makedirs(pythoscope_path)
+    except OSError, err:
+        print "Couldn't initialize Pythoscope directory: %s." % err.strerror
 
 INSPECT_USAGE = """Pythoscope inspector usage:
 
@@ -14,9 +82,7 @@ INSPECT_USAGE = """Pythoscope inspector usage:
 
 This command will collect information about all listed Python
 modules. Listed paths can point to a Python module file or to
-a directory. Directories are processed recursively. All
-information is saved to .pythoscope file in the current
-working directory.
+a directory. Directories are processed recursively.
 
 Options:
   -h, --help                 Show this help message and exit.
@@ -35,9 +101,15 @@ def inspect(appname, args):
             print INSPECT_USAGE % appname
             sys.exit()
 
-    project = Project.from_file(PROJECT_FILE)
-    project.add_modules(collect_information_from_paths(args))
-    project.save()
+    try:
+        project = Project.from_directory(find_pythoscope_directory(args[0]))
+        project.add_modules(collect_information_from_paths(args))
+        project.save()
+    except IndexError:
+        print "Error: You must provide at least one argument to inspect."
+    except PythoscopeDirectoryMissing, err:
+        print "Error: Can't find .pythoscope/ directory for this project. " \
+              "Use the 'init' command first."
 
 GENERATE_USAGE = """Pythoscope generator usage:
 
@@ -97,10 +169,15 @@ def generate(appname, args):
         elif opt in ("-t", "--template"):
             template = value
 
-    project = Project.from_file(PROJECT_FILE)
     try:
+        project = Project.from_directory(find_pythoscope_directory(args[0]))
         add_tests_to_project(project, args, destdir, template, force)
         project.save()
+    except IndexError:
+        print "Error: You must provide at least one argument to generate."
+    except PythoscopeDirectoryMissing:
+        print "Error: Can't find .pythoscope/ directory for this project. " \
+              "Use the 'init' command first."
     except ModuleNeedsAnalysis, err:
         if err.out_of_sync:
             print "Error: Tried to generate tests for test module located at %r, " \
@@ -131,12 +208,14 @@ def main():
     try:
         mode, args = sys.argv[1], sys.argv[2:]
 
-        if mode == 'inspect':
+        if mode == 'init':
+            init(appname, args)
+        elif mode == 'inspect':
             inspect(appname, args)
         elif mode == 'generate':
             generate(appname, args)
         else:
-            print "Error: unknown mode %r\n" % mode
+            print "Error: unknown command %r\n" % mode
             print MAIN_USAGE % (appname, appname)
             sys.exit(1)
     except IndexError:

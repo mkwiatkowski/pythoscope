@@ -16,7 +16,7 @@ class TestProject:
 
         project = Project(filepath, modules)
         project.save()
-        project = Project.from_file(filepath)
+        project = Project.from_directory(tmpdir)
 
         assert_equal(2, len(project.modules))
         assert_equal(2, len(project['good_module'].objects))
