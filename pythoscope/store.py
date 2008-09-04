@@ -482,8 +482,8 @@ class TestModule(Localizable, TestSuite):
                 break
 
     def save(self):
-        if self.is_out_of_sync():
-            raise ModuleNeedsAnalysis(self.path, out_of_sync=True)
         # Don't save the test file unless it has at least one test case.
         if self.test_cases:
+            if self.is_out_of_sync():
+                raise ModuleNeedsAnalysis(self.path, out_of_sync=True)
             self.write(self.get_content())
