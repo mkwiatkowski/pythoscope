@@ -49,6 +49,7 @@ class TestAppendingTestClasses:
 
         # Regenerate the tests.
         add_tests_to_project(project, ["module.py"], project_path, 'unittest')
+        project.save()
 
         assert_length(project._get_test_modules(), 1)
         result = read_file_contents(test_module_path)

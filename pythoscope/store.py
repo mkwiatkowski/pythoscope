@@ -39,6 +39,11 @@ def module_path_to_test_path(module):
         replace(os.path.sep, "_")
 
 class Project(object):
+    """Object representing the whole project under Pythoscope wings.
+
+    No modifications are final until you call save().
+    """
+
     def from_directory(cls, dirpath):
         """Read the project information from the pythoscope directory.
 
@@ -49,9 +54,12 @@ class Project(object):
         try:
             fd = open(picklepath)
             project = pickle.load(fd)
+            fd.close()
             # Update project's picklepath, as the file could've been renamed.
             project.picklepath = picklepath
-            fd.close()
+            # Mark all test modules as unchanged.
+            for test_module in project._get_test_modules():
+                test_module.changed = False
         except IOError:
             project = Project(picklepath)
         return project
@@ -66,6 +74,9 @@ class Project(object):
         fd = open(self.picklepath, 'w')
         pickle.dump(self, fd)
         fd.close()
+
+        for test_module in self._get_test_modules():
+            test_module.save()
 
     def add_modules(self, modules):
         for module in modules:
@@ -302,6 +313,7 @@ class TestSuite(TestCase):
     def __init__(self, name, code=None, parent=None, test_cases=[]):
         TestCase.__init__(self, name, code, parent)
 
+        self.changed = True
         self.test_cases = []
 
     def add_test_cases(self, test_cases, append_code=True):
@@ -316,7 +328,7 @@ class TestSuite(TestCase):
 
         if append_code:
             self._append_test_case_code(test_case.code)
-            self.save()
+            self.mark_as_changed()
 
     def replace_test_case(self, old_test_case, new_test_case):
         self._check_test_case_type(new_test_case)
@@ -332,11 +344,12 @@ class TestSuite(TestCase):
         old_test_case.code.replace(new_test_case.code)
 
         self.add_test_case(new_test_case, False)
-        self.save()
+        self.mark_as_changed()
 
-    def save(self):
+    def mark_as_changed(self):
+        self.changed = True
         if self.parent:
-            self.parent.save()
+            self.parent.mark_as_changed()
 
     def _check_test_case_type(self, test_case):
         if not isinstance(test_case, tuple(self.allowed_test_case_classes)):
@@ -450,13 +463,13 @@ class TestModule(Localizable, TestSuite):
         elif force:
             self.main_snippet.replace(main_snippet)
             self.main_snippet = main_snippet
-        self.save()
+        self.mark_as_changed()
 
     def _ensure_imports(self, imports):
         "Make sure that all required imports are present."
         for imp in imports:
             self._ensure_import(imp)
-        self.save()
+        self.mark_as_changed()
 
     def _ensure_import(self, import_desc):
         # Add an extra newline separating imports from the code.
@@ -487,8 +500,8 @@ class TestModule(Localizable, TestSuite):
                 break
 
     def save(self):
-        # Don't save the test file unless it has at least one test case.
-        if self.test_cases:
+        # Don't save the test file unless it has been changed.
+        if self.changed:
             if self.is_out_of_sync():
                 raise ModuleNeedsAnalysis(self.path, out_of_sync=True)
             self.write(self.get_content())

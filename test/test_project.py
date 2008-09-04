@@ -55,13 +55,10 @@ class TestProject:
         assert list(self.project.test_cases_iter())[0] is test_method.parent
         assert test_method.parent is not test_class
 
-    def test_after_adding_new_test_case_to_class_its_module_is_saved(self):
-        saved = []
-        TestModule.save = lambda self: saved.append(True)
-
+    def test_after_adding_new_test_case_to_class_its_module_is_marked_as_changed(self):
         self.existing_test_class.add_test_case(TestMethod("test_something_new"))
 
-        assert saved
+        assert self.test_module.changed
 
     def test_doesnt_overwrite_existing_test_methods_by_default(self):
         test_method = TestMethod("test_method")

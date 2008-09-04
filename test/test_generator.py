@@ -123,22 +123,30 @@ class TestGeneratorWithDestDir:
     def test_doesnt_overwrite_existing_files_which_werent_analyzed(self):
         TEST_CONTENTS = "# test"
         # File exists, but project does NOT contain corresponding TestModule.
-        project = Project(modules=[self.module_with_function])
+        project = Project(os.path.join(self.destdir, "pickle"),
+                          modules=[self.module_with_function])
         existing_file = self.destdir.putfile("test_project.py", TEST_CONTENTS)
 
-        assert_raises(ModuleNeedsAnalysis,
-                      lambda: add_tests_to_project(project, ["project"], self.destdir, 'unittest'))
+        def add_and_save():
+            add_tests_to_project(project, ["project"], self.destdir, 'unittest')
+            project.save()
+
+        assert_raises(ModuleNeedsAnalysis, add_and_save)
         assert_equal(TEST_CONTENTS, read_file_contents(existing_file))
 
     def test_doesnt_overwrite_existing_files_which_were_modified_since_last_analysis(self):
         TEST_CONTENTS = "# test"
         # File exists, and project contains corresponding, but outdated, TestModule.
-        project = Project(modules=[self.module_with_function, self.test_module])
+        project = Project(os.path.join(self.destdir, "pickle"),
+                          modules=[self.module_with_function, self.test_module])
         existing_file = self.destdir.putfile("test_project.py", TEST_CONTENTS)
         self.test_module.created = time.time() - 3600
 
-        assert_raises(ModuleNeedsAnalysis,
-                      lambda: add_tests_to_project(project, ["project"], self.destdir, 'unittest'))
+        def add_and_save():
+            add_tests_to_project(project, ["project"], self.destdir, 'unittest')
+            project.save()
+
+        assert_raises(ModuleNeedsAnalysis, add_and_save)
         assert_equal(TEST_CONTENTS, read_file_contents(existing_file))
 
     def test_doesnt_generate_test_files_with_no_test_cases(self):
