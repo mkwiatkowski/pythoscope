@@ -6,7 +6,7 @@ from helper import CustomSeparator
 
 class TestStoreWithCustomSeparator(CustomSeparator):
     def test_uses_system_specific_path_separator(self):
-        module = Module("some#path.py")
+        module = Module(subpath="some#path.py", project=None)
         assert_equal("some.path", module.locator)
 
     def test_module_path_to_test_path_uses_system_specific_path_separator(self):

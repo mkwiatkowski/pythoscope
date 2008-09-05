@@ -3,7 +3,7 @@ import re
 
 from astvisitor import descend, parse, ParseError, ASTVisitor
 from store import Module, Class, Function, TestModule, TestClass, TestMethod
-from util import read_file_contents, python_sources_below
+from util import read_file_contents, python_modules_below
 
 
 def is_test_module_path(path):
@@ -45,38 +45,26 @@ class ClassVisitor(ASTVisitor):
     def visit_function(self, name, args, body):
         self.methods.append(name)
 
-def collect_information_from_paths(paths):
-    """Collects information from list of paths. Path can point to a Python module
-    file or to a directory. Directories are processed recursively.
+def inspect_project(project):
+    for modpath in python_modules_below(project.path):
+        inspect_module(project, modpath)
 
-    Returns a list of modules.
-    """
-    modules = []
-    for path in paths:
-        if os.path.isdir(path):
-            modules.extend(collect_information_from_paths(python_sources_below(path)))
-        else:
-            modules.append(collect_information_from_module(path))
-    return modules
-
-def collect_information_from_module(path):
+def inspect_module(project, path):
     if is_test_module_path(path):
-        collect_from_code = collect_information_from_test_code
+        collect_from_code = inspect_test_code
     else:
-        collect_from_code = collect_information_from_code
+        collect_from_code = inspect_code
 
-    module = collect_from_code(read_file_contents(path))
-    module.path = path
-    return module
+    collect_from_code(project, path, read_file_contents(path))
 
-def collect_information_from_code(code):
+def inspect_code(project, path, code):
     try:
         tree = parse(code)
     except ParseError, e:
-        return Module(errors=[e])
+        return project.add_module(Module, path, errors=[e])
     visitor = descend(tree, TopLevelVisitor)
 
-    return Module(objects=visitor.objects)
+    return project.add_module(Module, path, objects=visitor.objects)
 
 class TestClassVisitor(ASTVisitor):
     def __init__(self):
@@ -112,19 +100,19 @@ class TestModuleVisitor(ASTVisitor):
     def visit_main_snippet(self, body):
         self.main_snippet = body
 
-def collect_information_from_test_code(code):
+def inspect_test_code(project, path, code):
     try:
         tree = parse(code)
     except ParseError, e:
-        return Module(errors=[e])
+        return project.add_module(Module, path, errors=[e])
     visitor = descend(tree, TestModuleVisitor)
 
     for test_class in visitor.test_classes:
         test_class.imports = visitor.imports
         test_class.main_snippet = visitor.main_snippet
 
-    test_module = TestModule(code=tree,
-                             imports=visitor.imports,
-                             main_snippet=visitor.main_snippet,
-                             test_cases=visitor.test_classes)
-    return test_module
+    return project.add_module(TestModule, path,
+                              code=tree,
+                              imports=visitor.imports,
+                              main_snippet=visitor.main_snippet,
+                              test_cases=visitor.test_classes)

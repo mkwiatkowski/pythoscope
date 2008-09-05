@@ -2,7 +2,7 @@ import getopt
 import os
 import sys
 
-from collector import collect_information_from_paths
+from collector import inspect_project
 from generator import add_tests_to_project, UnknownTemplate
 from store import Project, ModuleNotFound, ModuleNeedsAnalysis, \
      get_pythoscope_path
@@ -78,13 +78,9 @@ def init(appname, args):
 
 INSPECT_USAGE = """Pythoscope inspector usage:
 
-    %s inspect [options] [files and directories...]
+    %s inspect [options]
 
-This command will collect information about all listed Python
-modules. Listed paths can point to a Python module file or to
-a directory. Directories are processed recursively.
-
-If you don't list any locations, current directory will be used.
+This command will collect information about the current project.
 
 Options:
   -h, --help                 Show this help message and exit.
@@ -103,13 +99,9 @@ def inspect(appname, args):
             print INSPECT_USAGE % appname
             sys.exit()
 
-    # Use the current directory as default.
-    if not args:
-        args = ["."]
-
     try:
-        project = Project.from_directory(find_project_directory(args[0]))
-        project.add_modules(collect_information_from_paths(args))
+        project = Project.from_directory(find_project_directory("."))
+        inspect_project(project)
         project.save()
     except PythoscopeDirectoryMissing, err:
         print "Error: Can't find .pythoscope/ directory for this project. " \

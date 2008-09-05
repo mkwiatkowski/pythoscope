@@ -22,7 +22,7 @@ class ModuleNotFound(Exception):
 def test_module_name_for_test_case(test_case):
     "Come up with a name for a test module which will contain given test case."
     if test_case.associated_modules:
-        return module_path_to_test_path(test_case.associated_modules[0].path)
+        return module_path_to_test_path(test_case.associated_modules[0].subpath)
     return "test_foo.py" # TODO
 
 def module_path_to_test_path(module):
@@ -57,10 +57,13 @@ class Project(object):
         The pickle file may not exist for project that is analyzed the
         first time and that's OK.
         """
+        project_path = os.path.realpath(project_path)
         try:
             fd = open(get_pickle_path(project_path))
             project = pickle.load(fd)
             fd.close()
+            # Update project's path, as the directory could've been moved.
+            project.path = project_path
             # Mark all test modules as unchanged.
             for test_module in project._get_test_modules():
                 test_module.changed = False
@@ -69,10 +72,9 @@ class Project(object):
         return project
     from_directory = classmethod(from_directory)
 
-    def __init__(self, path=None, modules=[]):
+    def __init__(self, path=None):
         self.path = path
         self._modules = {}
-        self.add_modules(modules)
 
     def _get_pickle_path(self):
         return get_pickle_path(self.path)
@@ -85,12 +87,29 @@ class Project(object):
         for test_module in self._get_test_modules():
             test_module.save()
 
-    def add_modules(self, modules):
-        for module in modules:
-            self.add_module(module)
+    # TODO: 'module_type' will dissapear once we merge Module and TestModule classes.
+    def add_module(self, module_type, path, **kwds):
+        module = module_type(subpath=self._extract_subpath(path),
+                             project=self,
+                             **kwds)
+        self._modules[module.subpath] = module
+        return module
 
-    def add_module(self, module):
-        self._modules[module.path] = module
+    def _extract_subpath(self, path):
+        """Takes the file path and returns subpath relative to the
+        project, so the following correspondence is preserved:
+
+            path <=> os.path.join(project.path, subpath)
+
+        in terms of physical path (i.e. not necessarily strict string
+        equality).
+
+        Assumes the given path is under Project.path.
+        """
+        # project.path is a realpath which doesn't include trailing path
+        # separator, so we add 1 for that separator here.
+        prefix_length = len(self.path) + 1
+        return os.path.realpath(path)[prefix_length:]
 
     def add_test_cases(self, test_cases, test_directory, force):
         for test_case in test_cases:
@@ -149,9 +168,7 @@ class Project(object):
         test_path = os.path.join(test_directory, test_name)
         if os.path.exists(test_path):
             raise ModuleNeedsAnalysis(test_path)
-        test_module = TestModule(test_path)
-        self.add_module(test_module)
-        return test_module
+        return self.add_module(TestModule, test_path)
 
     def _find_test_module(self, test_case):
         """Find test module that will be good for the given test case.
@@ -169,7 +186,7 @@ class Project(object):
         the application module.
         """
         for test_module in self._get_test_modules():
-            if test_module.path.endswith(module_path_to_test_path(module.path)):
+            if test_module.subpath.endswith(module_path_to_test_path(module.subpath)):
                 return test_module
 
     def _find_associate_test_module_by_test_cases(self, module):
@@ -194,7 +211,7 @@ class Project(object):
 
     def __getitem__(self, module):
         for mod in self.modules:
-            if module in [mod.path, mod.locator]:
+            if module in [mod.subpath, mod.locator]:
                 return mod
         raise ModuleNotFound(module)
 
@@ -203,23 +220,21 @@ class Project(object):
     modules = property(_get_modules)
 
 class Localizable(object):
-    """An object which has a corresponding file.
+    """An object which has a corresponding file belonging to some Project.
 
     Each Localizable has a 'path' attribute and an information when it was
-    created, to be in sync with its file system counterpart.
+    created, to be in sync with its file system counterpart. Path is always
+    relative to the project this localizable belongs to.
     """
-    def __init__(self, path, created=None):
-        # Path has to be unique, otherwise Project won't be able to
-        # differentiate between modules.
-        if path is None:
-            path  = "<%s %s>" % (str(self.__class__), id(self))
+    def __init__(self, project, subpath, created=None):
+        self.project = project
+        self.subpath = subpath
         if created is None:
             created = time.time()
-        self.path = path
         self.created = created
 
     def _get_locator(self):
-        return re.sub(r'(%s__init__)?\.py$' % os.path.sep, '', self.path).\
+        return re.sub(r'(%s__init__)?\.py$' % os.path.sep, '', self.subpath).\
             replace(os.path.sep, ".")
     locator = property(_get_locator)
 
@@ -227,20 +242,25 @@ class Localizable(object):
         """Is the object out of sync with its file.
         """
         try:
-            return os.path.getmtime(self.path) > self.created
+            return os.path.getmtime(self.get_path()) > self.created
         except OSError:
             # File may not exist, in which case we're safe.
             return False
 
+    def get_path(self):
+        """Return the full path to the file.
+        """
+        return os.path.join(self.project.path, self.subpath)
+
     def write(self, new_content):
         """Overwrite the file with new contents and update its created time.
         """
-        write_string_to_file(new_content, self.path)
+        write_string_to_file(new_content, self.get_path())
         self.created = time.time()
 
 class Module(Localizable):
-    def __init__(self, path=None, objects=[], errors=[]):
-        Localizable.__init__(self, path)
+    def __init__(self, project, subpath, objects=[], errors=[]):
+        Localizable.__init__(self, project, subpath)
         self.objects = objects
         self.errors = errors
 
@@ -420,9 +440,9 @@ class TestClass(TestSuite):
 class TestModule(Localizable, TestSuite):
     allowed_test_case_classes = [TestClass]
 
-    def __init__(self, path=None, code=None, test_cases=[], imports=None,
+    def __init__(self, project, subpath, code=None, test_cases=[], imports=None,
                  main_snippet=None):
-        Localizable.__init__(self, path)
+        Localizable.__init__(self, project, subpath)
         TestSuite.__init__(self, None, code, None, test_cases)
 
         if imports is None:
@@ -510,5 +530,5 @@ class TestModule(Localizable, TestSuite):
         # Don't save the test file unless it has been changed.
         if self.changed:
             if self.is_out_of_sync():
-                raise ModuleNeedsAnalysis(self.path, out_of_sync=True)
+                raise ModuleNeedsAnalysis(self.subpath, out_of_sync=True)
             self.write(self.get_content())

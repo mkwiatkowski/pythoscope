@@ -4,7 +4,7 @@ from fixture import TempIO
 from nose.tools import assert_equal
 
 from pythoscope.generator import add_tests_to_project
-from pythoscope.store import TestModule, Project
+from pythoscope.store import Module, TestModule, Project
 from pythoscope.util import read_file_contents, set
 
 
@@ -42,6 +42,8 @@ def assert_single_function(info, name):
 def assert_equal_sets(collection1, collection2):
     assert_equal(set(collection1), set(collection2))
 
+# Make your test case a subclass of CustomSeparator to test your code with
+# alternative os.path.sep.
 class CustomSeparator:
     def setUp(self):
         self.old_sep = os.path.sep
@@ -50,13 +52,37 @@ class CustomSeparator:
     def tearDown(self):
         os.path.sep = self.old_sep
 
-def generate_single_test_module(module, template='unittest'):
-    """Return test module contents generated for given module.
+def EmptyProject():
+    return Project(path=os.path.realpath("."))
+
+def ProjectInDirectory():
+    project_path = TempIO()
+    project_path.mkdir(".pythoscope")
+    return Project(project_path)
+
+def ProjectWithModules(paths, project_type=EmptyProject):
+    project = project_type()
+    for path in paths:
+        module_type = Module
+        if isinstance(path, tuple):
+            module_type, path = path
+        project.add_module(module_type, os.path.join(project.path, path))
+    return project
+
+def get_test_module_contents(project):
+    """Get contents of the first test module of a project.
     """
-    project = Project(modules=[module])
-    add_tests_to_project(project, [module.path], TempIO(), template, False)
     try:
         return project._get_test_modules()[0].get_content()
     except IndexError:
         return "" # No test module was generated.
+get_test_module_contents.__test__ = False
+
+def generate_single_test_module(template='unittest', type=Module, **module_kwds):
+    """Return test module contents generated for given module.
+    """
+    project = EmptyProject()
+    project.add_module(type, "module.py", **module_kwds)
+    add_tests_to_project(project, ["module.py"], TempIO(), template, False)
+    return get_test_module_contents(project)
 generate_single_test_module.__test__ = False

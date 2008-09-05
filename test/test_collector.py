@@ -2,14 +2,13 @@ import sys
 
 from nose.tools import assert_equal
 from nose.exc import SkipTest
-from helper import assert_length, assert_single_class, assert_single_function
+from helper import assert_length, assert_single_class, assert_single_function, EmptyProject
 
-from pythoscope.collector import collect_information_from_code,\
-     collect_information_from_test_code
+from pythoscope.collector import inspect_code, inspect_test_code
 from pythoscope.astvisitor import regenerate
 
 # Let nose know that those aren't test functions.
-collect_information_from_test_code.__test__ = False
+inspect_test_code.__test__ = False
 
 new_style_class = """
 class AClass(object):
@@ -159,50 +158,56 @@ def test_that():
 """
 
 class TestCollector:
+    def _inspect_code(self, code):
+        return inspect_code(EmptyProject(), "module.py", code)
+
+    def _inspect_test_code(self, code):
+        return inspect_test_code(EmptyProject(), "test_module.py", code)
+
     def test_collects_information_about_top_level_classes(self):
-        info = collect_information_from_code(new_style_class)
+        info = self._inspect_code(new_style_class)
 
         assert_single_class(info, "AClass")
 
     def test_collects_information_about_top_level_functions(self):
-        info = collect_information_from_code(stand_alone_function)
+        info = self._inspect_code(stand_alone_function)
 
         assert_single_function(info, "a_function")
 
     def test_doesnt_count_methods_as_functions(self):
-        info = collect_information_from_code(new_style_class)
+        info = self._inspect_code(new_style_class)
 
         assert_length(info.functions, 0)
 
     def test_collects_information_about_old_style_classes(self):
-        info = collect_information_from_code(old_style_class)
+        info = self._inspect_code(old_style_class)
 
         assert_single_class(info, "OldStyleClass")
 
     def test_collects_information_about_classes_without_methods(self):
-        info = collect_information_from_code(class_without_methods)
+        info = self._inspect_code(class_without_methods)
 
         assert_single_class(info, "ClassWithoutMethods")
 
     def test_ignores_inner_classes_and_functions(self):
-        info = collect_information_from_code(inner_classes_and_function)
+        info = self._inspect_code(inner_classes_and_function)
 
         assert_single_class(info, "OuterClass")
         assert_single_function(info, "outer_function")
 
     def test_collects_information_about_methods_of_a_class(self):
-        info = collect_information_from_code(class_with_methods)
+        info = self._inspect_code(class_with_methods)
 
         assert_equal(["first_method", "second_method", "third_method"],
                      info.classes[0].methods)
 
     def test_collector_handles_syntax_errors(self):
-        info = collect_information_from_code(syntax_error)
+        info = self._inspect_code(syntax_error)
 
         assert_length(info.errors, 1)
 
     def test_collector_handles_indentation_errors(self):
-        info = collect_information_from_code(indentation_error)
+        info = self._inspect_code(indentation_error)
 
         assert_length(info.errors, 1)
 
@@ -211,7 +216,7 @@ class TestCollector:
                  definitions_inside_while, definitions_inside_for]
 
         for case in suite:
-            info = collect_information_from_code(case)
+            info = self._inspect_code(case)
             assert_single_class(info, "InsideClass")
             assert_single_function(info, "inside_function")
 
@@ -221,12 +226,12 @@ class TestCollector:
         if sys.version_info < (2, 5):
             raise SkipTest
 
-        info = collect_information_from_code(definitions_inside_with)
+        info = self._inspect_code(definitions_inside_with)
         assert_single_class(info, "InsideClass")
         assert_single_function(info, "inside_function")
 
     def test_collects_information_about_functions_defined_using_lambda(self):
-        info = collect_information_from_code(lambda_definition)
+        info = self._inspect_code(lambda_definition)
 
         assert_single_function(info, "lambda_function")
 
@@ -235,22 +240,22 @@ class TestCollector:
         expected_results = [[], ["object"], ["Mother", "Father"]]
 
         for case, expected in zip(suite, expected_results):
-            info = collect_information_from_code(case)
+            info = self._inspect_code(case)
             assert_equal(expected, info.classes[0].bases)
 
     def test_correctly_collects_information_about_bases_from_other_modules(self):
-        info = collect_information_from_code(class_inheriting_from_unittest_testcase)
+        info = self._inspect_code(class_inheriting_from_unittest_testcase)
 
         assert_equal(["unittest.TestCase"], info.classes[0].bases)
 
     def test_ignores_existance_of_any_inner_class_methods(self):
-        info = collect_information_from_code(class_with_inner_class)
+        info = self._inspect_code(class_with_inner_class)
 
         assert_single_class(info, "OuterClass")
         assert_equal(["__init__", "outer_class_method"], info.classes[0].methods)
 
     def test_collects_information_about_test_modules(self):
-        info = collect_information_from_test_code(two_test_classes)
+        info = self._inspect_test_code(two_test_classes)
 
         assert_equal(["unittest"], info.imports)
         assert_equal(["FirstTestClass", "TestMore"],
@@ -261,12 +266,12 @@ class TestCollector:
                      map(lambda c: c.name, info.test_classes[1].test_cases))
 
     def test_recognizes_unrecognized_chunks_of_test_code(self):
-        info = collect_information_from_test_code(strange_test_code)
+        info = self._inspect_test_code(strange_test_code)
 
         assert_equal(strange_test_code, regenerate(info.code))
 
     def test_recognizes_nose_style_test_code(self):
-        info = collect_information_from_test_code(nose_style_test_functions)
+        info = self._inspect_test_code(nose_style_test_functions)
 
         assert_equal(["nose"], info.imports)
         assert_equal(nose_style_test_functions, regenerate(info.code))

@@ -1,26 +1,31 @@
+import os
+
 from fixture import TempIO
 from nose.tools import assert_equal, assert_raises
 
 from pythoscope.store import Project, Module, Class, Function, TestModule, \
      TestClass, TestMethod, ModuleNotFound
 
-from helper import assert_length, assert_equal_sets
+from helper import assert_length, assert_equal_sets, EmptyProject, ProjectWithModules
 
 # Let nose know that those aren't test classes.
 TestModule.__test__ = False
 TestClass.__test__ = False
 TestMethod.__test__ = False
 
+
 class TestProject:
     def test_can_be_saved_and_restored_from_file(self):
         tmpdir = TempIO()
         tmpdir.mkdir(".pythoscope")
-        modules = [Module(path='good_module.py',
-                          objects=[Class("AClass", ["amethod"]),
-                                   Function("afunction")]),
-                   Module(path='bad_module.py', errors=["Syntax error"])]
-
-        project = Project(tmpdir, modules)
+        project = Project(tmpdir)
+        def ppath(path):
+            return os.path.join(project.path, path)
+        project.add_module(Module, ppath('good_module.py'),
+                           objects=[Class("AClass", ["amethod"]),
+                                    Function("afunction")])
+        project.add_module(Module, ppath('bad_module.py'),
+                           errors=["Syntax error"])
         project.save()
         project = Project.from_directory(tmpdir)
 
@@ -33,10 +38,10 @@ class TestProject:
 
     def test_can_be_queried_for_modules_by_their_path(self):
         paths = ["module.py", "sub/dir/module.py", "package/__init__.py"]
-        project = Project(modules=map(Module, paths))
+        project = ProjectWithModules(paths)
 
         for path in paths:
-            assert_equal(path, project[path].path)
+            assert_equal(path, project[path].subpath)
 
     def test_raises_module_not_found_exception_when_no_module_like_that_is_present(self):
         project = Project()
@@ -45,33 +50,33 @@ class TestProject:
     def test_can_be_queried_for_modules_by_their_locator(self):
         paths = ["module.py", "sub/dir/module.py", "package/__init__.py"]
         locators = ["module", "sub.dir.module", "package"]
-        project = Project(modules=map(Module, paths))
+        project = ProjectWithModules(paths)
 
         for path, locator in zip(paths, locators):
-            assert_equal(path, project[locator].path)
+            assert_equal(path, project[locator].subpath)
 
     def test_replaces_old_module_objects_with_new_ones_during_add_modules(self):
-        modules = map(Module, ["module.py", "sub/dir/module.py", "other/module.py"])
-        new_module = Module("other/module.py")
+        paths = ["module.py", "sub/dir/module.py", "other/module.py"]
+        new_module_path = "other/module.py"
 
-        project = Project(modules=modules)
-        project.add_modules([new_module])
+        project = ProjectWithModules(paths)
+        new_module = project.add_module(Module, new_module_path)
 
         assert_length(project.modules, 3)
         assert project["other/module.py"] is new_module
 
 class TestProjectWithTestModule:
     def setUp(self):
+        self.project = EmptyProject()
         self.existing_test_class = TestClass("TestSomething")
-        self.test_module = TestModule()
+        self.test_module = self.project.add_module(TestModule, "test_module.py")
         self.test_module.add_test_case(self.existing_test_class)
-        self.project = Project(modules=[self.test_module])
 
     def test_attaches_test_class_to_test_module_with_most_test_cases_for_associated_module(self):
-        module = Module()
-        irrelevant_test_module = TestModule()
+        module = self.project.add_module(Module, "module.py")
+        irrelevant_test_module = self.project.add_module(TestModule,
+                                                         "irrelevant_test_module.py")
         self.existing_test_class.associated_modules = [module]
-        self.project.add_modules([module, irrelevant_test_module])
 
         new_test_class = TestClass("new", associated_modules=[module])
         self.project.add_test_case(new_test_class, None, False)

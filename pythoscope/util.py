@@ -59,9 +59,6 @@ def write_string_to_file(string, filename):
     fd.write(string)
     fd.close()
 
-def python_sources_below(path):
-    return [os.path.join(path, entry) for entry in os.listdir(path) if entry.endswith(".py")]
-
 def max_by_not_zero(func, collection):
     """Return the element of a collection for which func returns the highest
     value, greater than 0.
@@ -86,3 +83,18 @@ def max_by_not_zero(func, collection):
         return highest[1]
     else:
         return None
+
+def python_modules_below(path):
+    def is_python_module(path):
+        return path.endswith(".py")
+    return filter(is_python_module, rlistdir(path))
+
+def rlistdir(path):
+    """Resursive directory listing. Yield all files below given path.
+    """
+    if os.path.isdir(path):
+        for entry in os.listdir(path):
+            for subpath in rlistdir(os.path.join(path, entry)):
+                yield subpath
+    else:
+        yield path
