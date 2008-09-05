@@ -2,7 +2,7 @@ import getopt
 import os
 import sys
 
-from collector import inspect_project
+from inspector import inspect_project
 from generator import add_tests_to_project, UnknownTemplate
 from store import Project, ModuleNotFound, ModuleNeedsAnalysis, \
      get_pythoscope_path

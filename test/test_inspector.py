@@ -4,7 +4,7 @@ from nose.tools import assert_equal
 from nose.exc import SkipTest
 from helper import assert_length, assert_single_class, assert_single_function, EmptyProject
 
-from pythoscope.collector import inspect_code, inspect_test_code
+from pythoscope.inspector import inspect_code, inspect_test_code
 from pythoscope.astvisitor import regenerate
 
 # Let nose know that those aren't test functions.
@@ -164,12 +164,12 @@ class TestCollector:
     def _inspect_test_code(self, code):
         return inspect_test_code(EmptyProject(), "test_module.py", code)
 
-    def test_collects_information_about_top_level_classes(self):
+    def test_inspects_top_level_classes(self):
         info = self._inspect_code(new_style_class)
 
         assert_single_class(info, "AClass")
 
-    def test_collects_information_about_top_level_functions(self):
+    def test_inspects_top_level_functions(self):
         info = self._inspect_code(stand_alone_function)
 
         assert_single_function(info, "a_function")
@@ -179,12 +179,12 @@ class TestCollector:
 
         assert_length(info.functions, 0)
 
-    def test_collects_information_about_old_style_classes(self):
+    def test_inspects_old_style_classes(self):
         info = self._inspect_code(old_style_class)
 
         assert_single_class(info, "OldStyleClass")
 
-    def test_collects_information_about_classes_without_methods(self):
+    def test_inspects_classes_without_methods(self):
         info = self._inspect_code(class_without_methods)
 
         assert_single_class(info, "ClassWithoutMethods")
@@ -195,7 +195,7 @@ class TestCollector:
         assert_single_class(info, "OuterClass")
         assert_single_function(info, "outer_function")
 
-    def test_collects_information_about_methods_of_a_class(self):
+    def test_inspects_methods_of_a_class(self):
         info = self._inspect_code(class_with_methods)
 
         assert_equal(["first_method", "second_method", "third_method"],
@@ -211,7 +211,7 @@ class TestCollector:
 
         assert_length(info.errors, 1)
 
-    def test_collects_information_about_functions_and_classes_inside_other_blocks(self):
+    def test_inspects_functions_and_classes_inside_other_blocks(self):
         suite = [definitions_inside_try_except, definitions_inside_if,
                  definitions_inside_while, definitions_inside_for]
 
@@ -220,7 +220,7 @@ class TestCollector:
             assert_single_class(info, "InsideClass")
             assert_single_function(info, "inside_function")
 
-    def test_collects_information_about_functions_and_classes_inside_with(self):
+    def test_inspects_functions_and_classes_inside_with(self):
         # With statement was introduced in Python 2.5, so skip this test for
         # earlier versions.
         if sys.version_info < (2, 5):
@@ -230,12 +230,12 @@ class TestCollector:
         assert_single_class(info, "InsideClass")
         assert_single_function(info, "inside_function")
 
-    def test_collects_information_about_functions_defined_using_lambda(self):
+    def test_inspects_functions_defined_using_lambda(self):
         info = self._inspect_code(lambda_definition)
 
         assert_single_function(info, "lambda_function")
 
-    def test_collects_information_about_class_bases(self):
+    def test_inspects_class_bases(self):
         suite = [class_without_parents, class_with_one_parent, class_with_two_parents]
         expected_results = [[], ["object"], ["Mother", "Father"]]
 
@@ -243,7 +243,7 @@ class TestCollector:
             info = self._inspect_code(case)
             assert_equal(expected, info.classes[0].bases)
 
-    def test_correctly_collects_information_about_bases_from_other_modules(self):
+    def test_correctly_inspects_bases_from_other_modules(self):
         info = self._inspect_code(class_inheriting_from_unittest_testcase)
 
         assert_equal(["unittest.TestCase"], info.classes[0].bases)
@@ -254,7 +254,7 @@ class TestCollector:
         assert_single_class(info, "OuterClass")
         assert_equal(["__init__", "outer_class_method"], info.classes[0].methods)
 
-    def test_collects_information_about_test_modules(self):
+    def test_inspects_test_modules(self):
         info = self._inspect_test_code(two_test_classes)
 
         assert_equal(["unittest"], info.imports)

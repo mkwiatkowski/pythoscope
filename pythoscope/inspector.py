@@ -51,11 +51,11 @@ def inspect_project(project):
 
 def inspect_module(project, path):
     if is_test_module_path(path):
-        collect_from_code = inspect_test_code
+        inspect = inspect_test_code
     else:
-        collect_from_code = inspect_code
+        inspect = inspect_code
 
-    collect_from_code(project, path, read_file_contents(path))
+    inspect(project, path, read_file_contents(path))
 
 def inspect_code(project, path, code):
     try:
