@@ -2,7 +2,7 @@ from nose.tools import assert_equal
 
 from helper import assert_length, read_data
 
-from pythoscope.collector import inspect_project
+from pythoscope.inspector import inspect_project
 from pythoscope.generator import add_tests_to_project
 from pythoscope.util import read_file_contents
 
