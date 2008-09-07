@@ -2,7 +2,7 @@ import os
 import re
 
 from astvisitor import EmptyCode, descend, parse, ASTVisitor
-from store import TestModule, TestClass, TestMethod, ModuleNotFound
+from store import TestClass, TestMethod, ModuleNotFound
 from util import camelize
 
 
@@ -58,9 +58,6 @@ class TestGenerator(object):
             self._add_tests_for_module(module, project, destdir, force)
 
     def _add_tests_for_module(self, module, project, destdir, force):
-        # Don't generate tests for test modules.
-        if isinstance(module, TestModule):
-            return
         test_cases = self._generate_test_cases(module)
         if test_cases:
             project.add_test_cases(test_cases, destdir, force)
@@ -72,7 +69,7 @@ class TestGenerator(object):
 
     def _generate_test_case(self, object, module):
         class_name = name2testname(camelize(object.name))
-        methods_names = map(name2testname, object.get_testable_methods())
+        methods_names = map(name2testname, object.get_testable_method_names())
 
         # Don't generate empty test classes.
         if methods_names:

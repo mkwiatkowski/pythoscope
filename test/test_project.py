@@ -3,13 +3,12 @@ import os
 from fixture import TempIO
 from nose.tools import assert_equal, assert_raises
 
-from pythoscope.store import Project, Module, Class, Function, TestModule, \
-     TestClass, TestMethod, ModuleNotFound
+from pythoscope.store import Project, Module, Class, Function, TestClass, \
+     TestMethod, ModuleNotFound
 
 from helper import assert_length, assert_equal_sets, EmptyProject, ProjectWithModules
 
 # Let nose know that those aren't test classes.
-TestModule.__test__ = False
 TestClass.__test__ = False
 TestMethod.__test__ = False
 
@@ -21,10 +20,10 @@ class TestProject:
         project = Project(tmpdir)
         def ppath(path):
             return os.path.join(project.path, path)
-        project.add_module(Module, ppath('good_module.py'),
+        project.add_module(ppath('good_module.py'),
                            objects=[Class("AClass", ["amethod"]),
                                     Function("afunction")])
-        project.add_module(Module, ppath('bad_module.py'),
+        project.add_module(ppath('bad_module.py'),
                            errors=["Syntax error"])
         project.save()
         project = Project.from_directory(tmpdir)
@@ -60,7 +59,7 @@ class TestProject:
         new_module_path = "other/module.py"
 
         project = ProjectWithModules(paths)
-        new_module = project.add_module(Module, new_module_path)
+        new_module = project.add_module(new_module_path)
 
         assert_length(project.modules, 3)
         assert project["other/module.py"] is new_module
@@ -69,13 +68,12 @@ class TestProjectWithTestModule:
     def setUp(self):
         self.project = EmptyProject()
         self.existing_test_class = TestClass("TestSomething")
-        self.test_module = self.project.add_module(TestModule, "test_module.py")
+        self.test_module = self.project.add_module("test_module.py")
         self.test_module.add_test_case(self.existing_test_class)
 
     def test_attaches_test_class_to_test_module_with_most_test_cases_for_associated_module(self):
-        module = self.project.add_module(Module, "module.py")
-        irrelevant_test_module = self.project.add_module(TestModule,
-                                                         "irrelevant_test_module.py")
+        module = self.project.add_module("module.py")
+        irrelevant_test_module = self.project.add_module("irrelevant_test_module.py")
         self.existing_test_class.associated_modules = [module]
 
         new_test_class = TestClass("new", associated_modules=[module])

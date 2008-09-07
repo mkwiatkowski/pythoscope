@@ -48,7 +48,7 @@ class TestAppendingTestClasses:
         add_tests_to_project(project, ["module.py"], project.path, 'unittest')
         project.save()
 
-        assert_length(project._get_test_modules(), 1)
+        assert_length(project.get_modules(), 2)
         result = read_file_contents(test_module_path)
         expected_result = read_data(expected_output)
         assert_equal(expected_result, result)

@@ -59,6 +59,11 @@ def write_string_to_file(string, filename):
     fd.write(string)
     fd.close()
 
+def all_of_type(objects, type):
+    """Return all objects that are instances of a given type.
+    """
+    return [o for o in objects if isinstance(o, type)]
+
 def max_by_not_zero(func, collection):
     """Return the element of a collection for which func returns the highest
     value, greater than 0.
@@ -98,3 +103,6 @@ def rlistdir(path):
                 yield subpath
     else:
         yield path
+
+def get_names(objects):
+    return map(lambda c: c.name, objects)

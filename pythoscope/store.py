@@ -5,7 +5,7 @@ import time
 
 from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
      get_starting_whitespace, is_node_of_type, regenerate
-from util import max_by_not_zero, underscore, write_string_to_file
+from util import all_of_type, max_by_not_zero, underscore, write_string_to_file
 
 
 class ModuleNeedsAnalysis(Exception):
@@ -44,6 +44,11 @@ def get_pythoscope_path(project_path):
 def get_pickle_path(project_path):
     return os.path.join(get_pythoscope_path(project_path), "project.pickle")
 
+def get_test_objects(objects):
+    def is_test_object(object):
+        return isinstance(object, TestCase)
+    return filter(is_test_object, objects)
+
 class Project(object):
     """Object representing the whole project under Pythoscope wings.
 
@@ -64,9 +69,6 @@ class Project(object):
             fd.close()
             # Update project's path, as the directory could've been moved.
             project.path = project_path
-            # Mark all test modules as unchanged.
-            for test_module in project._get_test_modules():
-                test_module.changed = False
         except IOError:
             project = Project(project_path)
         return project
@@ -84,14 +86,12 @@ class Project(object):
         pickle.dump(self, fd)
         fd.close()
 
-        for test_module in self._get_test_modules():
+        for test_module in self.get_modules():
             test_module.save()
 
-    # TODO: 'module_type' will dissapear once we merge Module and TestModule classes.
-    def add_module(self, module_type, path, **kwds):
-        module = module_type(subpath=self._extract_subpath(path),
-                             project=self,
-                             **kwds)
+    # TODO: since it returns a value this method should be called create_module.
+    def add_module(self, path, **kwds):
+        module = Module(subpath=self._extract_subpath(path), project=self, **kwds)
         self._modules[module.subpath] = module
         return module
 
@@ -116,6 +116,7 @@ class Project(object):
             self.add_test_case(test_case, test_directory, force)
 
     def add_test_case(self, test_case, test_directory, force):
+        print " Project => Adding test case %s" % test_case
         existing_test_case = self._find_test_case_by_name(test_case.name)
         if not existing_test_case:
             place = self._find_place_for_test_case(test_case, test_directory)
@@ -127,8 +128,8 @@ class Project(object):
 
     def test_cases_iter(self):
         "Iterate over all test cases present in a project."
-        for tmodule in self._get_test_modules():
-            for test_case in tmodule.test_cases:
+        for module in self.get_modules():
+            for test_case in module.test_cases:
                 yield test_case
 
     def _merge_test_classes(self, test_class, other_test_class, force):
@@ -146,9 +147,6 @@ class Project(object):
             if tcase.name == name:
                 return tcase
 
-    def _get_test_modules(self):
-        return [mod for mod in self.modules if isinstance(mod, TestModule)]
-
     def _find_place_for_test_case(self, test_case, test_directory):
         """Find the best place for the new test case to be added. If there is
         no such place in existing test modules, a new one will be created.
@@ -161,14 +159,14 @@ class Project(object):
                    self._create_test_class_for(test_case)
 
     def _create_test_module_for(self, test_case, test_directory):
-        """Create a new TestModule for a given test case. If the test module
+        """Create a new test module for a given test case. If the test module
         already existed, will raise a ModuleNeedsAnalysis exception.
         """
         test_name = test_module_name_for_test_case(test_case)
         test_path = os.path.join(test_directory, test_name)
         if os.path.exists(test_path):
             raise ModuleNeedsAnalysis(test_path)
-        return self.add_module(TestModule, test_path)
+        return self.add_module(test_path)
 
     def _find_test_module(self, test_case):
         """Find test module that will be good for the given test case.
@@ -185,17 +183,17 @@ class Project(object):
         """Try to find a test module with name corresponding to the name of
         the application module.
         """
-        for test_module in self._get_test_modules():
-            if test_module.subpath.endswith(module_path_to_test_path(module.subpath)):
-                return test_module
+        for mod in self.get_modules():
+            if mod.subpath.endswith(module_path_to_test_path(module.subpath)):
+                return mod
 
     def _find_associate_test_module_by_test_cases(self, module):
         """Try to find a test module with most test cases for the given
         application module.
         """
-        def test_cases_number(test_module):
-            return len(test_module.get_test_cases_for_module(module))
-        test_module = max_by_not_zero(test_cases_number, self._get_test_modules())
+        def test_cases_number(mod):
+            return len(mod.get_test_cases_for_module(module))
+        test_module = max_by_not_zero(test_cases_number, self.get_modules())
         if test_module:
             return test_module
 
@@ -215,73 +213,9 @@ class Project(object):
                 return mod
         raise ModuleNotFound(module)
 
-    def _get_modules(self):
+    def get_modules(self):
         return self._modules.values()
-    modules = property(_get_modules)
-
-class Localizable(object):
-    """An object which has a corresponding file belonging to some Project.
-
-    Each Localizable has a 'path' attribute and an information when it was
-    created, to be in sync with its file system counterpart. Path is always
-    relative to the project this localizable belongs to.
-    """
-    def __init__(self, project, subpath, created=None):
-        self.project = project
-        self.subpath = subpath
-        if created is None:
-            created = time.time()
-        self.created = created
-
-    def _get_locator(self):
-        return re.sub(r'(%s__init__)?\.py$' % os.path.sep, '', self.subpath).\
-            replace(os.path.sep, ".")
-    locator = property(_get_locator)
-
-    def is_out_of_sync(self):
-        """Is the object out of sync with its file.
-        """
-        try:
-            return os.path.getmtime(self.get_path()) > self.created
-        except OSError:
-            # File may not exist, in which case we're safe.
-            return False
-
-    def get_path(self):
-        """Return the full path to the file.
-        """
-        return os.path.join(self.project.path, self.subpath)
-
-    def write(self, new_content):
-        """Overwrite the file with new contents and update its created time.
-        """
-        write_string_to_file(new_content, self.get_path())
-        self.created = time.time()
-
-class Module(Localizable):
-    def __init__(self, project, subpath, objects=[], errors=[]):
-        Localizable.__init__(self, project, subpath)
-        self.objects = objects
-        self.errors = errors
-
-    def _get_testable_objects(self):
-        return [o for o in self.objects if o.is_testable()]
-    testable_objects = property(_get_testable_objects)
-
-    def _get_classes(self):
-        return [o for o in self.objects if isinstance(o, Class)]
-    classes = property(_get_classes)
-
-    def _get_functions(self):
-        return [o for o in self.objects if isinstance(o, Function)]
-    functions = property(_get_functions)
-
-    def has_test_cases(self):
-        "Return True if the Module will spawn at least one test case."
-        for object in self.testable_objects:
-            if object.testable_methods:
-                return True
-        return False
+    modules = property(get_modules)
 
 class Class(object):
     def __init__(self, name, methods, bases=[]):
@@ -296,25 +230,32 @@ class Class(object):
                 return False
         return True
 
-    def get_testable_methods(self):
-        return list(self._testable_methods_generator())
+    def get_testable_method_names(self):
+        return list(self._testable_method_names_generator())
 
-    def _testable_methods_generator(self):
+    def _testable_method_names_generator(self):
         for method in self.methods:
-            if method == '__init__':
+            if method.name == '__init__':
                 yield "object_initialization"
-            elif not method.startswith('_'):
-                yield method
+            elif not method.name.startswith('_'):
+                yield method.name
 
-class Function(object):
-    def __init__(self, name):
+class Callable(object):
+    def __init__(self, name, code=None):
+        if code is None:
+            code = EmptyCode()
         self.name = name
+        self.code = code
 
-    def get_testable_methods(self):
+class Function(Callable):
+    def get_testable_method_names(self):
         return [underscore(self.name)]
 
     def is_testable(self):
         return not self.name.startswith('_')
+
+class Method(Callable):
+    pass
 
 class TestCase(object):
     """A single test object, possibly contained within a test suite (denoted
@@ -396,6 +337,8 @@ class TestClass(TestSuite):
     """
     allowed_test_case_classes = [TestMethod]
 
+    # TODO: what happens when a modules inside associated_modules list gets
+    # replaced with a new one?
     def __init__(self, name, code=None, parent=None, test_cases=[],
                  imports=None, main_snippet=None, associated_modules=None):
         TestSuite.__init__(self, name, code, parent, test_cases)
@@ -437,23 +380,85 @@ class TestClass(TestSuite):
             if method.name == name:
                 return method
 
-class TestModule(Localizable, TestSuite):
+class Localizable(object):
+    """An object which has a corresponding file belonging to some Project.
+
+    Each Localizable has a 'path' attribute and an information when it was
+    created, to be in sync with its file system counterpart. Path is always
+    relative to the project this localizable belongs to.
+    """
+    def __init__(self, project, subpath, created=None):
+        self.project = project
+        self.subpath = subpath
+        if created is None:
+            created = time.time()
+        self.created = created
+
+    def _get_locator(self):
+        return re.sub(r'(%s__init__)?\.py$' % os.path.sep, '', self.subpath).\
+            replace(os.path.sep, ".")
+    locator = property(_get_locator)
+
+    def is_out_of_sync(self):
+        """Is the object out of sync with its file.
+        """
+        try:
+            return os.path.getmtime(self.get_path()) > self.created
+        except OSError:
+            # File may not exist, in which case we're safe.
+            return False
+
+    def get_path(self):
+        """Return the full path to the file.
+        """
+        return os.path.join(self.project.path, self.subpath)
+
+    def write(self, new_content):
+        """Overwrite the file with new contents and update its created time.
+        """
+        write_string_to_file(new_content, self.get_path())
+        self.created = time.time()
+
+class Module(Localizable, TestSuite):
     allowed_test_case_classes = [TestClass]
 
-    def __init__(self, project, subpath, code=None, test_cases=[], imports=None,
-                 main_snippet=None):
-        Localizable.__init__(self, project, subpath)
-        TestSuite.__init__(self, None, code, None, test_cases)
-
+    def __init__(self, project, subpath, code=None, objects=None, imports=None,
+                 main_snippet=None, errors=[]):
+        if objects is None:
+            objects = []
         if imports is None:
             imports = []
+        test_cases = get_test_objects(objects)
 
+        Localizable.__init__(self, project, subpath)
+        TestSuite.__init__(self, self.locator, code, None, test_cases)
+
+        print "Created module %s with code %s" % (subpath, code)
+
+        self.objects = objects
         self.imports = imports
         self.main_snippet = main_snippet
+        self.errors = errors
 
         # Code of test cases passed to the constructor is already contained
         # within the module code.
         self.add_test_cases(test_cases, False)
+
+    def _get_testable_objects(self):
+        return [o for o in self.objects if o.is_testable()]
+    testable_objects = property(_get_testable_objects)
+
+    def _get_classes(self):
+        return all_of_type(self.objects, Class)
+    classes = property(_get_classes)
+
+    def _get_functions(self):
+        return all_of_type(self.objects, Function)
+    functions = property(_get_functions)
+
+    def _get_test_classes(self):
+        return all_of_type(self.objects, TestClass)
+    test_classes = property(_get_test_classes)
 
     def add_test_case(self, test_case, append_code=True):
         TestSuite.add_test_case(self, test_case, append_code)
@@ -472,10 +477,6 @@ class TestModule(Localizable, TestSuite):
         """Return all test cases that are associated with given module.
         """
         return [tc for tc in self.test_cases if module in tc.associated_modules]
-
-    def _get_test_classes(self):
-        return [o for o in self.test_cases if isinstance(o, TestClass)]
-    test_classes = property(_get_test_classes)
 
     def _ensure_main_snippet(self, main_snippet, force=False):
         """Make sure the main_snippet is present. Won't overwrite the snippet
@@ -532,3 +533,4 @@ class TestModule(Localizable, TestSuite):
             if self.is_out_of_sync():
                 raise ModuleNeedsAnalysis(self.subpath, out_of_sync=True)
             self.write(self.get_content())
+            self.changed = False

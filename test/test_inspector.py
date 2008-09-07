@@ -2,13 +2,13 @@ import sys
 
 from nose.tools import assert_equal
 from nose.exc import SkipTest
-from helper import assert_length, assert_single_class, assert_single_function, EmptyProject
+from helper import assert_length, assert_single_class, assert_single_function, \
+     assert_equal_sets, EmptyProject
 
-from pythoscope.inspector import inspect_code, inspect_test_code
+from pythoscope.inspector import inspect_code
 from pythoscope.astvisitor import regenerate
+from pythoscope.util import get_names
 
-# Let nose know that those aren't test functions.
-inspect_test_code.__test__ = False
 
 new_style_class = """
 class AClass(object):
@@ -115,8 +115,8 @@ class ClassWithTwoParents(Mother, Father):
     pass
 """
 
-class_inheriting_from_unittest_testcase = """
-class TestClass(unittest.TestCase):
+class_inheriting_from_some_other_module_class = """
+class SomeClass(othermodule.Class):
     pass
 """
 
@@ -157,12 +157,30 @@ def test_that():
     pass
 """
 
-class TestCollector:
+application_module_with_test_class = """import os
+import unittest
+
+def fib(x):
+    if x in [0,1]:
+        return x
+    else:
+        return fib(x-2) + fib(x-1)
+
+class TestFib(unittest.TestCase):
+    def test_one(self):
+        assert fib(1) == 1
+    def test_two(self):
+        assert fib(2) == 1
+    def test_three(self):
+        assert fib(3) == 2
+
+if __name__ == '__main__':
+    unittest.main()
+"""
+
+class TestInspector:
     def _inspect_code(self, code):
         return inspect_code(EmptyProject(), "module.py", code)
-
-    def _inspect_test_code(self, code):
-        return inspect_test_code(EmptyProject(), "test_module.py", code)
 
     def test_inspects_top_level_classes(self):
         info = self._inspect_code(new_style_class)
@@ -199,7 +217,7 @@ class TestCollector:
         info = self._inspect_code(class_with_methods)
 
         assert_equal(["first_method", "second_method", "third_method"],
-                     info.classes[0].methods)
+                     get_names(info.classes[0].methods))
 
     def test_collector_handles_syntax_errors(self):
         info = self._inspect_code(syntax_error)
@@ -244,35 +262,46 @@ class TestCollector:
             assert_equal(expected, info.classes[0].bases)
 
     def test_correctly_inspects_bases_from_other_modules(self):
-        info = self._inspect_code(class_inheriting_from_unittest_testcase)
+        info = self._inspect_code(class_inheriting_from_some_other_module_class)
 
-        assert_equal(["unittest.TestCase"], info.classes[0].bases)
+        assert_length(info.objects, 1)
+        assert_equal(["othermodule.Class"], info.objects[0].bases)
 
     def test_ignores_existance_of_any_inner_class_methods(self):
         info = self._inspect_code(class_with_inner_class)
 
         assert_single_class(info, "OuterClass")
-        assert_equal(["__init__", "outer_class_method"], info.classes[0].methods)
+        assert_equal(["__init__", "outer_class_method"],
+                     get_names(info.classes[0].methods))
 
     def test_inspects_test_modules(self):
-        info = self._inspect_test_code(two_test_classes)
+        info = self._inspect_code(two_test_classes)
 
         assert_equal(["unittest"], info.imports)
         assert_equal(["FirstTestClass", "TestMore"],
-                     map(lambda c: c.name, info.test_classes))
+                     get_names(info.test_classes))
         assert_equal(["test_this", "test_that"],
-                     map(lambda c: c.name, info.test_classes[0].test_cases))
+                     get_names(info.test_classes[0].test_cases))
         assert_equal(["test_more"],
-                     map(lambda c: c.name, info.test_classes[1].test_cases))
+                     get_names(info.test_classes[1].test_cases))
 
     def test_recognizes_unrecognized_chunks_of_test_code(self):
-        info = self._inspect_test_code(strange_test_code)
+        info = self._inspect_code(strange_test_code)
 
         assert_equal(strange_test_code, regenerate(info.code))
 
     def test_recognizes_nose_style_test_code(self):
-        info = self._inspect_test_code(nose_style_test_functions)
+        info = self._inspect_code(nose_style_test_functions)
 
         assert_equal(["nose"], info.imports)
         assert_equal(nose_style_test_functions, regenerate(info.code))
         assert_equal(None, info.main_snippet)
+
+    def test_inspects_test_classes_inside_application_modules(self):
+        info = self._inspect_code(application_module_with_test_class)
+
+        assert_equal_sets(["os", "unittest"], info.imports)
+        assert_equal(application_module_with_test_class, regenerate(info.code))
+        assert info.main_snippet is not None
+        assert_equal(["TestFib"], get_names(info.test_classes))
+        assert_equal(["fib"], get_names(info.functions))

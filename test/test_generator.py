@@ -7,7 +7,7 @@ from nose.tools import assert_equal, assert_not_equal, assert_raises
 
 from pythoscope.astvisitor import parse
 from pythoscope.generator import add_tests_to_project, GenerationError
-from pythoscope.store import Project, Module, Class, Function, TestModule,\
+from pythoscope.store import Project, Module, Class, Method, Function, \
      ModuleNeedsAnalysis
 from pythoscope.util import read_file_contents
 
@@ -17,7 +17,6 @@ from helper import assert_contains, assert_doesnt_contain, assert_length,\
 
 # Let nose know that those aren't test functions/classes.
 add_tests_to_project.__test__ = False
-TestModule.__test__ = False
 
 class TestGenerator:
     def test_generates_unittest_boilerplate(self):
@@ -26,8 +25,8 @@ class TestGenerator:
         assert_contains(result, "if __name__ == '__main__':\n    unittest.main()")
 
     def test_generates_test_class_for_each_production_class(self):
-        objects = [Class('SomeClass', ['some_method']),
-                   Class('AnotherClass', ['another_method'])]
+        objects = [Class('SomeClass', [Method('some_method')]),
+                   Class('AnotherClass', [Method('another_method')])]
         result = generate_single_test_module(objects=objects)
         assert_contains(result, "class TestSomeClass(unittest.TestCase):")
         assert_contains(result, "class TestAnotherClass(unittest.TestCase):")
@@ -39,8 +38,8 @@ class TestGenerator:
         assert_contains(result, "class TestAnotherFunction(unittest.TestCase):")
 
     def test_generates_test_method_for_each_production_method_and_function(self):
-        objects = [Class('SomeClass', ['some_method']),
-                   Class('AnotherClass', ['another_method', 'one_more']),
+        objects = [Class('SomeClass', [Method('some_method')]),
+                   Class('AnotherClass', map(Method, ['another_method', 'one_more'])),
                    Function('a_function')]
         result = generate_single_test_module(objects=objects)
         assert_contains(result, "def test_some_method(self):")
@@ -49,7 +48,7 @@ class TestGenerator:
         assert_contains(result, "def test_a_function(self):")
 
     def test_generates_nice_name_for_init_method(self):
-        objects = [Class('SomeClass', ['__init__'])]
+        objects = [Class('SomeClass', [Method('__init__')])]
         result = generate_single_test_module(objects=objects)
         assert_contains(result, "def test_object_initialization(self):")
 
@@ -58,7 +57,7 @@ class TestGenerator:
         assert_doesnt_contain(result, "class TestSomeClass(unittest.TestCase):")
 
     def test_can_generate_nose_style_tests(self):
-        objects = [Class('AClass', ['a_method']), Function('a_function')]
+        objects = [Class('AClass', [Method('a_method')]), Function('a_function')]
         result = generate_single_test_module(template='nose', objects=objects)
 
         assert_doesnt_contain(result, "import unittest")
@@ -73,7 +72,7 @@ class TestGenerator:
         assert_doesnt_contain(result, "if __name__ == '__main__':\n    unittest.main()")
 
     def test_ignores_private_methods(self):
-        objects = [Class('SomeClass', ['_semiprivate', '__private', '__eq__'])]
+        objects = [Class('SomeClass', map(Method, ['_semiprivate', '__private', '__eq__']))]
         result = generate_single_test_module(objects=objects)
         assert_doesnt_contain(result, "class TestSomeClass(unittest.TestCase):")
 
@@ -82,12 +81,12 @@ class TestGenerator:
         assert_doesnt_contain(result, "class")
 
     def test_ignores_exception_classes(self):
-        objects = [Class('ExceptionClass', ['method'], bases=['Exception'])]
+        objects = [Class('ExceptionClass', [Method('method')], bases=['Exception'])]
         result = generate_single_test_module(objects=objects)
         assert_doesnt_contain(result, "class TestExceptionClass(unittest.TestCase):")
 
     def test_ignores_unittest_classes(self):
-        objects = [Class('TestClass', ['test_method'], bases=['unittest.TestCase'])]
+        objects = [Class('TestClass', [Method('test_method')], bases=['unittest.TestCase'])]
         result = generate_single_test_module(objects=objects)
         assert_doesnt_contain(result, "class TestTestClass(unittest.TestCase):")
 
@@ -97,7 +96,7 @@ class TestGenerator:
         assert re.match(r"import unittest.*?class TestFunction.*?if __name__ == '__main__'", result, re.DOTALL)
 
     def test_ignores_test_modules(self):
-        result = generate_single_test_module(type=TestModule)
+        result = generate_single_test_module()
         assert_equal("", result)
 
     def test_doesnt_generate_test_files_with_no_test_cases(self):
@@ -112,7 +111,7 @@ class TestGenerator:
         TEST_CONTENTS = "# test"
         project = ProjectWithModules(["module.py"], ProjectInDirectory)
         project["module"].objects = [Function("function")]
-        # File exists, but project does NOT contain corresponding TestModule.
+        # File exists, but project does NOT contain corresponding test module.
         existing_file = project.path.putfile("test_module.py", TEST_CONTENTS)
 
         def add_and_save():
@@ -123,7 +122,7 @@ class TestGenerator:
         assert_equal(TEST_CONTENTS, read_file_contents(existing_file))
 
     def test_creates_new_test_module_if_no_of_the_existing_match(self):
-        project = ProjectWithModules(["module.py", (TestModule, "test_other.py")])
+        project = ProjectWithModules(["module.py", "test_other.py"])
         project["module"].objects = [Function("function")]
 
         add_tests_to_project(project, ["module"], project.path, 'unittest')
@@ -134,7 +133,7 @@ class TestGenerator:
 
 class TestGeneratorWithSingleModule:
     def setUp(self):
-        self.project = ProjectWithModules(["module.py", (TestModule, "test_module.py")])
+        self.project = ProjectWithModules(["module.py", "test_module.py"])
         self.project["module"].objects = [Function("function")]
 
     def test_adds_imports_to_existing_test_files_only_if_they_arent_present(self):
@@ -163,7 +162,7 @@ class TestGeneratorWithSingleModule:
         assert_equal(project_test_cases[0].associated_modules, [self.project["module"]])
 
     def test_chooses_the_right_existing_test_module_for_new_test_case(self):
-        self.project.add_module(TestModule, "test_other.py")
+        self.project.add_module("test_other.py")
 
         add_tests_to_project(self.project, ["module"], self.project.path, 'unittest')
 
@@ -172,9 +171,9 @@ class TestGeneratorWithSingleModule:
 
     def test_doesnt_overwrite_existing_files_which_were_modified_since_last_analysis(self):
         TEST_CONTENTS = "# test"
-        project = ProjectWithModules(["module.py", (TestModule, "test_module.py")], ProjectInDirectory)
+        project = ProjectWithModules(["module.py", "test_module.py"], ProjectInDirectory)
         project["module"].objects = [Function("function")]
-        # File exists, and project contains corresponding, but outdated, TestModule.
+        # File exists, and project contains corresponding, but outdated, test module.
         existing_file = project.path.putfile("test_module.py", TEST_CONTENTS)
         project["test_module"].created = time.time() - 3600
 

@@ -4,7 +4,7 @@ from fixture import TempIO
 from nose.tools import assert_equal
 
 from pythoscope.generator import add_tests_to_project
-from pythoscope.store import Module, TestModule, Project
+from pythoscope.store import Module, Project, ModuleNotFound
 from pythoscope.util import read_file_contents, set
 
 
@@ -63,26 +63,24 @@ def ProjectInDirectory():
 def ProjectWithModules(paths, project_type=EmptyProject):
     project = project_type()
     for path in paths:
-        module_type = Module
-        if isinstance(path, tuple):
-            module_type, path = path
-        project.add_module(module_type, os.path.join(project.path, path))
+        project.add_module(os.path.join(project.path, path))
     return project
 
 def get_test_module_contents(project):
     """Get contents of the first test module of a project.
     """
     try:
-        return project._get_test_modules()[0].get_content()
-    except IndexError:
+        print project.get_modules()
+        return project["test_module.py"].get_content()
+    except ModuleNotFound:
         return "" # No test module was generated.
 get_test_module_contents.__test__ = False
 
-def generate_single_test_module(template='unittest', type=Module, **module_kwds):
+def generate_single_test_module(template='unittest', **module_kwds):
     """Return test module contents generated for given module.
     """
     project = EmptyProject()
-    project.add_module(type, "module.py", **module_kwds)
-    add_tests_to_project(project, ["module.py"], TempIO(), template, False)
+    project.add_module("module.py", **module_kwds)
+    add_tests_to_project(project, ["module.py"], ".", template, False)
     return get_test_module_contents(project)
 generate_single_test_module.__test__ = False
