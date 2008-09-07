@@ -162,7 +162,7 @@ class TestGeneratorWithSingleModule:
         assert_equal(project_test_cases[0].associated_modules, [self.project["module"]])
 
     def test_chooses_the_right_existing_test_module_for_new_test_case(self):
-        self.project.add_module("test_other.py")
+        self.project.create_module("test_other.py")
 
         add_tests_to_project(self.project, ["module"], self.project.path, 'unittest')
 

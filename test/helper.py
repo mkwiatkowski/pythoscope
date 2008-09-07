@@ -63,7 +63,7 @@ def ProjectInDirectory():
 def ProjectWithModules(paths, project_type=EmptyProject):
     project = project_type()
     for path in paths:
-        project.add_module(os.path.join(project.path, path))
+        project.create_module(os.path.join(project.path, path))
     return project
 
 def get_test_module_contents(project):
@@ -80,7 +80,7 @@ def generate_single_test_module(template='unittest', **module_kwds):
     """Return test module contents generated for given module.
     """
     project = EmptyProject()
-    project.add_module("module.py", **module_kwds)
+    project.create_module("module.py", **module_kwds)
     add_tests_to_project(project, ["module.py"], ".", template, False)
     return get_test_module_contents(project)
 generate_single_test_module.__test__ = False

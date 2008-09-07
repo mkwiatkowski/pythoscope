@@ -75,7 +75,7 @@ def inspect_code(project, path, code):
     try:
         tree = parse(code)
     except ParseError, e:
-        return project.add_module(path, errors=[e])
+        return project.create_module(path, errors=[e])
     visitor = descend(tree, ModuleVisitor)
 
     # We assume that all test classes in this module has dependencies on
@@ -84,6 +84,6 @@ def inspect_code(project, path, code):
         test_class.imports = visitor.imports
         test_class.main_snippet = visitor.main_snippet
 
-    return project.add_module(path, code=tree, objects=visitor.objects,
+    return project.create_module(path, code=tree, objects=visitor.objects,
                               imports=visitor.imports,
                               main_snippet=visitor.main_snippet)

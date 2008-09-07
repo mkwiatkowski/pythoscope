@@ -89,8 +89,11 @@ class Project(object):
         for test_module in self.get_modules():
             test_module.save()
 
-    # TODO: since it returns a value this method should be called create_module.
-    def add_module(self, path, **kwds):
+    def create_module(self, path, **kwds):
+        """Create a module for this project located under given path.
+
+        Returns the new Module object.
+        """
         module = Module(subpath=self._extract_subpath(path), project=self, **kwds)
         self._modules[module.subpath] = module
         return module
@@ -166,7 +169,7 @@ class Project(object):
         test_path = os.path.join(test_directory, test_name)
         if os.path.exists(test_path):
             raise ModuleNeedsAnalysis(test_path)
-        return self.add_module(test_path)
+        return self.create_module(test_path)
 
     def _find_test_module(self, test_case):
         """Find test module that will be good for the given test case.
