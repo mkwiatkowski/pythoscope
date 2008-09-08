@@ -6,7 +6,8 @@ import time
 from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
      get_starting_whitespace, is_node_of_type, regenerate
 from util import all_of_type, max_by_not_zero, underscore, \
-     write_string_to_file, ensure_directory, DirectoryException
+     write_string_to_file, ensure_directory, DirectoryException, \
+     get_last_modification_time
 
 
 class ModuleNeedsAnalysis(Exception):
@@ -90,12 +91,14 @@ class Project(object):
         return get_pickle_path(self.path)
 
     def save(self):
+        # To avoid inconsistencies try to save all project's modules first. If
+        # any of those saves fail, the pickle file won't get updated.
+        for test_module in self.get_modules():
+            test_module.save()
+
         fd = open(self._get_pickle_path(), 'w')
         pickle.dump(self, fd)
         fd.close()
-
-        for test_module in self.get_modules():
-            test_module.save()
 
     def create_module(self, path, **kwds):
         """Create a module for this project located under given path.
@@ -420,11 +423,7 @@ class Localizable(object):
     def is_out_of_sync(self):
         """Is the object out of sync with its file.
         """
-        try:
-            return os.path.getmtime(self.get_path()) > self.created
-        except OSError:
-            # File may not exist, in which case we're safe.
-            return False
+        return get_last_modification_time(self.get_path()) > self.created
 
     def get_path(self):
         """Return the full path to the file.

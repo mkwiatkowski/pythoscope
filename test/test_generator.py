@@ -9,7 +9,7 @@ from pythoscope.astvisitor import parse
 from pythoscope.generator import add_tests_to_project
 from pythoscope.store import Project, Module, Class, Method, Function, \
      ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod
-from pythoscope.util import read_file_contents
+from pythoscope.util import read_file_contents, get_last_modification_time
 
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
      CustomSeparator, generate_single_test_module, ProjectInDirectory, \
@@ -151,13 +151,23 @@ class TestGenerator:
         assert_raises(ModuleNeedsAnalysis, add_and_save)
         assert_equal(TEST_CONTENTS, read_file_contents(existing_file))
 
-    def test_raises_an_exception_if_destdir_is_a_file(self):
-        project = TestableProject()
-        destfile = project.path.putfile(project.new_tests_directory, "its content")
+class TestGeneratorWithTestDirectoryAsFile:
+    def setUp(self):
+        self.project = TestableProject()
+        destfile = self.project.path.putfile(self.project.new_tests_directory, "its content")
         def add_and_save():
-            add_tests_to_project(project, ["module"], 'unittest')
-            project.save()
-        assert_raises(ModuleSaveError, add_and_save)
+            add_tests_to_project(self.project, ["module"], 'unittest')
+            self.project.save()
+        self.add_and_save = add_and_save
+
+    def test_raises_an_exception_if_destdir_is_a_file(self):
+        assert_raises(ModuleSaveError, self.add_and_save)
+
+    def test_doesnt_save_pickle_file_if_module_save_error_is_raised(self):
+        mtime = get_last_modification_time(self.project._get_pickle_path())
+        try: self.add_and_save()
+        except ModuleSaveError: pass
+        assert_equal(mtime, get_last_modification_time(self.project._get_pickle_path()))
 
 class TestGeneratorWithSingleModule:
     def setUp(self):

@@ -118,3 +118,10 @@ def ensure_directory(directory):
             raise DirectoryException("Destination is not a directory.")
     else:
         os.makedirs(directory)
+
+def get_last_modification_time(path):
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        # File may not exist, in which case it was never modified.
+        return 0
