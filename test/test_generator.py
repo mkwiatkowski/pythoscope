@@ -8,7 +8,7 @@ from nose.tools import assert_equal, assert_not_equal, assert_raises
 from pythoscope.astvisitor import parse
 from pythoscope.generator import add_tests_to_project, GenerationError
 from pythoscope.store import Project, Module, Class, Method, Function, \
-     ModuleNeedsAnalysis
+     ModuleNeedsAnalysis, TestClass, TestMethod
 from pythoscope.util import read_file_contents
 
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
@@ -17,6 +17,8 @@ from helper import assert_contains, assert_doesnt_contain, assert_length,\
 
 # Let nose know that those aren't test functions/classes.
 add_tests_to_project.__test__ = False
+TestClass.__test__ = False
+TestMethod.__test__ = False
 
 class TestGenerator:
     def test_generates_unittest_boilerplate(self):
@@ -86,7 +88,7 @@ class TestGenerator:
         assert_doesnt_contain(result, "class TestExceptionClass(unittest.TestCase):")
 
     def test_ignores_unittest_classes(self):
-        objects = [Class('TestClass', [Method('test_method')], bases=['unittest.TestCase'])]
+        objects = [TestClass('TestClass', [TestMethod('test_method')])]
         result = generate_single_test_module(objects=objects)
         assert_doesnt_contain(result, "class TestTestClass(unittest.TestCase):")
 

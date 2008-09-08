@@ -383,6 +383,9 @@ class TestClass(TestSuite):
             if method.name == name:
                 return method
 
+    def is_testable(self):
+        return False
+
 class Localizable(object):
     """An object which has a corresponding file belonging to some Project.
 
