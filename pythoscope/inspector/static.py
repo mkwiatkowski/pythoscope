@@ -1,9 +1,9 @@
 import os.path
 import re
 
-from astvisitor import descend, parse, ParseError, ASTVisitor
-from store import Module, Class, Function, Method, TestClass, TestMethod
-from util import read_file_contents, python_modules_below
+from pythoscope.astvisitor import descend, parse, ParseError, ASTVisitor
+from pythoscope.store import Module, Class, Function, Method, TestClass, TestMethod
+from pythoscope.util import read_file_contents
 
 
 def is_test_class(name, bases):
@@ -63,10 +63,6 @@ class ClassVisitor(ASTVisitor):
 
     def visit_function(self, name, args, body):
         self.methods.append((name, body))
-
-def inspect_project(project):
-    for modpath in python_modules_below(project.path):
-        inspect_module(project, modpath)
 
 def inspect_module(project, path):
     return inspect_code(project, path, read_file_contents(path))

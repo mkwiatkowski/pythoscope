@@ -5,7 +5,7 @@ from nose.exc import SkipTest
 from helper import assert_length, assert_single_class, assert_single_function, \
      assert_equal_sets, EmptyProject
 
-from pythoscope.inspector import inspect_code
+from pythoscope.inspector.static import inspect_code
 from pythoscope.astvisitor import regenerate
 from pythoscope.util import get_names
 
@@ -178,7 +178,7 @@ if __name__ == '__main__':
     unittest.main()
 """
 
-class TestInspector:
+class TestStaticInspector:
     def _inspect_code(self, code):
         return inspect_code(EmptyProject(), "module.py", code)
 
