@@ -7,7 +7,7 @@ from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
      get_starting_whitespace, is_node_of_type, regenerate
 from util import all_of_type, max_by_not_zero, underscore, \
      write_string_to_file, ensure_directory, DirectoryException, \
-     get_last_modification_time
+     get_last_modification_time, read_file_contents
 
 
 class ModuleNeedsAnalysis(Exception):
@@ -71,6 +71,9 @@ def get_pythoscope_path(project_path):
 def get_pickle_path(project_path):
     return os.path.join(get_pythoscope_path(project_path), "project.pickle")
 
+def get_points_of_entry_path(project_path):
+    return os.path.join(get_pythoscope_path(project_path), "points-of-entry")
+
 def get_test_objects(objects):
     def is_test_object(object):
         return isinstance(object, TestCase)
@@ -108,6 +111,9 @@ class Project(object):
 
     def _get_pickle_path(self):
         return get_pickle_path(self.path)
+
+    def _get_points_of_entry_path(self):
+        return get_points_of_entry_path(self.path)
 
     def save(self):
         # To avoid inconsistencies try to save all project's modules first. If
@@ -253,6 +259,52 @@ class Project(object):
         return self._modules.values()
     modules = property(get_modules)
 
+    def find_method(self, name, classname, modulename):
+        for klass in self[modulename].classes:
+            if klass.name == classname:
+                for method in klass.methods:
+                    if method.name == name:
+                        return method
+
+    def find_function(self, name, modulename):
+        for function in self[modulename].functions:
+            if function.name == name:
+                return function
+
+class Call(object):
+    """Stores information about a single function or method call.
+
+    There's more to function/method call than arguments and outputs.
+    They're the only attributes for now, but information on side effects
+    will be added later.
+    """
+    def __init__(self, input, output):
+        self.input = input
+        self.output = output
+
+class Callable(object):
+    def __init__(self, name, code=None, calls=None):
+        if code is None:
+            code = EmptyCode()
+        if calls is None:
+            calls = []
+        self.name = name
+        self.code = code
+        self.calls = calls
+
+    def add_call(self, call):
+        self.calls.append(call)
+
+class Function(Callable):
+    def get_testable_method_names(self):
+        return [underscore(self.name)]
+
+    def is_testable(self):
+        return not self.name.startswith('_')
+
+class Method(Callable):
+    pass
+
 class Class(object):
     def __init__(self, name, methods, bases=[]):
         self.name = name
@@ -275,23 +327,6 @@ class Class(object):
                 yield "object_initialization"
             elif not method.name.startswith('_'):
                 yield method.name
-
-class Callable(object):
-    def __init__(self, name, code=None):
-        if code is None:
-            code = EmptyCode()
-        self.name = name
-        self.code = code
-
-class Function(Callable):
-    def get_testable_method_names(self):
-        return [underscore(self.name)]
-
-    def is_testable(self):
-        return not self.name.startswith('_')
-
-class Method(Callable):
-    pass
 
 class TestCase(object):
     """A single test object, possibly contained within a test suite (denoted
@@ -573,3 +608,14 @@ class Module(Localizable, TestSuite):
             except DirectoryException, err:
                 raise ModuleSaveError(self.subpath, err.message)
             self.changed = False
+
+class PointOfEntry(object):
+    def __init__(self, project, name):
+        self.project = project
+        self.name = name
+
+    def get_path(self):
+        return os.path.join(self.project._get_points_of_entry_path(), self.name)
+
+    def get_content(self):
+        return read_file_contents(self.get_path())

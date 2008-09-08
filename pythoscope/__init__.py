@@ -5,7 +5,7 @@ import sys
 from inspector import inspect_project
 from generator import add_tests_to_project, UnknownTemplate
 from store import Project, ModuleNotFound, ModuleNeedsAnalysis, \
-     ModuleSaveError, get_pythoscope_path
+     ModuleSaveError, get_pythoscope_path, get_points_of_entry_path
 
 
 class PythoscopeDirectoryMissing(Exception):
@@ -73,6 +73,7 @@ def init(appname, args):
 
     try:
         os.makedirs(pythoscope_path)
+        os.makedirs(get_points_of_entry_path(project_path))
     except OSError, err:
         print "Couldn't initialize Pythoscope directory: %s." % err.strerror
 
