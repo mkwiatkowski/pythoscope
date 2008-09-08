@@ -6,14 +6,14 @@ from fixture import TempIO
 from nose.tools import assert_equal, assert_not_equal, assert_raises
 
 from pythoscope.astvisitor import parse
-from pythoscope.generator import add_tests_to_project, GenerationError
+from pythoscope.generator import add_tests_to_project
 from pythoscope.store import Project, Module, Class, Method, Function, \
-     ModuleNeedsAnalysis, TestClass, TestMethod
+     ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod
 from pythoscope.util import read_file_contents
 
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
      CustomSeparator, generate_single_test_module, ProjectInDirectory, \
-     ProjectWithModules
+     ProjectWithModules, TestableProject
 
 # Let nose know that those aren't test functions/classes.
 add_tests_to_project.__test__ = False
@@ -101,37 +101,63 @@ class TestGenerator:
         result = generate_single_test_module()
         assert_equal("", result)
 
+    def test_uses_existing_destination_directory(self):
+        project = ProjectInDirectory()
+        add_tests_to_project(project, [], 'unittest')
+        # Simply make sure it doesn't raise any exceptions.
+
     def test_doesnt_generate_test_files_with_no_test_cases(self):
         project = ProjectWithModules(["module.py"], ProjectInDirectory)
         test_file = os.path.join(project.path, "test_module.py")
 
-        add_tests_to_project(project, ["module"], project.path, 'unittest')
+        add_tests_to_project(project, ["module"], 'unittest')
 
         assert not os.path.exists(test_file)
 
     def test_doesnt_overwrite_existing_files_which_werent_analyzed(self):
         TEST_CONTENTS = "# test"
-        project = ProjectWithModules(["module.py"], ProjectInDirectory)
-        project["module"].objects = [Function("function")]
+        project = TestableProject()
         # File exists, but project does NOT contain corresponding test module.
-        existing_file = project.path.putfile("test_module.py", TEST_CONTENTS)
+        existing_file = os.path.join(project.new_tests_directory, "test_module.py")
+        project.path.putfile(existing_file, TEST_CONTENTS)
 
         def add_and_save():
-            add_tests_to_project(project, ["module"], project.path, 'unittest')
+            add_tests_to_project(project, ["module"], 'unittest')
+            project.save()
+
+        assert_raises(ModuleNeedsAnalysis, add_and_save)
+        assert_equal(TEST_CONTENTS, read_file_contents(project._path_for_test("test_module.py")))
+
+    def test_creates_new_test_module_if_no_of_the_existing_match(self):
+        project = TestableProject(["test_other.py"], ProjectInDirectory)
+
+        add_tests_to_project(project, ["module"], 'unittest')
+
+        project_test_cases = list(project.test_cases_iter())
+        assert_length(project_test_cases, 1)
+        assert_length(project["test_other"].test_cases, 0)
+
+    def test_doesnt_overwrite_existing_files_which_were_modified_since_last_analysis(self):
+        TEST_CONTENTS = "# test"
+        project = TestableProject(["test_module.py"])
+        # File exists, and project contains corresponding, but outdated, test module.
+        existing_file = project.path.putfile("test_module.py", TEST_CONTENTS)
+        project["test_module"].created = time.time() - 3600
+
+        def add_and_save():
+            add_tests_to_project(project, ["module"], 'unittest')
             project.save()
 
         assert_raises(ModuleNeedsAnalysis, add_and_save)
         assert_equal(TEST_CONTENTS, read_file_contents(existing_file))
 
-    def test_creates_new_test_module_if_no_of_the_existing_match(self):
-        project = ProjectWithModules(["module.py", "test_other.py"])
-        project["module"].objects = [Function("function")]
-
-        add_tests_to_project(project, ["module"], project.path, 'unittest')
-
-        project_test_cases = list(project.test_cases_iter())
-        assert_length(project_test_cases, 1)
-        assert_length(project["test_other"].test_cases, 0)
+    def test_raises_an_exception_if_destdir_is_a_file(self):
+        project = TestableProject()
+        destfile = project.path.putfile(project.new_tests_directory, "its content")
+        def add_and_save():
+            add_tests_to_project(project, ["module"], 'unittest')
+            project.save()
+        assert_raises(ModuleSaveError, add_and_save)
 
 class TestGeneratorWithSingleModule:
     def setUp(self):
@@ -143,7 +169,7 @@ class TestGeneratorWithSingleModule:
         for imp in imports:
             self.project["test_module"].imports = [imp]
 
-            add_tests_to_project(self.project, ["module"], self.project.path, 'unittest')
+            add_tests_to_project(self.project, ["module"], 'unittest')
 
             assert_equal([imp], self.project["test_module"].imports)
 
@@ -151,13 +177,13 @@ class TestGeneratorWithSingleModule:
         TEST_CONTENTS = "class TestSomething: pass\n\n"
         self.project["test_module"].code = parse(TEST_CONTENTS)
 
-        add_tests_to_project(self.project, ["module"], self.project.path, 'unittest')
+        add_tests_to_project(self.project, ["module"], 'unittest')
 
         assert_contains(self.project["test_module"].get_content(), TEST_CONTENTS)
         assert_contains(self.project["test_module"].get_content(), "class TestFunction(unittest.TestCase):")
 
     def test_associates_test_cases_with_application_modules(self):
-        add_tests_to_project(self.project, ["module"], self.project.path, 'unittest')
+        add_tests_to_project(self.project, ["module"], 'unittest')
 
         project_test_cases = list(self.project.test_cases_iter())
         assert_length(project_test_cases, 1)
@@ -166,35 +192,7 @@ class TestGeneratorWithSingleModule:
     def test_chooses_the_right_existing_test_module_for_new_test_case(self):
         self.project.create_module("test_other.py")
 
-        add_tests_to_project(self.project, ["module"], self.project.path, 'unittest')
+        add_tests_to_project(self.project, ["module"], 'unittest')
 
         assert_length(self.project["test_module"].test_cases, 1)
         assert_length(self.project["test_other"].test_cases, 0)
-
-    def test_doesnt_overwrite_existing_files_which_were_modified_since_last_analysis(self):
-        TEST_CONTENTS = "# test"
-        project = ProjectWithModules(["module.py", "test_module.py"], ProjectInDirectory)
-        project["module"].objects = [Function("function")]
-        # File exists, and project contains corresponding, but outdated, test module.
-        existing_file = project.path.putfile("test_module.py", TEST_CONTENTS)
-        project["test_module"].created = time.time() - 3600
-
-        def add_and_save():
-            add_tests_to_project(project, ["module"], project.path, 'unittest')
-            project.save()
-
-        assert_raises(ModuleNeedsAnalysis, add_and_save)
-        assert_equal(TEST_CONTENTS, read_file_contents(existing_file))
-
-class TestGeneratorWithProjectInDirectory:
-    def setUp(self):
-        self.project = ProjectInDirectory()
-
-    def test_uses_existing_destination_directory(self):
-        add_tests_to_project(self.project, [], self.project.path, 'unittest')
-        # Simply make sure it doesn't raise any exceptions.
-
-    def test_raises_an_exception_if_destdir_is_a_file(self):
-        destfile = self.project.path.putfile("file", "its content")
-        assert_raises(GenerationError,
-                      lambda: add_tests_to_project(self.project, [], destfile, 'unittest'))

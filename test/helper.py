@@ -4,7 +4,7 @@ from fixture import TempIO
 from nose.tools import assert_equal
 
 from pythoscope.generator import add_tests_to_project
-from pythoscope.store import Module, Project, ModuleNotFound
+from pythoscope.store import Module, Project, Function, ModuleNotFound
 from pythoscope.util import read_file_contents, set
 
 
@@ -66,11 +66,16 @@ def ProjectWithModules(paths, project_type=EmptyProject):
         project.create_module(os.path.join(project.path, path))
     return project
 
+def TestableProject(more_modules=[], project_type=ProjectInDirectory):
+    project = ProjectWithModules(["module.py"] + more_modules, project_type)
+    project["module"].objects = [Function("function")]
+    return project
+
 def get_test_module_contents(project):
     """Get contents of the first test module of a project.
     """
     try:
-        return project["test_module.py"].get_content()
+        return project["pythoscope-tests/test_module.py"].get_content()
     except ModuleNotFound:
         return "" # No test module was generated.
 get_test_module_contents.__test__ = False
@@ -80,6 +85,6 @@ def generate_single_test_module(template='unittest', **module_kwds):
     """
     project = EmptyProject()
     project.create_module("module.py", **module_kwds)
-    add_tests_to_project(project, ["module.py"], ".", template, False)
+    add_tests_to_project(project, ["module.py"], template, False)
     return get_test_module_contents(project)
 generate_single_test_module.__test__ = False

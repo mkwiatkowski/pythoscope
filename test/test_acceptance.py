@@ -17,7 +17,7 @@ class TestStaticAnalysis:
         project.path.putfile("module.py", read_data("static_analysis_module.py"))
 
         inspect_project(project)
-        add_tests_to_project(project, ["module"], project.path, 'unittest')
+        add_tests_to_project(project, ["module"], 'unittest')
         result = get_test_module_contents(project)
 
         assert_equal(expected_result, result)
@@ -45,7 +45,7 @@ class TestAppendingTestClasses:
         inspect_project(project)
 
         # Regenerate the tests.
-        add_tests_to_project(project, ["module.py"], project.path, 'unittest')
+        add_tests_to_project(project, ["module.py"], 'unittest')
         project.save()
 
         assert_length(project.get_modules(), 2)

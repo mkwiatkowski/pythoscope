@@ -73,7 +73,7 @@ class TestProject:
 
         new_test_method = TestMethod("test_new_method")
         new_test_class = TestClass("TestSomething", test_cases=[new_test_method])
-        project.add_test_case(new_test_class, "", False)
+        project.add_test_case(new_test_class)
 
         assert_length(list(project.test_cases_iter()), 1)
         assert_equal_sets([new_test_method], test_class.test_cases)
@@ -92,19 +92,19 @@ class TestProjectWithTestModule:
         self.existing_test_class.associated_modules = [module]
 
         new_test_class = TestClass("new", associated_modules=[module])
-        self.project.add_test_case(new_test_class, None, False)
+        self.project.add_test_case(new_test_class)
 
         assert new_test_class in self.test_module.test_cases
 
     def test_doesnt_overwrite_existing_test_classes_by_default(self):
         test_class = TestClass("TestSomething")
-        self.project.add_test_case(test_class, "", False)
+        self.project.add_test_case(test_class)
 
         assert_length(list(self.project.test_cases_iter()), 1)
 
     def test_adds_new_test_classes_to_existing_test_module(self):
         test_class = TestClass("TestSomethingNew")
-        self.project.add_test_case(test_class, "", False)
+        self.project.add_test_case(test_class)
 
         assert_equal_sets([self.existing_test_class, test_class],
                           list(self.project.test_cases_iter()))
@@ -112,7 +112,7 @@ class TestProjectWithTestModule:
     def test_adds_new_test_methods_to_existing_test_classes(self):
         test_method = TestMethod("test_new_method")
         test_class = TestClass("TestSomething", test_cases=[test_method])
-        self.project.add_test_case(test_class, "", False)
+        self.project.add_test_case(test_class)
 
         assert_length(list(self.project.test_cases_iter()), 1)
         assert list(self.project.test_cases_iter())[0] is test_method.parent
@@ -126,7 +126,7 @@ class TestProjectWithTestModule:
     def test_doesnt_overwrite_existing_test_methods_by_default(self):
         test_method = TestMethod("test_method")
         test_class = TestClass("TestSomething", test_cases=[test_method])
-        self.project.add_test_case(test_class, "", False)
+        self.project.add_test_case(test_class)
 
         assert_equal([test_method],
                      list(self.project.test_cases_iter())[0].test_cases)
@@ -134,7 +134,7 @@ class TestProjectWithTestModule:
         # Let's try adding the same method again.
         new_test_method = TestMethod("test_method")
         new_test_class = TestClass("TestSomething", test_cases=[new_test_method])
-        self.project.add_test_case(new_test_class, "", False)
+        self.project.add_test_case(new_test_class)
 
         assert_equal([test_method],
                      list(self.project.test_cases_iter())[0].test_cases)
@@ -142,7 +142,7 @@ class TestProjectWithTestModule:
     def test_overwrites_existing_test_methods_with_force_option(self):
         test_method = TestMethod("test_method")
         test_class = TestClass("TestSomething", test_cases=[test_method])
-        self.project.add_test_case(test_class, "", False)
+        self.project.add_test_case(test_class)
 
         assert_equal([test_method],
                      list(self.project.test_cases_iter())[0].test_cases)
@@ -151,7 +151,7 @@ class TestProjectWithTestModule:
         # set to True.
         new_test_method = TestMethod("test_method")
         new_test_class = TestClass("TestSomething", test_cases=[new_test_method])
-        self.project.add_test_case(new_test_class, "", True)
+        self.project.add_test_case(new_test_class, force=True)
 
         # The class is still the same.
         assert_equal([self.existing_test_class],

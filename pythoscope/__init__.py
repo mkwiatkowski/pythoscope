@@ -5,7 +5,7 @@ import sys
 from inspector import inspect_project
 from generator import add_tests_to_project, UnknownTemplate
 from store import Project, ModuleNotFound, ModuleNeedsAnalysis, \
-     get_pythoscope_path
+     ModuleSaveError, get_pythoscope_path
 
 
 class PythoscopeDirectoryMissing(Exception):
@@ -121,8 +121,6 @@ notation. For example, both of the following are acceptable:
 All test files will be written to a single directory.
 
 Options:
-  -d PATH, --destdir=PATH    Destination directory for generated test
-                             files. Default is "pythoscope-tests/".
   -f, --force                Go ahead and overwrite any existing
                              test files. Default is to skip generation
                              of tests for files that would otherwise
@@ -143,21 +141,17 @@ Available templates:
 
 def generate(appname, args):
     try:
-        options, args = getopt.getopt(args, "d:fht:",
-                                      ["destdir=", "force", "help", "template="])
+        options, args = getopt.getopt(args, "fht:", ["force", "help", "template="])
     except getopt.GetoptError, err:
         print "Error:", err, "\n"
         print GENERATE_USAGE % appname
         sys.exit(1)
 
-    destdir = "pythoscope-tests"
     force = False
     template = "unittest"
 
     for opt, value in options:
-        if opt in ("-d", "--destdir"):
-            destdir = value
-        elif opt in ("-f", "--force"):
+        if opt in ("-f", "--force"):
             force = True
         elif opt in ("-h", "--help"):
             print GENERATE_USAGE % appname
@@ -167,7 +161,7 @@ def generate(appname, args):
 
     try:
         project = Project.from_directory(find_project_directory(args[0]))
-        add_tests_to_project(project, args, destdir, template, force)
+        add_tests_to_project(project, args, template, force)
         project.save()
     except IndexError:
         print "Error: You must provide at least one argument to generate."
@@ -183,6 +177,8 @@ def generate(appname, args):
                   "but it hasn't been analyzed yet. Run 'inspect' on it first." % err.path
     except ModuleNotFound, err:
         print "Error: Couldn't find information on module %r, try running 'inspect' on it first." % err.module
+    except ModuleSaveError, err:
+        print "Error: Couldn't save module %r: %s." % (err.module, err.reason)
     except UnknownTemplate, err:
         print "Error: Couldn't find template named %r. Available templates are 'nose' and 'unittest'." % err.template
 

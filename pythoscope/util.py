@@ -106,3 +106,15 @@ def rlistdir(path):
 
 def get_names(objects):
     return map(lambda c: c.name, objects)
+
+class DirectoryException(Exception):
+    pass
+
+def ensure_directory(directory):
+    """Make sure given directory exists, creating it if necessary.
+    """
+    if os.path.exists(directory):
+        if not os.path.isdir(directory):
+            raise DirectoryException("Destination is not a directory.")
+    else:
+        os.makedirs(directory)

@@ -5,7 +5,8 @@ import time
 
 from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
      get_starting_whitespace, is_node_of_type, regenerate
-from util import all_of_type, max_by_not_zero, underscore, write_string_to_file
+from util import all_of_type, max_by_not_zero, underscore, \
+     write_string_to_file, ensure_directory, DirectoryException
 
 
 class ModuleNeedsAnalysis(Exception):
@@ -18,6 +19,12 @@ class ModuleNotFound(Exception):
     def __init__(self, module):
         Exception.__init__(self, "Couldn't find module %r." % module)
         self.module = module
+
+class ModuleSaveError(Exception):
+    def __init__(self, module, reason):
+        Exception.__init__(self, "Couldn't save module %r: %s." % (module, reason))
+        self.module = module
+        self.reason = reason
 
 def test_module_name_for_test_case(test_case):
     "Come up with a name for a test module which will contain given test case."
@@ -54,6 +61,7 @@ class Project(object):
 
     No modifications are final until you call save().
     """
+    new_tests_directory = "pythoscope-tests"
 
     def from_directory(cls, project_path):
         """Read the project information from the .pythoscope/ directory of
@@ -114,14 +122,14 @@ class Project(object):
         prefix_length = len(self.path) + 1
         return os.path.realpath(path)[prefix_length:]
 
-    def add_test_cases(self, test_cases, test_directory, force):
+    def add_test_cases(self, test_cases, force=False):
         for test_case in test_cases:
-            self.add_test_case(test_case, test_directory, force)
+            self.add_test_case(test_case, force)
 
-    def add_test_case(self, test_case, test_directory, force):
+    def add_test_case(self, test_case, force=False):
         existing_test_case = self._find_test_case_by_name(test_case.name)
         if not existing_test_case:
-            place = self._find_place_for_test_case(test_case, test_directory)
+            place = self._find_place_for_test_case(test_case)
             place.add_test_case(test_case)
         elif isinstance(test_case, TestClass) and isinstance(existing_test_case, TestClass):
             self._merge_test_classes(existing_test_case, test_case, force)
@@ -149,26 +157,31 @@ class Project(object):
             if tcase.name == name:
                 return tcase
 
-    def _find_place_for_test_case(self, test_case, test_directory):
+    def _find_place_for_test_case(self, test_case):
         """Find the best place for the new test case to be added. If there is
         no such place in existing test modules, a new one will be created.
         """
         if isinstance(test_case, TestClass):
             return self._find_test_module(test_case) or \
-                   self._create_test_module_for(test_case, test_directory)
+                   self._create_test_module_for(test_case)
         elif isinstance(test_case, TestMethod):
             return self._find_test_class(test_case) or \
                    self._create_test_class_for(test_case)
 
-    def _create_test_module_for(self, test_case, test_directory):
+    def _create_test_module_for(self, test_case):
         """Create a new test module for a given test case. If the test module
         already existed, will raise a ModuleNeedsAnalysis exception.
         """
         test_name = test_module_name_for_test_case(test_case)
-        test_path = os.path.join(test_directory, test_name)
+        test_path = self._path_for_test(test_name)
         if os.path.exists(test_path):
             raise ModuleNeedsAnalysis(test_path)
         return self.create_module(test_path)
+
+    def _path_for_test(self, test_module_name):
+        """Return a full path to test module with given name.
+        """
+        return os.path.join(self.path, self.new_tests_directory, test_module_name)
 
     def _find_test_module(self, test_case):
         """Find test module that will be good for the given test case.
@@ -420,7 +433,10 @@ class Localizable(object):
 
     def write(self, new_content):
         """Overwrite the file with new contents and update its created time.
+
+        Creates the containing directories if needed.
         """
+        ensure_directory(os.path.dirname(self.get_path()))
         write_string_to_file(new_content, self.get_path())
         self.created = time.time()
 
@@ -535,5 +551,8 @@ class Module(Localizable, TestSuite):
         if self.changed:
             if self.is_out_of_sync():
                 raise ModuleNeedsAnalysis(self.subpath, out_of_sync=True)
-            self.write(self.get_content())
+            try:
+                self.write(self.get_content())
+            except DirectoryException, err:
+                raise ModuleSaveError(self.subpath, err.message)
             self.changed = False

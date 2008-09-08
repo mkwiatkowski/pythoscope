@@ -11,9 +11,6 @@ def name2testname(name):
         return "Test%s" % name
     return "test_%s" % name
 
-class GenerationError(Exception):
-    pass
-
 class UnknownTemplate(Exception):
     def __init__(self, template):
         Exception.__init__(self, "Couldn't find template %r." % template)
@@ -46,21 +43,15 @@ class TestGenerator(object):
             raise UnknownTemplate(template)
     from_template = classmethod(from_template)
 
-    def add_tests_to_project(self, project, modnames, destdir, force=False):
-        if os.path.exists(destdir):
-            if not os.path.isdir(destdir):
-                raise GenerationError("Destination is not a directory.")
-        else:
-            os.makedirs(destdir)
-
+    def add_tests_to_project(self, project, modnames, force=False):
         for modname in modnames:
             module = project[modname]
-            self._add_tests_for_module(module, project, destdir, force)
+            self._add_tests_for_module(module, project, force)
 
-    def _add_tests_for_module(self, module, project, destdir, force):
+    def _add_tests_for_module(self, module, project, force):
         test_cases = self._generate_test_cases(module)
         if test_cases:
-            project.add_test_cases(test_cases, destdir, force)
+            project.add_test_cases(test_cases, force)
 
     def _generate_test_cases(self, module):
         return filter(None,
@@ -107,6 +98,6 @@ class NoseTestGenerator(TestGenerator):
             result += "        raise SkipTest # TODO: implement your test here\n\n"
         return result
 
-def add_tests_to_project(project, modnames, destdir, template, force=False):
+def add_tests_to_project(project, modnames, template, force=False):
     generator = TestGenerator.from_template(template)
-    generator.add_tests_to_project(project, modnames, destdir, force)
+    generator.add_tests_to_project(project, modnames, force)
