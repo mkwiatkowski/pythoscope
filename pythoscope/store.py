@@ -119,7 +119,6 @@ class Project(object):
             self.add_test_case(test_case, test_directory, force)
 
     def add_test_case(self, test_case, test_directory, force):
-        print " Project => Adding test case %s" % test_case
         existing_test_case = self._find_test_case_by_name(test_case.name)
         if not existing_test_case:
             place = self._find_place_for_test_case(test_case, test_directory)
@@ -438,8 +437,6 @@ class Module(Localizable, TestSuite):
 
         Localizable.__init__(self, project, subpath)
         TestSuite.__init__(self, self.locator, code, None, test_cases)
-
-        print "Created module %s with code %s" % (subpath, code)
 
         self.objects = objects
         self.imports = imports

@@ -70,7 +70,6 @@ def get_test_module_contents(project):
     """Get contents of the first test module of a project.
     """
     try:
-        print project.get_modules()
         return project["test_module.py"].get_content()
     except ModuleNotFound:
         return "" # No test module was generated.
