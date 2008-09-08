@@ -33,6 +33,11 @@ def test_module_name_for_test_case(test_case):
         return module_path_to_test_path(test_case.associated_modules[0].subpath)
     return "test_foo.py" # TODO
 
+def module_path_to_name(module_path):
+    return re.sub(r'.py$', '',
+                  re.sub(r'%s__init__.py$' % os.path.sep, '.py',
+                         module_path)).replace(os.path.sep, "_")
+
 def module_path_to_test_path(module):
     """Convert a module locator to a proper test filename.
 
@@ -43,8 +48,22 @@ def module_path_to_test_path(module):
     >>> module_path_to_test_path("pythoscope/__init__.py")
     'test_pythoscope.py'
     """
-    return "test_" + re.sub(r'%s__init__.py$' % os.path.sep, '.py', module).\
-        replace(os.path.sep, "_")
+    return "test_%s.py" % module_path_to_name(module)
+
+def possible_test_module_paths(module):
+    """Return possible locations of a test module corresponding to given
+    application module.
+
+    >>> possible_test_module_paths(Module(subpath="module.py", project=None))
+    ['test_module.py', 'module_test.py', 'moduleTest.py', 'tests_module.py', 'module_tests.py', 'moduleTests.py', 'testModule.py', 'TestModule.py', 'ModuleTest.py', 'testsModule.py', 'TestsModule.py', 'ModuleTests.py']
+    """
+    module_name = module_path_to_name(module.subpath)
+    def generate():
+        for path in ["test_%s", "%s_test", "%sTest", "tests_%s", "%s_tests", "%sTests"]:
+            yield (path % module_name) + ".py"
+        for path in ["test%s", "Test%s", "%sTest", "tests%s", "Tests%s", "%sTests"]:
+            yield (path % module_name.capitalize()) + ".py"
+    return list(generate())
 
 def get_pythoscope_path(project_path):
     return os.path.join(project_path, ".pythoscope")
@@ -188,8 +207,6 @@ class Project(object):
 
     def _find_test_module(self, test_case):
         """Find test module that will be good for the given test case.
-
-        Currently only module names are used as a criteria.
         """
         for module in test_case.associated_modules:
             test_module = self._find_associate_test_module_by_name(module) or \
@@ -201,8 +218,9 @@ class Project(object):
         """Try to find a test module with name corresponding to the name of
         the application module.
         """
+        possible_paths = possible_test_module_paths(module)
         for mod in self.get_modules():
-            if mod.subpath.endswith(module_path_to_test_path(module.subpath)):
+            if mod.subpath in possible_paths:
                 return mod
 
     def _find_associate_test_module_by_test_cases(self, module):

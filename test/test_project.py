@@ -79,6 +79,18 @@ class TestProject:
         assert_equal_sets([new_test_method], test_class.test_cases)
         assert new_test_method.parent is test_class
 
+    def test_finds_associated_test_modules_that_use_different_name_conventions(self):
+        test_module_names = ["test_module.py", "testModule.py", "TestModule.py",
+                             "tests_module.py", "testsModule.py", "TestsModule.py",
+                             "module_test.py", "moduleTest.py", "ModuleTest.py",
+                             "module_tests.py", "moduleTests.py", "ModuleTests.py"]
+
+        for test_module_name in test_module_names:
+            project = ProjectWithModules(["module.py", test_module_name])
+            test_class = TestClass("TestSomething",
+                                   associated_modules=[project["module"]])
+            assert project[test_module_name] is project._find_test_module(test_class)
+
 class TestProjectWithTestModule:
     def setUp(self):
         self.project = EmptyProject()
