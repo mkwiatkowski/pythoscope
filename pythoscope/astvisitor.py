@@ -80,9 +80,16 @@ def parse(code):
     if not code.endswith("\n"):
         code += "\n"
         added_newline = True
+
     drv = driver.Driver(pygram.python_grammar, pytree.convert)
     result = drv.parse_string(code, True)
+
+    # Always return a Node, not a Leaf.
+    if isinstance(result, Leaf):
+        result = Node(syms.file_input, [result])
+
     result.added_newline = added_newline
+
     return result
 
 def regenerate(tree):
