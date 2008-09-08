@@ -64,6 +64,21 @@ class TestProject:
         assert_length(project.modules, 3)
         assert project["other/module.py"] is new_module
 
+    def test_adds_new_test_methods_to_existing_test_classes_inside_application_modules(self):
+        project = EmptyProject()
+        application_class = Class("Something", [])
+        test_class = TestClass("TestSomething")
+        module = project.create_module("somethings.py")
+        module.add_test_case(test_class)
+
+        new_test_method = TestMethod("test_new_method")
+        new_test_class = TestClass("TestSomething", test_cases=[new_test_method])
+        project.add_test_case(new_test_class, "", False)
+
+        assert_length(list(project.test_cases_iter()), 1)
+        assert_equal_sets([new_test_method], test_class.test_cases)
+        assert new_test_method.parent is test_class
+
 class TestProjectWithTestModule:
     def setUp(self):
         self.project = EmptyProject()
