@@ -87,7 +87,7 @@ def get_code_from(thing):
     else:
         raise TypeError("Don't know how to get code from %s" % thing)
 
-def get_name_and_modulename_from(thing):
+def get_name_and_modulepath_from(thing):
     code = get_code_from(thing)
     return (code.co_name, code.co_filename)
 
@@ -98,16 +98,16 @@ def create_call(calling_frame, return_value):
     return Call(input, return_value)
 
 def find_method(project, frame):
-    name, modulename = get_name_and_modulename_from(frame)
+    name, modulepath = get_name_and_modulepath_from(frame)
     object = get_self_from_frame(frame)
     classname = object.__class__.__name__
 
-    return project.find_method(name=name, classname=classname, modulename=modulename)
+    return project.find_method(name=name, classname=classname, modulepath=modulepath)
 
 def find_function(project, frame):
-    name, modulename = get_name_and_modulename_from(frame)
+    name, modulepath = get_name_and_modulepath_from(frame)
 
-    return project.find_function(name=name, modulename=modulename)
+    return project.find_function(name=name, modulepath=modulepath)
 
 def find_callable(project, frame):
     """Based on the frame, find the right callable object.
@@ -118,7 +118,7 @@ def find_callable(project, frame):
         return find_function(project, frame)
 
 def is_ignored_call(frame):
-    name, modulename = get_name_and_modulename_from(frame)
+    name, modulepath = get_name_and_modulepath_from(frame)
     if name in IGNORED_NAMES:
         return True
 
@@ -172,5 +172,8 @@ def trace_exec(project, exec_string, scope={}):
         exec exec_string in scope
     return trace_function(project, fun)
 
-def inspect_point_of_entry(project, point_of_entry):
-    calls = trace_exec(project, point_of_entry.get_content())
+def inspect_point_of_entry(point_of_entry):
+    # Put project's path into PYTHONPATH, so point of entry's imports work.
+    sys.path.insert(0, point_of_entry.project.path)
+    calls = trace_exec(point_of_entry.project, point_of_entry.get_content())
+    sys.path.remove(point_of_entry.project.path)

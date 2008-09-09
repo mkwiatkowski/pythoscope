@@ -1,9 +1,50 @@
 from nose.tools import assert_equal
 from nose.plugins.skip import SkipTest
 
-from pythoscope.inspector.dynamic import trace_function, trace_exec
+from pythoscope.inspector.dynamic import trace_function, trace_exec, \
+     inspect_point_of_entry
 from pythoscope.store import Function, Method
 
+from helper import TestableProject, assert_length
+
+
+class ProjectMock(object):
+    def __init__(self):
+        self._methods = {}
+        self._functions = {}
+
+    def find_method(self, name, classname, modulepath):
+        method_id = (name, classname, modulepath)
+        if not self._methods.has_key(method_id):
+            self._methods[method_id] = Method(name)
+        return self._methods[method_id]
+
+    def find_function(self, name, modulepath):
+        function_id = (name, modulepath)
+        if not self._functions.has_key(function_id):
+            self._functions[function_id] = Function(name)
+        return self._functions[function_id]
+
+    def get_callables(self):
+        return self._methods.values() + self._functions.values()
+
+class PointOfEntryMock(object):
+    def __init__(self, project, content):
+        self.project = project
+        self.content = content
+
+    def get_content(self):
+        return self.content
+
+def collect_callables(fun):
+    project = ProjectMock()
+    trace_function(project, fun)
+    return project.get_callables()
+
+def collect_callables_from_string(string):
+    project = ProjectMock()
+    trace_exec(project, string)
+    return project.get_callables()
 
 def assert_function_call(expected_input, expected_output, function_call):
     assert_equal(expected_input, function_call.input)
@@ -132,36 +173,6 @@ def function_calling_other_which_uses_name_and_module_variables():
         except:
             pass
     function()
-
-class ProjectMock(object):
-    def __init__(self):
-        self._methods = {}
-        self._functions = {}
-
-    def find_method(self, name, classname, modulename):
-        method_id = (name, classname, modulename)
-        if not self._methods.has_key(method_id):
-            self._methods[method_id] = Method(name)
-        return self._methods[method_id]
-
-    def find_function(self, name, modulename):
-        function_id = (name, modulename)
-        if not self._functions.has_key(function_id):
-            self._functions[function_id] = Function(name)
-        return self._functions[function_id]
-
-    def get_callables(self):
-        return self._methods.values() + self._functions.values()
-
-def collect_callables(fun):
-    project = ProjectMock()
-    trace_function(project, fun)
-    return project.get_callables()
-
-def collect_callables_from_string(string):
-    project = ProjectMock()
-    trace_exec(project, string)
-    return project.get_callables()
 
 class TestTraceFunction:
     "trace_function"
@@ -307,3 +318,15 @@ class TestTraceExec:
 
         assert_function_call({'x': 5},  6,  function.calls[0])
         assert_function_call({'x': 42}, 43, function.calls[1])
+
+class TestInspectPointOfEntry:
+    def test_properly_gathers_all_input_and_output_values(self):
+        project = TestableProject()
+        project.path.putfile("module.py", "def function(x):\n  return x + 1\n")
+        poe = PointOfEntryMock(project, "from module import function\nfunction(42)\n")
+
+        inspect_point_of_entry(poe)
+
+        assert_length(project["module"].functions, 1)
+        assert_length(project["module"].functions[0].calls, 1)
+        assert_function_call({'x': 42}, 43, project["module"].functions[0].calls[0])

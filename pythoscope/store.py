@@ -7,7 +7,7 @@ from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
      get_starting_whitespace, is_node_of_type, regenerate
 from util import all_of_type, max_by_not_zero, underscore, \
      write_string_to_file, ensure_directory, DirectoryException, \
-     get_last_modification_time, read_file_contents
+     get_last_modification_time, read_file_contents, python_modules_below
 
 
 class ModuleNeedsAnalysis(Exception):
@@ -134,6 +134,12 @@ class Project(object):
         self._modules[module.subpath] = module
         return module
 
+    def iter_points_of_entry(self):
+        """Iterate over all points of entry defined for this project.
+        """
+        for name in python_modules_below(self._get_points_of_entry_path()):
+            yield PointOfEntry(project=self, name=name)
+
     def _extract_subpath(self, path):
         """Takes the file path and returns subpath relative to the
         project, so the following correspondence is preserved:
@@ -259,17 +265,25 @@ class Project(object):
         return self._modules.values()
     modules = property(get_modules)
 
-    def find_method(self, name, classname, modulename):
-        for klass in self[modulename].classes:
-            if klass.name == classname:
-                for method in klass.methods:
-                    if method.name == name:
-                        return method
+    def find_method(self, name, classname, modulepath):
+        modulename = self._extract_subpath(modulepath)
+        try:
+            for klass in self[modulename].classes:
+                if klass.name == classname:
+                    for method in klass.methods:
+                        if method.name == name:
+                            return method
+        except ModuleNotFound:
+            pass
 
-    def find_function(self, name, modulename):
-        for function in self[modulename].functions:
-            if function.name == name:
-                return function
+    def find_function(self, name, modulepath):
+        modulename = self._extract_subpath(modulepath)
+        try:
+            for function in self[modulename].functions:
+                if function.name == name:
+                    return function
+        except ModuleNotFound:
+            pass
 
 class Call(object):
     """Stores information about a single function or method call.
