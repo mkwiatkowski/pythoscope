@@ -5,7 +5,7 @@ import time
 
 from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
      get_starting_whitespace, is_node_of_type, regenerate
-from util import all_of_type, max_by_not_zero, underscore, \
+from util import all_of_type, max_by_not_zero, \
      write_string_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, python_modules_below
 
@@ -310,9 +310,6 @@ class Callable(object):
         self.calls.append(call)
 
 class Function(Callable):
-    def get_testable_method_names(self):
-        return [underscore(self.name)]
-
     def is_testable(self):
         return not self.name.startswith('_')
 
@@ -331,16 +328,6 @@ class Class(object):
             if klass in self.bases:
                 return False
         return True
-
-    def get_testable_method_names(self):
-        return list(self._testable_method_names_generator())
-
-    def _testable_method_names_generator(self):
-        for method in self.methods:
-            if method.name == '__init__':
-                yield "object_initialization"
-            elif not method.name.startswith('_'):
-                yield method.name
 
 class TestCase(object):
     """A single test object, possibly contained within a test suite (denoted

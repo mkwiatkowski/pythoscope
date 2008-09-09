@@ -8,7 +8,7 @@ from nose.tools import assert_equal, assert_not_equal, assert_raises
 from pythoscope.astvisitor import parse
 from pythoscope.generator import add_tests_to_project
 from pythoscope.store import Project, Module, Class, Method, Function, \
-     ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod
+     ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod, Call
 from pythoscope.util import read_file_contents, get_last_modification_time
 
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
@@ -150,6 +150,21 @@ class TestGenerator:
 
         assert_raises(ModuleNeedsAnalysis, add_and_save)
         assert_equal(TEST_CONTENTS, read_file_contents(existing_file))
+
+    def test_generates_test_case_for_each_function_call(self):
+        objects = [Function('square', calls=[Call({'x': 4}, 16)])]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_square_returns_16_for_4(self):")
+        assert_contains(result, "self.assertEqual(16, square(x=4))")
+
+    def test_generates_imports_needed_for_function_calls(self):
+        objects = [Function('square', calls=[Call({}, 42)])]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "from module import square")
 
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
