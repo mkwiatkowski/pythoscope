@@ -94,7 +94,7 @@ class TestGenerator(object):
         if isinstance(object, Function):
             # We have at least one call registered, so use it.
             if object.calls:
-                for call in object.calls:
+                for call in object.get_unique_calls():
                     yield (call2testname(object, call.input, call.output),
                            call.output,
                            call_as_string(object, call.input))

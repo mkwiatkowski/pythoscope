@@ -1,4 +1,5 @@
 import os
+import re
 
 from fixture import TempIO
 from nose.tools import assert_equal
@@ -26,6 +27,11 @@ def assert_length(collection, expected_length):
 def assert_contains(haystack, needle):
     assert needle in haystack,\
            "%r should contain %r, but it didn't." % (haystack, needle)
+
+def assert_contains_once(haystack, needle):
+    repeated = len(re.findall(re.escape(needle), haystack))
+    assert repeated == 1, "Expected %r to contain %r once, but it contained it %d times instead." %\
+           (haystack, needle, repeated)
 
 def assert_doesnt_contain(haystack, needle):
     assert needle not in haystack,\

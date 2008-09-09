@@ -13,7 +13,7 @@ from pythoscope.util import read_file_contents, get_last_modification_time
 
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
      CustomSeparator, generate_single_test_module, ProjectInDirectory, \
-     ProjectWithModules, TestableProject
+     ProjectWithModules, TestableProject, assert_contains_once
 
 # Let nose know that those aren't test functions/classes.
 add_tests_to_project.__test__ = False
@@ -165,6 +165,13 @@ class TestGenerator:
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "from module import square")
+
+    def test_ignores_repeated_calls(self):
+        objects = [Function('square', calls=[Call({'x': 4}, 16), Call({'x': 4}, 16)])]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains_once(result, 'def test_square_returns_16_for_4(self):')
 
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):

@@ -5,7 +5,7 @@ import time
 
 from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
      get_starting_whitespace, is_node_of_type, regenerate
-from util import all_of_type, max_by_not_zero, \
+from util import all_of_type, max_by_not_zero, set, \
      write_string_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, python_modules_below
 
@@ -296,6 +296,12 @@ class Call(object):
         self.input = input
         self.output = output
 
+    def __eq__(self, other):
+        return self.input == other.input and self.output == other.output
+
+    def __hash__(self):
+        return hash((tuple(self.input.iteritems()), self.output))
+
 class Callable(object):
     def __init__(self, name, code=None, calls=None):
         if code is None:
@@ -308,6 +314,9 @@ class Callable(object):
 
     def add_call(self, call):
         self.calls.append(call)
+
+    def get_unique_calls(self):
+        return set(self.calls)
 
 class Function(Callable):
     def is_testable(self):
