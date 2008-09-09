@@ -3,7 +3,7 @@ import re
 
 from astvisitor import EmptyCode, descend, parse, ASTVisitor
 from store import Class, Function, TestClass, TestMethod, ModuleNotFound
-from util import camelize, underscore
+from util import camelize, underscore, sorted
 
 
 def call_as_string(object, input):
@@ -33,6 +33,13 @@ def call2testname(object, input, output):
     else:
         call_description = str(output).lower()
     return "test_%s_returns_%s" % (underscore(object.name), call_description)
+
+def sorted_test_method_descriptions(descriptions):
+    def get_name(desc):
+        if isinstance(desc, tuple):
+            return desc[0]
+        return desc
+    return sorted(descriptions, key=get_name)
 
 def name2testname(name):
     if name[0].isupper():
@@ -113,7 +120,7 @@ class TestGenerator(object):
 
     def _generate_test_case(self, object, module):
         class_name = name2testname(camelize(object.name))
-        method_descriptions = list(self._generate_test_method_descriptions(object, module))
+        method_descriptions = sorted_test_method_descriptions(self._generate_test_method_descriptions(object, module))
 
         # Don't generate empty test classes.
         if method_descriptions:

@@ -4,7 +4,8 @@ import re
 import time
 
 from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
-     get_starting_whitespace, is_node_of_type, regenerate
+     get_starting_whitespace, is_node_of_type, regenerate, \
+     remove_trailing_whitespace
 from util import all_of_type, max_by_not_zero, set, \
      write_string_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, python_modules_below
@@ -442,12 +443,13 @@ class TestClass(TestSuite):
         new method is good.
         """
         if self.code.children and is_node_of_type(self.code.children[-1], 'suite'):
+            remove_trailing_whitespace(code)
             suite = self.code.children[-1]
             # Prefix the definition with the right amount of whitespace.
             node = find_last_leaf(suite.children[-2])
             ident = get_starting_whitespace(suite)
             # There's no need to have extra newlines.
-            if node.prefix.endswith("\n") and ident.startswith("\n"):
+            if node.prefix.endswith("\n"):
                 node.prefix += ident.lstrip("\n")
             else:
                 node.prefix += ident

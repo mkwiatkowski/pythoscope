@@ -70,6 +70,10 @@ def get_starting_whitespace(code):
             break
     return whitespace
 
+def remove_trailing_whitespace(code):
+    leaf = find_last_leaf(code)
+    leaf.prefix = leaf.prefix.replace(' ', '').replace('\t', '')
+
 def parse(code):
     """String -> AST
 

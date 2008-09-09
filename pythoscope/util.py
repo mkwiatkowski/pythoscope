@@ -7,6 +7,13 @@ try:
 except NameError:
     from sets import Set as set
 
+try:
+    sorted = sorted
+except NameError:
+    def sorted(alist):
+        alist = alist[:]
+        alist.sort()
+        return alist
 
 def camelize(name):
     """Covert name into CamelCase.

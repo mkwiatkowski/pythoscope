@@ -173,6 +173,13 @@ class TestGenerator:
 
         assert_contains_once(result, 'def test_square_returns_16_for_4(self):')
 
+    def test_sorts_new_test_methods_by_name(self):
+        objects = [Function('square', calls=[Call({'x': 2}, 4), Call({'x': 3}, 9)])]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert re.search('test_square_returns_4_for_2.*test_square_returns_9_for_3', result, re.DOTALL)
+
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
         self.project = TestableProject()

@@ -1,17 +1,17 @@
 import unittest
 
 class TestSimpleClass(unittest.TestCase):
-    def test_simple_method(self):
-        assert False # TODO: implement your test here
-
     def test_method_with_one_arg(self):
         assert False # TODO: implement your test here
 
-class TestClassWithInit(unittest.TestCase):
-    def test_object_initialization(self):
+    def test_simple_method(self):
         assert False # TODO: implement your test here
 
+class TestClassWithInit(unittest.TestCase):
     def test_method(self):
+        assert False # TODO: implement your test here
+
+    def test_object_initialization(self):
         assert False # TODO: implement your test here
 
 class TestOldStyleClass(unittest.TestCase):
