@@ -102,8 +102,12 @@ def python_modules_below(path):
     return filter(is_python_module, rlistdir(path))
 
 def rlistdir(path):
-    """Resursive directory listing. Yield all files below given path.
+    """Resursive directory listing. Yield all files below given path,
+    ignoring those which names begin with a dot.
     """
+    if os.path.basename(path).startswith('.'):
+        return
+
     if os.path.isdir(path):
         for entry in os.listdir(path):
             for subpath in rlistdir(os.path.join(path, entry)):
