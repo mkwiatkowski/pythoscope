@@ -6,13 +6,31 @@ from store import Class, Function, TestClass, TestMethod, ModuleNotFound
 from util import camelize, underscore, sorted
 
 
+def constructor_as_string(object):
+    """For a given object return a string representing a code that will
+    construct it.
+
+    >>> constructor_as_string(123)
+    '123'
+    >>> constructor_as_string('string')
+    "'string'"
+    """
+    return repr(object)
+
 def call_as_string(object, input):
     """Generate code for calling an object with given input.
 
     >>> call_as_string(Function('fun'), {'a': 1, 'b': 2})
     'fun(a=1, b=2)'
+    >>> call_as_string(Function('capitalize'), {'str': 'string'})
+    "capitalize(str='string')"
     """
-    return "%s(%s)" % (object.name, ', '.join(["%s=%s" % i for i in input.iteritems()]))
+    return "%s(%s)" % (object.name, ', '.join(["%s=%s" % (arg, constructor_as_string(value)) for arg, value in input.iteritems()]))
+
+def object2id(object):
+    """Convert object to string that can be used as an identifier.
+    """
+    return re.sub(r'\.|\!', '', re.sub(r'\s+', '_', str(object).strip()))
 
 def call2testname(object, input, output):
     """Generate a test method name that describes given object call.
@@ -21,15 +39,27 @@ def call2testname(object, input, output):
     'test_do_this_returns_true'
     >>> call2testname(Function('square'), {'x': 7}, 49)
     'test_square_returns_49_for_7'
-    >>> call2testname(Function('ackermann'), {'m': 3, 'n': 2}, 29)
-    'test_ackermann_returns_29_for_m_equal_3_and_n_equal_2'
+    >>> call2testname(Function('capitalize'), {'str': 'a word.'}, 'A word.')
+    'test_capitalize_returns_A_word_for_a_word'
+
+    Two or more arguments are mentioned by name.
+        >>> call2testname(Function('ackermann'), {'m': 3, 'n': 2}, 29)
+        'test_ackermann_returns_29_for_m_equal_3_and_n_equal_2'
+
+    Will sort arguments alphabetically.
+        >>> call2testname(Function('concat'), {'s1': 'Hello ', 's2': 'world!'}, 'Hello world!')
+        'test_concat_returns_Hello_world_for_s1_equal_Hello_and_s2_equal_world'
+
+    Always starts and ends a word with a letter or number.
+        >>> call2testname(Function('strip'), {'n': 1, 's': '  A bit of whitespace  '}, ' A bit of whitespace ')
+        'test_strip_returns_A_bit_of_whitespace_for_n_equal_1_and_s_equal_A_bit_of_whitespace'
     """
     if input:
         if len(input) == 1:
-            arguments = str(input.values()[0])
+            arguments = object2id(input.values()[0])
         else:
-            arguments = "_and_".join(["%s_equal_%s" % i for i in input.iteritems()])
-        call_description = "%s_for_%s" % (output, arguments)
+            arguments = "_and_".join(["%s_equal_%s" % (arg, object2id(value)) for arg, value in sorted(input.iteritems())])
+        call_description = "%s_for_%s" % (object2id(output), arguments)
     else:
         call_description = str(output).lower()
     return "test_%s_returns_%s" % (underscore(object.name), call_description)
@@ -103,7 +133,7 @@ class TestGenerator(object):
             if object.calls:
                 for call in object.get_unique_calls():
                     yield (call2testname(object, call.input, call.output),
-                           call.output,
+                           constructor_as_string(call.output),
                            call_as_string(object, call.input))
                     # We're calling the object, so we have to make sure it will
                     # be imported in the test

@@ -151,13 +151,21 @@ class TestGenerator:
         assert_raises(ModuleNeedsAnalysis, add_and_save)
         assert_equal(TEST_CONTENTS, read_file_contents(existing_file))
 
-    def test_generates_test_case_for_each_function_call(self):
+    def test_generates_test_case_for_each_function_call_with_numbers(self):
         objects = [Function('square', calls=[Call({'x': 4}, 16)])]
 
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "def test_square_returns_16_for_4(self):")
         assert_contains(result, "self.assertEqual(16, square(x=4))")
+
+    def test_generates_test_case_for_each_function_call_with_strings(self):
+        objects = [Function('underscore', calls=[Call({'name': 'John Smith'}, 'john_smith')])]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_underscore_returns_john_smith_for_John_Smith(self):")
+        assert_contains(result, "self.assertEqual('john_smith', underscore(name='John Smith'))")
 
     def test_generates_imports_needed_for_function_calls(self):
         objects = [Function('square', calls=[Call({}, 42)])]
