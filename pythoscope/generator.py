@@ -127,27 +127,6 @@ class TestGenerator(object):
             if test_case:
                 yield test_case
 
-    def _generate_test_method_descriptions(self, object, module):
-        if isinstance(object, Function):
-            # We have at least one call registered, so use it.
-            if object.calls:
-                for call in object.get_unique_calls():
-                    yield (call2testname(object, call.input, call.output),
-                           constructor_as_string(call.output),
-                           call_as_string(object, call.input))
-                    # We're calling the object, so we have to make sure it will
-                    # be imported in the test
-                    self.ensure_import((module.locator, object.name))
-            # No calls were traced, so we're go for a single test stub.
-            else:
-                yield name2testname(underscore(object.name))
-        elif isinstance(object, Class):
-            for method in object.methods:
-                if method.name == '__init__':
-                    yield name2testname("object_initialization")
-                elif not method.name.startswith('_'):
-                    yield name2testname(method.name)
-
     def _generate_test_case(self, object, module):
         class_name = name2testname(camelize(object.name))
         method_descriptions = sorted_test_method_descriptions(self._generate_test_method_descriptions(object, module))
@@ -168,6 +147,33 @@ class TestGenerator(object):
                              imports=self.imports,
                              main_snippet=self.main_snippet,
                              associated_modules=[module])
+
+    def _generate_test_method_descriptions(self, object, module):
+        if isinstance(object, Function):
+            return self._generate_test_method_descriptions_for_function(object, module)
+        elif isinstance(object, Class):
+            return self._generate_test_method_descriptions_for_class(object, module)
+
+    def _generate_test_method_descriptions_for_class(self, klass, module):
+        for method in klass.methods:
+            if method.name == '__init__':
+                yield name2testname("object_initialization")
+            elif not method.name.startswith('_'):
+                yield name2testname(method.name)
+
+    def _generate_test_method_descriptions_for_function(self, function, module):
+        if function.calls:
+            # We have at least one call registered, so use it.
+            for call in function.get_unique_calls():
+                yield (call2testname(function, call.input, call.output),
+                       constructor_as_string(call.output),
+                       call_as_string(function, call.input))
+                # We're calling the function, so we have to make sure it will
+                # be imported in the test
+                self.ensure_import((module.locator, function.name))
+        else:
+            # No calls were traced, so we're go for a single test stub.
+            yield name2testname(underscore(function.name))
 
 class UnittestTestGenerator(TestGenerator):
     main_snippet = parse("if __name__ == '__main__':\n    unittest.main()\n")
