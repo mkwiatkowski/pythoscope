@@ -118,8 +118,8 @@ class Project(object):
     def save(self):
         # To avoid inconsistencies try to save all project's modules first. If
         # any of those saves fail, the pickle file won't get updated.
-        for test_module in self.get_modules():
-            test_module.save()
+        for module in self.get_modules():
+            module.save()
 
         fd = open(self._get_pickle_path(), 'w')
         pickle.dump(self, fd)
@@ -352,7 +352,7 @@ class TestSuite(TestCase):
     def __init__(self, name, code=None, parent=None, test_cases=[]):
         TestCase.__init__(self, name, code, parent)
 
-        self.changed = True
+        self.changed = False
         self.test_cases = []
 
     def add_test_cases(self, test_cases, append_code=True):
@@ -445,6 +445,7 @@ class TestClass(TestSuite):
             suite.insert_child(-1, code)
         else:
             self.code.append_child(code)
+        self.mark_as_changed()
 
     def find_method_by_name(self, name):
         for method in self.test_cases:
@@ -559,21 +560,22 @@ class Module(Localizable, TestSuite):
         if not self.main_snippet:
             self.main_snippet = main_snippet
             self.code.append_child(main_snippet)
+            self.mark_as_changed()
         elif force:
             self.main_snippet.replace(main_snippet)
             self.main_snippet = main_snippet
-        self.mark_as_changed()
+            self.mark_as_changed()
 
     def _ensure_imports(self, imports):
         "Make sure that all required imports are present."
         for imp in imports:
             self._ensure_import(imp)
-        self.mark_as_changed()
 
     def _ensure_import(self, import_desc):
         # Add an extra newline separating imports from the code.
         if not self.imports:
             self.code.insert_child(0, Newline())
+            self.mark_as_changed()
         if not self._contains_import(import_desc):
             self._add_import(import_desc)
 
@@ -583,6 +585,7 @@ class Module(Localizable, TestSuite):
     def _add_import(self, import_desc):
         self.imports.append(import_desc)
         self.code.insert_child(0, create_import(import_desc))
+        self.mark_as_changed()
 
     def _append_test_case_code(self, code):
         # If the main_snippet exists we have to put the new test case
@@ -591,6 +594,7 @@ class Module(Localizable, TestSuite):
             self._insert_before_main_snippet(code)
         else:
             self.code.append_child(code)
+        self.mark_as_changed()
 
     def _insert_before_main_snippet(self, code):
         for i, child in enumerate(self.code.children):
