@@ -108,6 +108,8 @@ class Project(object):
             project.path = project_path
             # Those are listed in the filesystem, so make sure we're up-to-date.
             project._update_list_of_points_of_entry()
+            # Some modules may have been removed since the last inspection.
+            project._remove_non_existing_modules()
         except IOError:
             project = Project(project_path)
         return project
@@ -139,6 +141,11 @@ class Project(object):
             if re.search(r'[_-]?tests?([_-]|$)', path):
                 self.new_tests_directory = path
 
+    def _remove_non_existing_modules(self):
+        subpaths = [mod.subpath for mod in self.iter_modules() if not mod.exists()]
+        for subpath in subpaths:
+            self.remove_module(subpath)
+
     def save(self):
         # To avoid inconsistencies try to save all project's modules first. If
         # any of those saves fail, the pickle file won't get updated.
@@ -157,6 +164,18 @@ class Project(object):
         module = Module(subpath=self._extract_subpath(path), project=self, **kwds)
         self._modules[module.subpath] = module
         return module
+
+    def remove_module(self, subpath):
+        """Remove a module from this Project along with all references to it
+        from other modules.
+        """
+        module = self[subpath]
+        for test_case in self.test_cases_iter():
+            try:
+                test_case.associated_modules.remove(module)
+            except ValueError:
+                pass
+        del self._modules[subpath]
 
     def _extract_point_of_entry_subpath(self, path):
         """Takes the file path and returns subpath relative to the
@@ -610,6 +629,9 @@ class Localizable(object):
         ensure_directory(os.path.dirname(self.get_path()))
         write_string_to_file(new_content, self.get_path())
         self.created = time.time()
+
+    def exists(self):
+        return os.path.isfile(self.get_path())
 
 class Module(Localizable, TestSuite):
     allowed_test_case_classes = [TestClass]

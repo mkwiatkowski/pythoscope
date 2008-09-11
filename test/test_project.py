@@ -6,32 +6,31 @@ from nose.tools import assert_equal, assert_raises
 from pythoscope.store import Project, Module, Class, Function, TestClass, \
      TestMethod, ModuleNotFound
 
-from helper import assert_length, assert_equal_sets, EmptyProject, ProjectWithModules
+from helper import assert_length, assert_equal_sets, EmptyProject, \
+     ProjectWithModules, ProjectWithRealModules, ProjectInDirectory, \
+     assert_not_raises
 
 # Let nose know that those aren't test classes.
 TestClass.__test__ = False
 TestMethod.__test__ = False
 
 
-def ProjectWithSingleTestClass(test_module_name):
+def ProjectAndTestClass(test_module_name):
     project = ProjectWithModules(["module.py", test_module_name])
     test_class = TestClass("TestSomething", associated_modules=[project["module"]])
     return project, test_class
 
 class TestProject:
     def test_can_be_saved_and_restored_from_file(self):
-        tmpdir = TempIO()
-        tmpdir.mkdir(".pythoscope")
-        project = Project(tmpdir)
-        def ppath(path):
-            return os.path.join(project.path, path)
-        project.create_module(ppath('good_module.py'),
-                           objects=[Class("AClass", ["amethod"]),
-                                    Function("afunction")])
-        project.create_module(ppath('bad_module.py'),
-                           errors=["Syntax error"])
+        project = ProjectWithRealModules(["good_module.py", "bad_module.py"])
+        project['good_module'].objects = [Class("AClass", ["amethod"]), Function("afunction")]
+        project['bad_module'].errors = ["Syntax error"]
         project.save()
-        project = Project.from_directory(tmpdir)
+
+        # Make a reference to TempIO, so it doesn't auto-destruct.
+        tmpdir = project._tmpdir
+
+        project = Project.from_directory(project.path)
 
         assert_equal(2, len(project.modules))
         assert_equal(2, len(project['good_module'].objects))
@@ -91,19 +90,19 @@ class TestProject:
                              "module_tests.py", "moduleTests.py", "ModuleTests.py"]
 
         for test_module_name in test_module_names:
-            project, test_class = ProjectWithSingleTestClass(test_module_name)
+            project, test_class = ProjectAndTestClass(test_module_name)
             assert project[test_module_name] is project._find_test_module(test_class)
 
     def test_finds_associated_test_modules_inside_test_directories(self):
         for test_module_dir in ["test", "tests"]:
             test_module_name = os.path.join(test_module_dir, "test_module.py")
-            project, test_class = ProjectWithSingleTestClass(test_module_name)
+            project, test_class = ProjectAndTestClass(test_module_name)
             assert project[test_module_name] is project._find_test_module(test_class)
 
     def test_finds_associated_test_modules_inside_new_tests_directory(self):
         new_tests_directory = "something"
         test_module_name = os.path.join(new_tests_directory, "test_module.py")
-        project, test_class = ProjectWithSingleTestClass(test_module_name)
+        project, test_class = ProjectAndTestClass(test_module_name)
         project.new_tests_directory = new_tests_directory
         assert project[test_module_name] is project._find_test_module(test_class)
 
@@ -119,6 +118,23 @@ class TestProject:
             project = Project(tmpdir)
 
             assert_equal(test_module_dir, project.new_tests_directory)
+
+    def test_removes_definitions_of_modules_that_dont_exist_anymore(self):
+        project = ProjectWithRealModules(["module.py", "other_module.py", "test_module.py"])
+        test_class = TestClass("TestSomething", associated_modules=[project["module"]])
+        project.add_test_case(test_class)
+        project.save()
+
+        os.remove(os.path.join(project.path, "other_module.py"))
+
+        # Make a reference to TempIO, so it doesn't auto-destruct.
+        tmpdir = project._tmpdir
+
+        project = Project.from_directory(project.path)
+
+        assert_not_raises(ModuleNotFound, lambda: project["module"])
+        assert_raises(ModuleNotFound, lambda: project["other_module"])
+        assert_not_raises(ModuleNotFound, lambda: project["test_module"])
 
 class TestProjectWithTestModule:
     def setUp(self):

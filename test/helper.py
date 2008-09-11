@@ -49,6 +49,12 @@ def assert_single_function(info, name):
 def assert_equal_sets(collection1, collection2):
     assert_equal(set(collection1), set(collection2))
 
+def assert_not_raises(exception, callable):
+    try:
+        callable()
+    except exception:
+        assert False, "Exception %s has been raised." % exception
+
 class PointOfEntryMock(PointOfEntry):
     def __init__(self, project=None, name="poe", content=""):
         self.project = project
@@ -80,12 +86,21 @@ def EmptyProject():
 def ProjectInDirectory():
     project_path = TempIO()
     project_path.mkdir(".pythoscope")
-    return Project(project_path)
+    project = Project(project_path)
+    # Save the TempIO reference, so we can delay its destruction later.
+    project._tmpdir = project_path
+    return project
 
 def ProjectWithModules(paths, project_type=EmptyProject):
     project = project_type()
     for path in paths:
         project.create_module(os.path.join(project.path, path))
+    return project
+
+def ProjectWithRealModules(paths):
+    project = ProjectWithModules(paths, ProjectInDirectory)
+    for path in paths:
+        project.path.putfile(path, "")
     return project
 
 def TestableProject(more_modules=[], project_type=ProjectInDirectory):
