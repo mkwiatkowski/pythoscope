@@ -10,7 +10,8 @@ IGNORED_NAMES = ["<module>", "<genexpr>"]
 
 _traced_callables = None
 _top_level_function = None
-_project = None
+_sys_modules = None
+_point_of_entry = None
 
 def compact(list):
     "Remove all occurences of None from the given list."
@@ -38,35 +39,54 @@ def callable_type(frame):
 def is_class_definition(frame):
     "Return True if given frame represents a class definition."
     try:
-        return callable_type(frame) is types.ClassType
+        # Old-style classes are of type "ClassType", while new-style
+        # classes or of type "type".
+        return callable_type(frame) in [types.ClassType, type]
     except KeyError:
         return frame.f_code.co_names[:2] == ('__name__', '__module__')
 
-def get_self_from_frame(frame):
-    """Try to get the self object from the given frame.
+class NotMethodFrame(Exception):
+    pass
 
-    Returns None if the frame doesn't reference a method call.
+def get_method_information(frame):
+    """Analyze the frame and return relevant information about the method
+    call it presumably represents.
+
+    Returns a tuple: (self_object, input_dictionary).
+
+    If the frame doesn't represent a method call, raises NotMethodFrame
+    exception.
     """
     try:
-        args, varargs, _, locals = inspect.getargvalues(frame)
+        args, varargs, varkw, locals = inspect.getargvalues(frame)
         if args:
             # Will raise TypeError if args[0] is a list.
-            return locals[args[0]]
+            self = locals[args[0]]
         else:
             # Will raise an IndexError if no arguments were passed.
-            return locals[varargs][0]
-    except (KeyError, TypeError, IndexError):
-        return None
+            self = locals[varargs][0]
 
-def is_method_call(frame):
-    "Return True if given frame represents a method call."
-    try:
-        self       = get_self_from_frame(frame)
         methodname = frame.f_code.co_name
-        method     = getattr(self, methodname)
-        return method.im_func.func_code == frame.f_code
-    except AttributeError:
-        return False
+        # Will raise AttributeError when the self is None or doesn't
+        # have method with given name.
+        method = getattr(self, methodname)
+
+        # This isn't a call on the first argument's method.
+        if not method.im_func.func_code == frame.f_code:
+            raise NotMethodFrame
+
+        # Remove the "self" argument.
+        if args:
+            args.pop(0)
+        elif varargs and locals[varargs]:
+            # No pop(), because locals[varargs] is a tuple.
+            locals[varargs] = locals[varargs][1:]
+        else:
+            raise NotMethodFrame
+
+        return (self, input_from_argvalues(args, varargs, varkw, locals))
+    except (AttributeError, KeyError, TypeError, IndexError):
+        raise NotMethodFrame
 
 def resolve_args(names, locals):
     result = []
@@ -76,6 +96,9 @@ def resolve_args(names, locals):
         else:
             result.append((name, locals[name]))
     return result
+
+def input_from_argvalues(args, varargs, varkw, locals):
+    return dict(resolve_args(args + compact([varargs, varkw]), locals))
 
 def get_code_from(thing):
     # Frames have f_code attribute.
@@ -87,56 +110,36 @@ def get_code_from(thing):
     else:
         raise TypeError("Don't know how to get code from %s" % thing)
 
-def get_name_and_modulepath_from(thing):
-    code = get_code_from(thing)
-    return (code.co_name, code.co_filename)
+def create_function_call(calling_frame, return_vaule):
+    input = input_from_argvalues(*inspect.getargvalues(calling_frame))
+    return FunctionCall(input, return_value)
 
-def create_call(calling_frame, return_value):
-    args, varargs, varkw, locals = inspect.getargvalues(calling_frame)
+def create_method_call(calling_frame, return_vaule):
+    args, varargs, varkw, locals = argvalues_without_self(calling_frame)
     input = dict(resolve_args(args + compact([varargs, varkw]), locals))
 
-    return Call(input, return_value)
+    return FunctionCall(input, return_value)
 
-def find_method(project, frame):
-    name, modulepath = get_name_and_modulepath_from(frame)
-    object = get_self_from_frame(frame)
-    classname = object.__class__.__name__
-
-    return project.find_method(name=name, classname=classname, modulepath=modulepath)
-
-def find_function(project, frame):
-    name, modulepath = get_name_and_modulepath_from(frame)
-
-    return project.find_function(name=name, modulepath=modulepath)
-
-def find_callable(project, frame):
-    """Based on the frame, find the right callable object.
-    """
-    if is_method_call(frame):
-        return find_method(project, frame)
-    else:
-        return find_function(project, frame)
-
-def is_ignored_call(frame):
-    name, modulepath = get_name_and_modulepath_from(frame)
-    if name in IGNORED_NAMES:
+def is_ignored_code(code):
+    if code.co_name in IGNORED_NAMES:
         return True
-
-    code = get_code_from(frame)
     if code in [_top_level_function.func_code, stop_tracing.func_code]:
         return True
-
     return False
 
 def add_call_to(calling_frame, return_value):
-    if not is_ignored_call(calling_frame):
-        callable = find_callable(_project, calling_frame)
-        # If we can't find the callable in Project, we don't care about it.
-        # This way we don't record any information about thid-party and
-        # dynamically created code.
-        if callable:
-            call = create_call(calling_frame, return_value)
-            callable.add_call(call)
+    code = get_code_from(calling_frame)
+    name = code.co_name
+    modulepath = code.co_filename
+
+    if not is_ignored_code(code):
+        try:
+            self, input = get_method_information(calling_frame)
+            classname = self.__class__.__name__
+            _point_of_entry.add_method_call(name, classname, modulepath, id(self), input, return_value)
+        except NotMethodFrame:
+            input = input_from_argvalues(*inspect.getargvalues(calling_frame))
+            _point_of_entry.add_function_call(name, modulepath, input, return_value)
 
 def create_tracer(calling_frame):
     def tracer(frame, event, arg):
@@ -147,33 +150,53 @@ def create_tracer(calling_frame):
             add_call_to(calling_frame, arg)
     return tracer
 
-def start_tracing(project):
-    global _project
-    _project = project
+def start_tracing():
     sys.settrace(create_tracer(None))
 
 def stop_tracing():
     sys.settrace(None)
-    global _project
-    _project = None
 
-def trace_function(project, fun):
-    """Trace given function and add Calls to given Project instance.
+def trace_function(fun):
+    """Trace given function and add Calls to given PointOfEntry instance.
     """
     global _top_level_function
     _top_level_function = fun
 
-    start_tracing(project)
-    fun()
-    stop_tracing()
+    start_tracing()
+    try:
+        fun()
+    # TODO: Intercept and record unhandled exceptions.
+    finally:
+        stop_tracing()
 
-def trace_exec(project, exec_string, scope={}):
+def trace_exec(exec_string, scope={}):
     def fun():
         exec exec_string in scope
-    return trace_function(project, fun)
+    return trace_function(fun)
 
-def inspect_point_of_entry(point_of_entry):
+def setup_tracing(point_of_entry):
+    global _sys_modules, _point_of_entry
+
     # Put project's path into PYTHONPATH, so point of entry's imports work.
     sys.path.insert(0, point_of_entry.project.path)
-    calls = trace_exec(point_of_entry.project, point_of_entry.get_content())
+    point_of_entry.clear_previous_run()    
+    _point_of_entry = point_of_entry
+    _sys_modules = sys.modules.keys()
+
+def teardown_tracing(point_of_entry):
+    global _sys_modules, _point_of_entry
+
+    # Revert any changes to sys.modules.
+    # This unfortunatelly doesn't include changes to the modules' state itself.
+    # Replaced module instances in sys.modules are also not reverted.
+    modnames = [m for m in sys.modules.keys() if m not in _sys_modules]
+    for modname in modnames:
+        del sys.modules[modname]
+
+    _point_of_entry = None
     sys.path.remove(point_of_entry.project.path)
+
+def inspect_point_of_entry(point_of_entry):
+    setup_tracing(point_of_entry)
+    calls = trace_exec(point_of_entry.get_content())
+    teardown_tracing(point_of_entry)

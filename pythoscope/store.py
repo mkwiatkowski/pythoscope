@@ -101,6 +101,8 @@ class Project(object):
             fd.close()
             # Update project's path, as the directory could've been moved.
             project.path = project_path
+            # Those are listed in the filesystem, so make sure we're up-to-date.
+            project._update_list_of_points_of_entry()
         except IOError:
             project = Project(project_path)
         return project
@@ -108,6 +110,7 @@ class Project(object):
 
     def __init__(self, path=None):
         self.path = path
+        self.points_of_entry = {}
         self._modules = {}
 
     def _get_pickle_path(self):
@@ -115,6 +118,11 @@ class Project(object):
 
     def _get_points_of_entry_path(self):
         return get_points_of_entry_path(self.path)
+
+    def _update_list_of_points_of_entry(self):
+        for name in python_modules_below(self._get_points_of_entry_path()):
+            if name not in self.points_of_entry:
+                self.points_of_entry[name] = PointOfEntry(project=self, name=name)
 
     def save(self):
         # To avoid inconsistencies try to save all project's modules first. If
@@ -134,12 +142,6 @@ class Project(object):
         module = Module(subpath=self._extract_subpath(path), project=self, **kwds)
         self._modules[module.subpath] = module
         return module
-
-    def iter_points_of_entry(self):
-        """Iterate over all points of entry defined for this project.
-        """
-        for name in python_modules_below(self._get_points_of_entry_path()):
-            yield PointOfEntry(project=self, name=name)
 
     def _extract_subpath(self, path):
         """Takes the file path and returns subpath relative to the
@@ -266,14 +268,12 @@ class Project(object):
         return self._modules.values()
     modules = property(get_modules)
 
-    def find_method(self, name, classname, modulepath):
+    def find_class(self, name, modulepath):
         modulename = self._extract_subpath(modulepath)
         try:
             for klass in self[modulename].classes:
-                if klass.name == classname:
-                    for method in klass.methods:
-                        if method.name == name:
-                            return method
+                if klass.name == name:
+                    return klass
         except ModuleNotFound:
             pass
 
@@ -297,40 +297,97 @@ class Call(object):
         self.input = input
         self.output = output
 
+class FunctionCall(Call):
+    """__eq__ and __hash__ definitions provided for Function.get_unique_calls().
+    """
+    def __init__(self, input, output, point_of_entry):
+        Call.__init__(self, input, output)
+        self.point_of_entry = point_of_entry
+
     def __eq__(self, other):
-        return self.input == other.input and self.output == other.output
+        return self.point_of_entry is other.point_of_entry and \
+               self.input == other.input and \
+               self.output == other.output
 
     def __hash__(self):
-        return hash((tuple(self.input.iteritems()), self.output))
+        return hash((self.point_of_entry.name,
+                     tuple(self.input.iteritems()),
+                     self.output))
 
-class Callable(object):
-    def __init__(self, name, code=None, calls=None):
+    def __repr__(self):
+        return "FunctionCall(input=%r, output=%r, poe=%r)" % \
+               (self.input, self.output, self.point_of_entry.name)
+
+class MethodCall(Call):
+    def __init__(self, input, output, method_name):
+        Call.__init__(self, input, output)
+        self.method_name = method_name
+
+    def __repr__(self):
+        return "MethodCall(input=%r, output=%r, method_name=%r)" % \
+               (self.input, self.output, self.method_name)
+
+class Definition(object):
+    def __init__(self, name, code=None):
         if code is None:
             code = EmptyCode()
-        if calls is None:
-            calls = []
         self.name = name
         self.code = code
+
+class Callable(object):
+    def __init__(self, calls=None):
+        if calls is None:
+            calls = []
         self.calls = calls
 
     def add_call(self, call):
         self.calls.append(call)
 
-    def get_unique_calls(self):
-        return set(self.calls)
+class Function(Definition, Callable):
+    def __init__(self, name, code=None, calls=None):
+        Definition.__init__(self, name, code)
+        Callable.__init__(self, calls)
 
-class Function(Callable):
     def is_testable(self):
         return not self.name.startswith('_')
 
-class Method(Callable):
+    def get_unique_calls(self):
+        return set(self.calls)
+
+    def remove_calls_from(self, point_of_entry):
+        self.calls = [call for call in self.calls if call.point_of_entry is not point_of_entry]
+
+    def __repr__(self):
+        return "Function(name=%r, calls=%r)" % (self.name, self.calls)
+
+# Methods are not Callable, because they cannot be called by itself - they
+# need a bound object. We represent this object by LiveObject class, which
+# gathers all MethodCalls for given instance.
+class Method(Definition):
     pass
 
+class LiveObject(Callable):
+    """Representation of an object which creation and usage was traced
+    during dynamic inspection.
+    """
+    def __init__(self, id, klass, point_of_entry):
+        self.id = id
+        self.klass = klass
+        self.point_of_entry = point_of_entry
+        self.calls = []
+
+    def add_call(self, call):
+        self.calls.append(call)
+
+    def __repr__(self):
+        return "LiveObject(id=%d, klass=%r, calls=%r)" % (self.id, self.klass.name, self.calls)
+
 class Class(object):
-    def __init__(self, name, methods, bases=[]):
+    def __init__(self, name, methods=[], bases=[]):
         self.name = name
         self.methods = methods
         self.bases = bases
+        self.live_objects = {}
 
     def is_testable(self):
         ignored_superclasses = ['Exception', 'unittest.TestCase']
@@ -338,6 +395,27 @@ class Class(object):
             if klass in self.bases:
                 return False
         return True
+
+    def add_live_object(self, live_object):
+        self.live_objects[live_object.id] = live_object
+
+    def remove_live_objects_from(self, point_of_entry):
+        for id, live_object in self.live_objects.iteritems():
+            if live_object.point_of_entry is point_of_entry:
+                del self.live_objects[id]
+
+    def get_traced_method_names(self):
+        traced_method_names = set()
+        for live_object in self.live_objects.values():
+            for call in live_object.calls:
+                traced_method_names.add(call.method_name)
+        return traced_method_names
+
+    def get_untraced_methods(self):
+        traced_method_names = self.get_traced_method_names()
+        def is_untraced(method):
+            return method.name not in traced_method_names
+        return filter(is_untraced, self.methods)
 
 class TestCase(object):
     """A single test object, possibly contained within a test suite (denoted
@@ -626,6 +704,12 @@ class Module(Localizable, TestSuite):
             self.changed = False
 
 class PointOfEntry(object):
+    """Piece of code provided by the user that allows dynamic analysis.
+
+    In add_method_call/add_function_call if we can't find a class or function
+    in Project, we don't care about it. This way we don't record any information
+    about thid-party and dynamically created code.
+    """
     def __init__(self, project, name):
         self.project = project
         self.name = name
@@ -635,3 +719,26 @@ class PointOfEntry(object):
 
     def get_content(self):
         return read_file_contents(self.get_path())
+
+    def clear_previous_run(self):
+        for klass in self.project.classes:
+            klass.remove_live_objects_from(self)
+        for function in self.project.functions:
+            function.remove_calls_from(self)
+
+    def add_method_call(self, name, classname, modulepath, object_id, input, output):
+        klass = self.project.find_class(classname, modulepath)
+
+        if klass:
+            try:
+                live_object = klass.live_objects[object_id]
+            except KeyError:
+                live_object = LiveObject(object_id, klass, self)
+                klass.add_live_object(live_object)
+            live_object.add_call(MethodCall(input, output, name))
+
+    def add_function_call(self, name, modulepath, input, output):
+        function = self.project.find_function(name, modulepath)
+
+        if function:
+            function.add_call(FunctionCall(input, output, self))

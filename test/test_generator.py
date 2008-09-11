@@ -8,17 +8,44 @@ from nose.tools import assert_equal, assert_not_equal, assert_raises
 from pythoscope.astvisitor import parse
 from pythoscope.generator import add_tests_to_project
 from pythoscope.store import Project, Module, Class, Method, Function, \
-     ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod, Call
+     ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod, \
+     MethodCall, FunctionCall, LiveObject
 from pythoscope.util import read_file_contents, get_last_modification_time
 
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
      CustomSeparator, generate_single_test_module, ProjectInDirectory, \
-     ProjectWithModules, TestableProject, assert_contains_once
+     ProjectWithModules, TestableProject, assert_contains_once, \
+     PointOfEntryMock
 
 # Let nose know that those aren't test functions/classes.
 add_tests_to_project.__test__ = False
 TestClass.__test__ = False
 TestMethod.__test__ = False
+
+
+def ClassWithMethods(classname, methods):
+    method_objects = []
+    method_calls = []
+
+    for name, calls in methods:
+        method_objects.append(Method(name))
+        for input, output in calls:
+            method_calls.append(MethodCall(input, output, name))
+
+    klass = Class(classname, methods=method_objects)
+    live_object = LiveObject(12345, klass, None)
+    live_object.calls = method_calls
+    klass.add_live_object(live_object)
+
+    return klass
+
+def FunctionWithCalls(funcname, calls):
+    poe = PointOfEntryMock()
+    function_calls = [FunctionCall(i, o, poe) for (i,o) in calls]
+    return Function(funcname, calls=function_calls)
+
+def FunctionWithSingleCall(funcname, input, output):
+    return FunctionWithCalls(funcname, [(input, output)])
 
 class TestGenerator:
     def test_generates_unittest_boilerplate(self):
@@ -152,7 +179,7 @@ class TestGenerator:
         assert_equal(TEST_CONTENTS, read_file_contents(existing_file))
 
     def test_generates_test_case_for_each_function_call_with_numbers(self):
-        objects = [Function('square', calls=[Call({'x': 4}, 16)])]
+        objects = [FunctionWithSingleCall('square', {'x': 4}, 16)]
 
         result = generate_single_test_module(objects=objects)
 
@@ -160,29 +187,45 @@ class TestGenerator:
         assert_contains(result, "self.assertEqual(16, square(x=4))")
 
     def test_generates_test_case_for_each_function_call_with_strings(self):
-        objects = [Function('underscore', calls=[Call({'name': 'John Smith'}, 'john_smith')])]
+        objects = [FunctionWithSingleCall('underscore', {'name': 'John Smith'}, 'john_smith')]
 
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "def test_underscore_returns_john_smith_for_John_Smith(self):")
         assert_contains(result, "self.assertEqual('john_smith', underscore(name='John Smith'))")
 
+    def test_generates_test_case_for_each_method_call(self):
+        klass = ClassWithMethods('Something', [('method', [({'arg': 111}, 'one one one')])])
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_method_returns_one_one_one_for_111(self):")
+        assert_contains(result, "something = Something()")
+        assert_contains(result, "self.assertEqual('one one one', something.method(arg=111))")
+
     def test_generates_imports_needed_for_function_calls(self):
-        objects = [Function('square', calls=[Call({}, 42)])]
+        objects = [FunctionWithSingleCall('square', {}, 42)]
 
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "from module import square")
 
+    def test_generates_imports_needed_for_method_calls(self):
+        klass = ClassWithMethods('Something', [('method', [({}, 42)])])
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "from module import Something")
+
     def test_ignores_repeated_calls(self):
-        objects = [Function('square', calls=[Call({'x': 4}, 16), Call({'x': 4}, 16)])]
+        objects = [FunctionWithCalls('square', 2*[({'x': 4}, 16)])]
 
         result = generate_single_test_module(objects=objects)
 
         assert_contains_once(result, 'def test_square_returns_16_for_4(self):')
 
     def test_sorts_new_test_methods_by_name(self):
-        objects = [Function('square', calls=[Call({'x': 2}, 4), Call({'x': 3}, 9)])]
+        objects = [FunctionWithCalls('square', [({'x': 2}, 4), ({'x': 3}, 9)])]
 
         result = generate_single_test_module(objects=objects)
 

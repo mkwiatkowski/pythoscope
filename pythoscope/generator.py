@@ -2,7 +2,7 @@ import os
 import re
 
 from astvisitor import EmptyCode, descend, parse, ASTVisitor
-from store import Class, Function, TestClass, TestMethod, ModuleNotFound
+from store import Class, Function, TestClass, TestMethod, ModuleNotFound, LiveObject
 from util import camelize, underscore, sorted
 
 
@@ -14,44 +14,50 @@ def constructor_as_string(object):
     '123'
     >>> constructor_as_string('string')
     "'string'"
+    >>> obj = LiveObject(None, Class('SomeClass'), None)
+    >>> constructor_as_string(obj)
+    'SomeClass()'
     """
+    if isinstance(object, LiveObject):
+        # TODO: look for __init__ call and base the constructor on that.
+        return "%s()" % object.klass.name
     return repr(object)
 
-def call_as_string(object, input):
+def call_as_string(object_name, input):
     """Generate code for calling an object with given input.
 
-    >>> call_as_string(Function('fun'), {'a': 1, 'b': 2})
+    >>> call_as_string('fun', {'a': 1, 'b': 2})
     'fun(a=1, b=2)'
-    >>> call_as_string(Function('capitalize'), {'str': 'string'})
+    >>> call_as_string('capitalize', {'str': 'string'})
     "capitalize(str='string')"
     """
-    return "%s(%s)" % (object.name, ', '.join(["%s=%s" % (arg, constructor_as_string(value)) for arg, value in input.iteritems()]))
+    return "%s(%s)" % (object_name, ', '.join(["%s=%s" % (arg, constructor_as_string(value)) for arg, value in input.iteritems()]))
 
 def object2id(object):
     """Convert object to string that can be used as an identifier.
     """
     return re.sub(r'\.|\!', '', re.sub(r'\s+', '_', str(object).strip()))
 
-def call2testname(object, input, output):
+def call2testname(object_name, input, output):
     """Generate a test method name that describes given object call.
 
-    >>> call2testname(Function('do_this'), {}, True)
+    >>> call2testname('do_this', {}, True)
     'test_do_this_returns_true'
-    >>> call2testname(Function('square'), {'x': 7}, 49)
+    >>> call2testname('square', {'x': 7}, 49)
     'test_square_returns_49_for_7'
-    >>> call2testname(Function('capitalize'), {'str': 'a word.'}, 'A word.')
+    >>> call2testname('capitalize', {'str': 'a word.'}, 'A word.')
     'test_capitalize_returns_A_word_for_a_word'
 
     Two or more arguments are mentioned by name.
-        >>> call2testname(Function('ackermann'), {'m': 3, 'n': 2}, 29)
+        >>> call2testname('ackermann', {'m': 3, 'n': 2}, 29)
         'test_ackermann_returns_29_for_m_equal_3_and_n_equal_2'
 
     Will sort arguments alphabetically.
-        >>> call2testname(Function('concat'), {'s1': 'Hello ', 's2': 'world!'}, 'Hello world!')
+        >>> call2testname('concat', {'s1': 'Hello ', 's2': 'world!'}, 'Hello world!')
         'test_concat_returns_Hello_world_for_s1_equal_Hello_and_s2_equal_world'
 
     Always starts and ends a word with a letter or number.
-        >>> call2testname(Function('strip'), {'n': 1, 's': '  A bit of whitespace  '}, ' A bit of whitespace ')
+        >>> call2testname('strip', {'n': 1, 's': '  A bit of whitespace  '}, ' A bit of whitespace ')
         'test_strip_returns_A_bit_of_whitespace_for_n_equal_1_and_s_equal_A_bit_of_whitespace'
     """
     if input:
@@ -62,19 +68,45 @@ def call2testname(object, input, output):
         call_description = "%s_for_%s" % (object2id(output), arguments)
     else:
         call_description = str(output).lower()
-    return "test_%s_returns_%s" % (underscore(object.name), call_description)
+    return "test_%s_returns_%s" % (underscore(object_name), call_description)
 
 def sorted_test_method_descriptions(descriptions):
-    def get_name(desc):
-        if isinstance(desc, tuple):
-            return desc[0]
-        return desc
-    return sorted(descriptions, key=get_name)
+    return sorted(descriptions, key=lambda md: md.name)
 
 def name2testname(name):
     if name[0].isupper():
         return "Test%s" % name
     return "test_%s" % name
+
+def should_ignore_method(method):
+    return method.name.startswith('_') and method.name != "__init__"
+
+def method_descriptions_from_function(function):
+    for call in function.get_unique_calls():
+        name = call2testname(function.name, call.input, call.output)
+        assertions = [(constructor_as_string(call.output),
+                       call_as_string(function.name, call.input))]
+        yield TestMethodDescription(name, assertions)
+
+def method_description_from_live_object(live_object):
+    if len(live_object.calls) == 1:
+        call = live_object.calls[0]
+        test_name = call2testname(call.method_name, call.input, call.output)
+    else:
+        # TODO: come up with a nicer name for methods with more than one call.
+        test_name = "%s_%s" % (underscore(live_object.klass.name), live_object.id)
+
+    # Before we call the method, we have to construct an object.
+    local_name = underscore(live_object.klass.name)
+    setup = "%s = %s\n" % (local_name, constructor_as_string(live_object))
+
+    assertions = []
+    for call in live_object.calls:
+        name = "%s.%s" % (local_name, call.method_name)
+        assertions.append((constructor_as_string(call.output),
+                           call_as_string(name, call.input)))
+
+    return TestMethodDescription(test_name, assertions, setup)
 
 class UnknownTemplate(Exception):
     def __init__(self, template):
@@ -94,6 +126,13 @@ def localize_method_code(code, method_name):
                 self.method_body = body
 
     return descend(code.children, LocalizeMethodVisitor).method_body
+
+class TestMethodDescription(object):
+    # Assertions should be a list of tuples in form (expected_value, actual_value).
+    def __init__(self, name, assertions=[], setup=""):
+        self.name = name
+        self.assertions = assertions
+        self.setup = setup
 
 class TestGenerator(object):
     imports = []
@@ -136,10 +175,7 @@ class TestGenerator(object):
             test_body = self.create_test_class(class_name, method_descriptions)
             test_code = parse(test_body)
             def methoddesc2testmethod(method_description):
-                if isinstance(method_description, tuple):
-                    name = method_description[0]
-                else:
-                    name = method_description
+                name = method_description.name
                 return TestMethod(name=name, code=localize_method_code(test_code, name))
             return TestClass(name=class_name,
                              code=test_code,
@@ -154,26 +190,38 @@ class TestGenerator(object):
         elif isinstance(object, Class):
             return self._generate_test_method_descriptions_for_class(object, module)
 
-    def _generate_test_method_descriptions_for_class(self, klass, module):
-        for method in klass.methods:
-            if method.name == '__init__':
-                yield name2testname("object_initialization")
-            elif not method.name.startswith('_'):
-                yield name2testname(method.name)
-
     def _generate_test_method_descriptions_for_function(self, function, module):
         if function.calls:
+            # We're calling the function, so we have to make sure it will
+            # be imported in the test
+            self.ensure_import((module.locator, function.name))
+
             # We have at least one call registered, so use it.
-            for call in function.get_unique_calls():
-                yield (call2testname(function, call.input, call.output),
-                       constructor_as_string(call.output),
-                       call_as_string(function, call.input))
-                # We're calling the function, so we have to make sure it will
-                # be imported in the test
-                self.ensure_import((module.locator, function.name))
+            return method_descriptions_from_function(function)
         else:
             # No calls were traced, so we're go for a single test stub.
-            yield name2testname(underscore(function.name))
+            return [TestMethodDescription(name2testname(underscore(function.name)))]
+
+    def _generate_test_method_descriptions_for_class(self, klass, module):
+        if klass.live_objects:
+            # We're calling the method, so we have to make sure its class
+            # will be imported in the test
+            self.ensure_import((module.locator, klass.name))
+
+        for live_object in klass.live_objects.values():
+            yield method_description_from_live_object(live_object)
+
+        # No calls were traced for those methods, so we'll go for simple test stubs.
+        for method in klass.get_untraced_methods():
+            if not should_ignore_method(method):
+                yield self._generate_test_method_description_for_method(method)
+
+    def _generate_test_method_description_for_method(self, method):
+        if method.name == '__init__':
+            name = "object_initialization"
+        else:
+            name = method.name
+        return TestMethodDescription(name2testname(name))
 
 class UnittestTestGenerator(TestGenerator):
     main_snippet = parse("if __name__ == '__main__':\n    unittest.main()\n")
@@ -184,13 +232,14 @@ class UnittestTestGenerator(TestGenerator):
     def create_test_class(self, class_name, method_descriptions):
         result = "class %s(unittest.TestCase):\n" % class_name
         for method_description in method_descriptions:
-            if isinstance(method_description, tuple):
-                method_name, expected, actual = method_description
-                result += "    def %s(self):\n" % method_name
-                result += "        self.assertEqual(%s, %s)\n\n" % (expected, actual)
+            if method_description.assertions:
+                result += "    def %s(self):\n" % method_description.name
+                result += "        " + method_description.setup
+                for assertion in method_description.assertions:
+                    result += "        self.assertEqual(%s, %s)\n" % assertion
+                result += "\n"
             else:
-                method_name = method_description
-                result += "    def %s(self):\n" % method_name
+                result += "    def %s(self):\n" % method_description.name
                 result += "        assert False # TODO: implement your test here\n\n"
         return result
 
@@ -201,14 +250,15 @@ class NoseTestGenerator(TestGenerator):
     def create_test_class(self, class_name, method_descriptions):
         result = "class %s:\n" % class_name
         for method_description in method_descriptions:
-            if isinstance(method_descriptions, tuple):
-                method_name, expected, actual = method_description
-                result += "    def %s(self):\n" % method_name
-                result += "        assert_equal(%s, %s)\n\n" % (expected, actual)
+            if method_description.assertions:
+                result += "    def %s(self):\n" % method_description.name
+                result += "        " + method_description.setup
+                for assertion in method_description.assertions:
+                    result += "        assert_equal(%s, %s)\n" % assertion
+                result += "\n"
                 self.ensure_import(('nose.tools', 'assert_equal'))
             else:
-                method_name = method_description
-                result += "    def %s(self):\n" % method_name
+                result += "    def %s(self):\n" % method_description.name
                 result += "        raise SkipTest # TODO: implement your test here\n\n"
         return result
 

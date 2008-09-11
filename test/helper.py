@@ -5,7 +5,8 @@ from fixture import TempIO
 from nose.tools import assert_equal
 
 from pythoscope.generator import add_tests_to_project
-from pythoscope.store import Module, Project, Function, ModuleNotFound
+from pythoscope.store import Module, Project, Function, ModuleNotFound, \
+     PointOfEntry
 from pythoscope.util import read_file_contents, set
 
 
@@ -47,6 +48,18 @@ def assert_single_function(info, name):
 
 def assert_equal_sets(collection1, collection2):
     assert_equal(set(collection1), set(collection2))
+
+class PointOfEntryMock(PointOfEntry):
+    def __init__(self, project=None, name="poe", content=""):
+        self.project = project
+        self.name = name
+        self.content = content
+
+    def clear_previous_run(self):
+        pass
+
+    def get_content(self):
+        return self.content
 
 # Make your test case a subclass of CustomSeparator to test your code with
 # alternative os.path.sep.

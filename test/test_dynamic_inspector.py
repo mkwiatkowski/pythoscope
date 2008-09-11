@@ -1,23 +1,27 @@
+import sys
+
 from nose.tools import assert_equal
 from nose.plugins.skip import SkipTest
 
 from pythoscope.inspector.dynamic import trace_function, trace_exec, \
-     inspect_point_of_entry
-from pythoscope.store import Function, Method
+     inspect_point_of_entry, setup_tracing, teardown_tracing
+from pythoscope.store import Class, Function, Method, LiveObject
 
-from helper import TestableProject, assert_length
+from helper import TestableProject, assert_length, PointOfEntryMock, \
+     assert_equal_sets, ProjectWithModules, ProjectInDirectory
 
 
 class ProjectMock(object):
     def __init__(self):
-        self._methods = {}
+        self.path = "."
+        self._classes = {}
         self._functions = {}
 
-    def find_method(self, name, classname, modulepath):
-        method_id = (name, classname, modulepath)
-        if not self._methods.has_key(method_id):
-            self._methods[method_id] = Method(name)
-        return self._methods[method_id]
+    def find_class(self, classname, modulepath):
+        class_id = (classname, modulepath)
+        if not self._classes.has_key(class_id):
+            self._classes[class_id] = Class(classname)
+        return self._classes[class_id]
 
     def find_function(self, name, modulepath):
         function_id = (name, modulepath)
@@ -25,25 +29,38 @@ class ProjectMock(object):
             self._functions[function_id] = Function(name)
         return self._functions[function_id]
 
+    def iter_callables(self):
+        for klass in self._classes.values():
+            for live_object in klass.live_objects.values():
+                yield live_object
+        for function in self._functions.values():
+            yield function
+
     def get_callables(self):
-        return self._methods.values() + self._functions.values()
-
-class PointOfEntryMock(object):
-    def __init__(self, project, content):
-        self.project = project
-        self.content = content
-
-    def get_content(self):
-        return self.content
+        return list(self.iter_callables())
 
 def collect_callables(fun):
     project = ProjectMock()
-    trace_function(project, fun)
+    poe = PointOfEntryMock(project=project)
+
+    setup_tracing(poe)
+    try:
+        trace_function(fun)
+    finally:
+        teardown_tracing(poe)
+
     return project.get_callables()
 
 def collect_callables_from_string(string):
     project = ProjectMock()
-    trace_exec(project, string)
+    poe = PointOfEntryMock(project=project)
+
+    setup_tracing(poe)
+    try:
+        trace_exec(string)
+    finally:
+        teardown_tracing(poe)
+
     return project.get_callables()
 
 def assert_function_call(expected_input, expected_output, function_call):
@@ -287,23 +304,24 @@ class TestTraceFunction:
 
         assert_function_call({'x': 42}, 43, function.calls[0])
 
-    def test_returns_a_list_with_method_objects(self):
+    def test_returns_a_list_with_live_objects(self):
         trace = collect_callables(function_calling_a_method)
 
-        assert all(isinstance(obj, Method) for obj in trace)
+        assert all(isinstance(obj, LiveObject) for obj in trace)
 
     def test_handles_methods_with_strangely_named_self(self):
         trace = collect_callables(function_calling_methods_with_strangely_named_self)
 
-        assert all(isinstance(obj, Method) for obj in trace)
-        assert_equal(set(['strange_method', 'another_strange_method']),
-                     set(m.name for m in trace))
+        assert_length(trace, 2)
+        assert all(isinstance(obj, LiveObject) for obj in trace)
+        assert_equal_sets(['strange_method', 'another_strange_method'],
+                          [obj.calls[0].method_name for obj in trace])
 
     def test_distinguishes_between_methods_with_the_same_name_from_different_classes(self):
         trace = collect_callables(function_calling_two_methods_with_the_same_name_from_different_classes)
 
-        assert_equal([('method', 1), ('method', 1)],
-                     [(f.name, len(f.calls)) for f in trace])
+        assert_equal_sets([('FirstClass', 1, 'method'), ('SecondClass', 1, 'method')],
+                          [(obj.klass.name, len(obj.calls), obj.calls[0].method_name) for obj in trace])
 
     def test_distinguishes_between_classes_and_functions(self):
         trace = collect_callables(function_calling_other_which_uses_name_and_module_variables)
@@ -320,13 +338,37 @@ class TestTraceExec:
         assert_function_call({'x': 42}, 43, function.calls[1])
 
 class TestInspectPointOfEntry:
-    def test_properly_gathers_all_input_and_output_values(self):
+    def test_properly_gathers_all_input_and_output_values_of_a_function_call(self):
         project = TestableProject()
         project.path.putfile("module.py", "def function(x):\n  return x + 1\n")
-        poe = PointOfEntryMock(project, "from module import function\nfunction(42)\n")
+        poe = PointOfEntryMock(project, content="from module import function\nfunction(42)\n")
 
         inspect_point_of_entry(poe)
 
         assert_length(project["module"].functions, 1)
         assert_length(project["module"].functions[0].calls, 1)
         assert_function_call({'x': 42}, 43, project["module"].functions[0].calls[0])
+
+    def test_properly_gathers_all_input_and_output_values_of_a_method_call(self):
+        method = Method("some_method")
+        klass = Class("SomeClass", methods=[method])
+        project = TestableProject()
+        project["module"].objects = [klass]
+        project.path.putfile("module.py", "class SomeClass:\n  def some_method(self, x): return x + 1\n")
+        poe = PointOfEntryMock(project, content="from module import SomeClass\nSomeClass().some_method(42)\n")
+
+        inspect_point_of_entry(poe)
+
+        assert_length(klass.live_objects, 1)
+        live_object = klass.live_objects.popitem()[1]
+        assert_length(live_object.calls, 1)
+        assert_function_call({'x': 42}, 43, live_object.calls[0])
+
+    def test_inspect_point_of_entry_properly_wipes_out_imports_from_sys_modules(self):
+        project = ProjectWithModules(["whatever.py"], ProjectInDirectory)
+        project.path.putfile("whatever.py", "")
+        poe = PointOfEntryMock(project, content="import whatever")
+
+        inspect_point_of_entry(poe)
+
+        assert 'whatever' not in sys.modules
