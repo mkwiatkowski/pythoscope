@@ -8,7 +8,8 @@ from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
      remove_trailing_whitespace
 from util import all_of_type, max_by_not_zero, set, \
      write_string_to_file, ensure_directory, DirectoryException, \
-     get_last_modification_time, read_file_contents, python_modules_below
+     get_last_modification_time, read_file_contents, python_modules_below, \
+     extract_subpath
 
 
 class ModuleNeedsAnalysis(Exception):
@@ -108,10 +109,12 @@ class Project(object):
         return project
     from_directory = classmethod(from_directory)
 
-    def __init__(self, path=None):
+    def __init__(self, path):
         self.path = path
         self.points_of_entry = {}
         self._modules = {}
+
+        self._update_list_of_points_of_entry()
 
     def _get_pickle_path(self):
         return get_pickle_path(self.path)
@@ -120,7 +123,8 @@ class Project(object):
         return get_points_of_entry_path(self.path)
 
     def _update_list_of_points_of_entry(self):
-        for name in python_modules_below(self._get_points_of_entry_path()):
+        for path in python_modules_below(self._get_points_of_entry_path()):
+            name = self._extract_point_of_entry_subpath(path)
             if name not in self.points_of_entry:
                 self.points_of_entry[name] = PointOfEntry(project=self, name=name)
 
@@ -143,21 +147,21 @@ class Project(object):
         self._modules[module.subpath] = module
         return module
 
+    def _extract_point_of_entry_subpath(self, path):
+        """Takes the file path and returns subpath relative to the
+        points of entry path.
+
+        Assumes the given path is under points of entry path.
+        """
+        return extract_subpath(path, self._get_points_of_entry_path())
+
     def _extract_subpath(self, path):
         """Takes the file path and returns subpath relative to the
-        project, so the following correspondence is preserved:
-
-            path <=> os.path.join(project.path, subpath)
-
-        in terms of physical path (i.e. not necessarily strict string
-        equality).
+        project.
 
         Assumes the given path is under Project.path.
         """
-        # project.path is a realpath which doesn't include trailing path
-        # separator, so we add 1 for that separator here.
-        prefix_length = len(self.path) + 1
-        return os.path.realpath(path)[prefix_length:]
+        return extract_subpath(path, self.path)
 
     def add_test_cases(self, test_cases, force=False):
         for test_case in test_cases:
@@ -267,6 +271,19 @@ class Project(object):
     def get_modules(self):
         return self._modules.values()
     modules = property(get_modules)
+
+    def iter_modules(self):
+        return self._modules.values()
+
+    def iter_classes(self):
+        for module in self.iter_modules():
+            for klass in module.classes:
+                yield klass
+
+    def iter_functions(self):
+        for module in self.iter_modules():
+            for function in module.functions:
+                yield function
 
     def find_class(self, name, modulepath):
         modulename = self._extract_subpath(modulepath)
@@ -721,9 +738,9 @@ class PointOfEntry(object):
         return read_file_contents(self.get_path())
 
     def clear_previous_run(self):
-        for klass in self.project.classes:
+        for klass in self.project.iter_classes():
             klass.remove_live_objects_from(self)
-        for function in self.project.functions:
+        for function in self.project.iter_functions():
             function.remove_calls_from(self)
 
     def add_method_call(self, name, classname, modulepath, object_id, input, output):

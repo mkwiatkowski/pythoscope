@@ -136,3 +136,17 @@ def get_last_modification_time(path):
     except OSError:
         # File may not exist, in which case it was never modified.
         return 0
+
+def extract_subpath(path, prefix):
+    """Remove prefix from given path to generate subpath, so the following
+    correspondence is preserved:
+
+      path <=> os.path.join(prefix, subpath)
+
+    in terms of physical path (i.e. not necessarily strict string
+    equality).
+    """
+    prefix_length = len(prefix)
+    if not prefix.endswith(os.path.sep):
+        prefix_length += 1
+    return os.path.realpath(path)[prefix_length:]

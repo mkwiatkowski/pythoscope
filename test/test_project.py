@@ -43,7 +43,7 @@ class TestProject:
             assert_equal(path, project[path].subpath)
 
     def test_raises_module_not_found_exception_when_no_module_like_that_is_present(self):
-        project = Project()
+        project = EmptyProject()
         assert_raises(ModuleNotFound, lambda: project["whatever"])
 
     def test_can_be_queried_for_modules_by_their_locator(self):
