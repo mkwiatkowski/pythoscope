@@ -40,24 +40,17 @@ class ProjectMock(object):
         return list(self.iter_callables())
 
 def collect_callables(fun):
+    if isinstance(fun, str):
+        trace = trace_exec
+    else:
+        trace = trace_function
+
     project = ProjectMock()
     poe = PointOfEntryMock(project=project)
 
     setup_tracing(poe)
     try:
-        trace_function(fun)
-    finally:
-        teardown_tracing(poe)
-
-    return project.get_callables()
-
-def collect_callables_from_string(string):
-    project = ProjectMock()
-    poe = PointOfEntryMock(project=project)
-
-    setup_tracing(poe)
-    try:
-        trace_exec(string)
+        trace(fun)
     finally:
         teardown_tracing(poe)
 
@@ -331,7 +324,7 @@ class TestTraceFunction:
 class TestTraceExec:
     "trace_exec"
     def test_returns_function_objects_with_all_calls_recorded(self):
-        trace = collect_callables_from_string("f = lambda x: x + 1; f(5); f(42)")
+        trace = collect_callables("f = lambda x: x + 1; f(5); f(42)")
         function = trace.pop()
 
         assert_function_call({'x': 5},  6,  function.calls[0])
