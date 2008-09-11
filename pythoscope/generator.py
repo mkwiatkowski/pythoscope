@@ -245,7 +245,7 @@ class UnittestTestGenerator(TestGenerator):
 
 class NoseTestGenerator(TestGenerator):
     def __init__(self):
-        self.imports = [('nose', 'SkipTest')]
+        self.imports = []
 
     def create_test_class(self, class_name, method_descriptions):
         result = "class %s:\n" % class_name
@@ -260,6 +260,7 @@ class NoseTestGenerator(TestGenerator):
             else:
                 result += "    def %s(self):\n" % method_description.name
                 result += "        raise SkipTest # TODO: implement your test here\n\n"
+                self.ensure_import(('nose', 'SkipTest'))
         return result
 
 def add_tests_to_project(project, modnames, template, force=False):

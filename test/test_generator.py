@@ -100,6 +100,12 @@ class TestGenerator:
 
         assert_doesnt_contain(result, "if __name__ == '__main__':\n    unittest.main()")
 
+    def test_doesnt_generate_skiptest_import_for_nose_tests_that_dont_use_it(self):
+        objects = [FunctionWithSingleCall('a_function', {'x': 1}, 2)]
+        result = generate_single_test_module(template='nose', objects=objects)
+
+        assert_doesnt_contain(result, "from nose import SkipTest")
+
     def test_ignores_private_methods(self):
         objects = [Class('SomeClass', map(Method, ['_semiprivate', '__private', '__eq__']))]
         result = generate_single_test_module(objects=objects)
