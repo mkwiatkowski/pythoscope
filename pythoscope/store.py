@@ -9,7 +9,7 @@ from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
 from util import all_of_type, max_by_not_zero, set, \
      write_string_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, python_modules_below, \
-     extract_subpath
+     extract_subpath, directories_under
 
 
 class ModuleNeedsAnalysis(Exception):
@@ -52,20 +52,26 @@ def module_path_to_test_path(module):
     """
     return "test_%s.py" % module_path_to_name(module)
 
-def possible_test_module_paths(module):
+def possible_test_module_paths(module, new_tests_directory):
     """Return possible locations of a test module corresponding to given
     application module.
-
-    >>> possible_test_module_paths(Module(subpath="module.py", project=None))
-    ['test_module.py', 'module_test.py', 'moduleTest.py', 'tests_module.py', 'module_tests.py', 'moduleTests.py', 'testModule.py', 'TestModule.py', 'ModuleTest.py', 'testsModule.py', 'TestsModule.py', 'ModuleTests.py']
     """
-    module_name = module_path_to_name(module.subpath)
+    test_directories = ["", "test", "tests"]
+    if new_tests_directory not in test_directories:
+        test_directories.append(new_tests_directory)
     def generate():
-        for path in ["test_%s", "%s_test", "%sTest", "tests_%s", "%s_tests", "%sTests"]:
-            yield (path % module_name) + ".py"
-        for path in ["test%s", "Test%s", "%sTest", "tests%s", "Tests%s", "%sTests"]:
-            yield (path % module_name.capitalize()) + ".py"
+        for name in possible_test_module_names(module):
+            for test_directory in test_directories:
+                yield os.path.join(test_directory, name)
     return list(generate())
+
+def possible_test_module_names(module):
+    module_name = module_path_to_name(module.subpath)
+
+    for name in ["test_%s", "%s_test", "%sTest", "tests_%s", "%s_tests", "%sTests"]:
+        yield (name % module_name) + ".py"
+    for name in ["test%s", "Test%s", "%sTest", "tests%s", "Tests%s", "%sTests"]:
+        yield (name % module_name.capitalize()) + ".py"
 
 def get_pythoscope_path(project_path):
     return os.path.join(project_path, ".pythoscope")
@@ -86,8 +92,6 @@ class Project(object):
 
     No modifications are final until you call save().
     """
-    new_tests_directory = "pythoscope-tests"
-
     def from_directory(cls, project_path):
         """Read the project information from the .pythoscope/ directory of
         the given project.
@@ -111,10 +115,12 @@ class Project(object):
 
     def __init__(self, path):
         self.path = path
+        self.new_tests_directory = "pythoscope-tests"
         self.points_of_entry = {}
         self._modules = {}
 
         self._update_list_of_points_of_entry()
+        self._find_new_tests_directory()
 
     def _get_pickle_path(self):
         return get_pickle_path(self.path)
@@ -127,6 +133,11 @@ class Project(object):
             name = self._extract_point_of_entry_subpath(path)
             if name not in self.points_of_entry:
                 self.points_of_entry[name] = PointOfEntry(project=self, name=name)
+
+    def _find_new_tests_directory(self):
+        for path in directories_under(self.path):
+            if re.search(r'[_-]?tests?([_-]|$)', path):
+                self.new_tests_directory = path
 
     def save(self):
         # To avoid inconsistencies try to save all project's modules first. If
@@ -237,7 +248,7 @@ class Project(object):
         """Try to find a test module with name corresponding to the name of
         the application module.
         """
-        possible_paths = possible_test_module_paths(module)
+        possible_paths = possible_test_module_paths(module, self.new_tests_directory)
         for mod in self.get_modules():
             if mod.subpath in possible_paths:
                 return mod

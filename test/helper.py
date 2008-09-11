@@ -72,7 +72,10 @@ class CustomSeparator:
         os.path.sep = self.old_sep
 
 def EmptyProject():
-    return Project(path=os.path.realpath("."))
+    project = Project(path=os.path.realpath("."))
+    # Preserve the default value.
+    project.new_tests_directory = "pythoscope-tests"
+    return project
 
 def ProjectInDirectory():
     project_path = TempIO()

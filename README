@@ -27,7 +27,8 @@ project, select files you want to generate tests for::
 
  $ pythoscope  generate  path/to/your/project/specific/file.py  path/to/your/project/other/*.py
 
-Test files will be saved into **pythoscope-tests/** directory. Test cases
+Test files will be saved to your test directory, if you have one, or
+into a new **pythoscope-tests/** directory otherwise. Test cases
 are aggregated into TestCase classes. Currently each production class
 and each production function gets its own TestCase class.
 

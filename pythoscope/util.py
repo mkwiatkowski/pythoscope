@@ -150,3 +150,10 @@ def extract_subpath(path, prefix):
     if not prefix.endswith(os.path.sep):
         prefix_length += 1
     return os.path.realpath(path)[prefix_length:]
+
+def directories_under(path):
+    """Return names of directories under given path (not recursive).
+    """
+    for entry in os.listdir(path):
+        if os.path.isdir(os.path.join(path, entry)):
+            yield entry

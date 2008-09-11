@@ -13,6 +13,11 @@ TestClass.__test__ = False
 TestMethod.__test__ = False
 
 
+def ProjectWithSingleTestClass(test_module_name):
+    project = ProjectWithModules(["module.py", test_module_name])
+    test_class = TestClass("TestSomething", associated_modules=[project["module"]])
+    return project, test_class
+
 class TestProject:
     def test_can_be_saved_and_restored_from_file(self):
         tmpdir = TempIO()
@@ -86,10 +91,34 @@ class TestProject:
                              "module_tests.py", "moduleTests.py", "ModuleTests.py"]
 
         for test_module_name in test_module_names:
-            project = ProjectWithModules(["module.py", test_module_name])
-            test_class = TestClass("TestSomething",
-                                   associated_modules=[project["module"]])
+            project, test_class = ProjectWithSingleTestClass(test_module_name)
             assert project[test_module_name] is project._find_test_module(test_class)
+
+    def test_finds_associated_test_modules_inside_test_directories(self):
+        for test_module_dir in ["test", "tests"]:
+            test_module_name = os.path.join(test_module_dir, "test_module.py")
+            project, test_class = ProjectWithSingleTestClass(test_module_name)
+            assert project[test_module_name] is project._find_test_module(test_class)
+
+    def test_finds_associated_test_modules_inside_new_tests_directory(self):
+        new_tests_directory = "something"
+        test_module_name = os.path.join(new_tests_directory, "test_module.py")
+        project, test_class = ProjectWithSingleTestClass(test_module_name)
+        project.new_tests_directory = new_tests_directory
+        assert project[test_module_name] is project._find_test_module(test_class)
+
+    def test_finds_new_tests_directory(self):
+        test_module_dirs = ["test", "functional_test", "unit_test",
+                            "tests", "functional_tests", "unit_tests",
+                            "pythoscope-tests", "unit-tests"]
+
+        for test_module_dir in test_module_dirs:
+            tmpdir = TempIO()
+            tmpdir.mkdir(".pythoscope")
+            tmpdir.mkdir(test_module_dir)
+            project = Project(tmpdir)
+
+            assert_equal(test_module_dir, project.new_tests_directory)
 
 class TestProjectWithTestModule:
     def setUp(self):
