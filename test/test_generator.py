@@ -15,7 +15,7 @@ from pythoscope.util import read_file_contents, get_last_modification_time
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
      CustomSeparator, generate_single_test_module, ProjectInDirectory, \
      ProjectWithModules, TestableProject, assert_contains_once, \
-     PointOfEntryMock
+     PointOfEntryMock, get_test_cases
 
 # Let nose know that those aren't test functions/classes.
 add_tests_to_project.__test__ = False
@@ -166,7 +166,7 @@ class TestGenerator:
 
         add_tests_to_project(project, ["module"], 'unittest')
 
-        project_test_cases = list(project.test_cases_iter())
+        project_test_cases = get_test_cases(project)
         assert_length(project_test_cases, 1)
         assert_length(project["test_other"].test_cases, 0)
 
@@ -281,7 +281,7 @@ class TestGeneratorWithSingleModule:
     def test_associates_test_cases_with_application_modules(self):
         add_tests_to_project(self.project, ["module"], 'unittest')
 
-        project_test_cases = list(self.project.test_cases_iter())
+        project_test_cases = get_test_cases(self.project)
         assert_length(project_test_cases, 1)
         assert_equal(project_test_cases[0].associated_modules, [self.project["module"]])
 

@@ -125,3 +125,7 @@ def generate_single_test_module(template='unittest', **module_kwds):
     add_tests_to_project(project, ["module.py"], template, False)
     return get_test_module_contents(project)
 generate_single_test_module.__test__ = False
+
+def get_test_cases(project):
+    return list(project.iter_test_cases())
+get_test_cases.__test__ = False

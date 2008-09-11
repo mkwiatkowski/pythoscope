@@ -170,7 +170,7 @@ class Project(object):
         from other modules.
         """
         module = self[subpath]
-        for test_case in self.test_cases_iter():
+        for test_case in self.iter_test_cases():
             try:
                 test_case.associated_modules.remove(module)
             except ValueError:
@@ -207,9 +207,8 @@ class Project(object):
         elif force:
             existing_test_case.replace_itself_with(test_case)
 
-    def test_cases_iter(self):
-        "Iterate over all test cases present in a project."
-        for module in self.get_modules():
+    def iter_test_cases(self):
+        for module in self.iter_modules():
             for test_case in module.test_cases:
                 yield test_case
 
@@ -224,7 +223,7 @@ class Project(object):
                 test_class.replace_test_case(existing_test_method, method)
 
     def _find_test_case_by_name(self, name):
-        for tcase in self.test_cases_iter():
+        for tcase in self.iter_test_cases():
             if tcase.name == name:
                 return tcase
 

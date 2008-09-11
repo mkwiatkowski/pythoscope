@@ -8,7 +8,7 @@ from pythoscope.store import Project, Module, Class, Function, TestClass, \
 
 from helper import assert_length, assert_equal_sets, EmptyProject, \
      ProjectWithModules, ProjectWithRealModules, ProjectInDirectory, \
-     assert_not_raises
+     assert_not_raises, get_test_cases
 
 # Let nose know that those aren't test classes.
 TestClass.__test__ = False
@@ -79,7 +79,7 @@ class TestProject:
         new_test_class = TestClass("TestSomething", test_cases=[new_test_method])
         project.add_test_case(new_test_class)
 
-        assert_length(list(project.test_cases_iter()), 1)
+        assert_length(get_test_cases(project), 1)
         assert_equal_sets([new_test_method], test_class.test_cases)
         assert new_test_method.parent is test_class
 
@@ -157,22 +157,22 @@ class TestProjectWithTestModule:
         test_class = TestClass("TestSomething")
         self.project.add_test_case(test_class)
 
-        assert_length(list(self.project.test_cases_iter()), 1)
+        assert_length(get_test_cases(self.project), 1)
 
     def test_adds_new_test_classes_to_existing_test_module(self):
         test_class = TestClass("TestSomethingNew")
         self.project.add_test_case(test_class)
 
         assert_equal_sets([self.existing_test_class, test_class],
-                          list(self.project.test_cases_iter()))
+                          get_test_cases(self.project))
 
     def test_adds_new_test_methods_to_existing_test_classes(self):
         test_method = TestMethod("test_new_method")
         test_class = TestClass("TestSomething", test_cases=[test_method])
         self.project.add_test_case(test_class)
 
-        assert_length(list(self.project.test_cases_iter()), 1)
-        assert list(self.project.test_cases_iter())[0] is test_method.parent
+        assert_length(get_test_cases(self.project), 1)
+        assert get_test_cases(self.project)[0] is test_method.parent
         assert test_method.parent is not test_class
 
     def test_after_adding_new_test_case_to_class_its_module_is_marked_as_changed(self):
@@ -186,7 +186,7 @@ class TestProjectWithTestModule:
         self.project.add_test_case(test_class)
 
         assert_equal([test_method],
-                     list(self.project.test_cases_iter())[0].test_cases)
+                     get_test_cases(self.project)[0].test_cases)
 
         # Let's try adding the same method again.
         new_test_method = TestMethod("test_method")
@@ -194,7 +194,7 @@ class TestProjectWithTestModule:
         self.project.add_test_case(new_test_class)
 
         assert_equal([test_method],
-                     list(self.project.test_cases_iter())[0].test_cases)
+                     get_test_cases(self.project)[0].test_cases)
 
     def test_overwrites_existing_test_methods_with_force_option(self):
         test_method = TestMethod("test_method")
@@ -202,7 +202,7 @@ class TestProjectWithTestModule:
         self.project.add_test_case(test_class)
 
         assert_equal([test_method],
-                     list(self.project.test_cases_iter())[0].test_cases)
+                     get_test_cases(self.project)[0].test_cases)
 
         # Let's try adding the same method again with a force option
         # set to True.
@@ -212,7 +212,7 @@ class TestProjectWithTestModule:
 
         # The class is still the same.
         assert_equal([self.existing_test_class],
-                     list(self.project.test_cases_iter()))
+                     get_test_cases(self.project))
         # But the method got replaced.
         assert_equal([new_test_method],
-                     list(self.project.test_cases_iter())[0].test_cases)
+                     get_test_cases(self.project)[0].test_cases)
