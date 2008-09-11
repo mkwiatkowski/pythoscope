@@ -267,9 +267,9 @@ class Project(object):
         the application module.
         """
         possible_paths = possible_test_module_paths(module, self.new_tests_directory)
-        for mod in self.get_modules():
-            if mod.subpath in possible_paths:
-                return mod
+        for module in self.get_modules():
+            if module.subpath in possible_paths:
+                return module
 
     def _find_associate_test_module_by_test_cases(self, module):
         """Try to find a test module with most test cases for the given
@@ -292,14 +292,13 @@ class Project(object):
         pass # TODO
 
     def __getitem__(self, module):
-        for mod in self.modules:
+        for mod in self.iter_modules():
             if module in [mod.subpath, mod.locator]:
                 return mod
         raise ModuleNotFound(module)
 
     def get_modules(self):
         return self._modules.values()
-    modules = property(get_modules)
 
     def iter_modules(self):
         return self._modules.values()

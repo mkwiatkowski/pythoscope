@@ -32,7 +32,7 @@ class TestProject:
 
         project = Project.from_directory(project.path)
 
-        assert_equal(2, len(project.modules))
+        assert_equal(2, len(project.get_modules()))
         assert_equal(2, len(project['good_module'].objects))
         assert_equal("AClass", project['good_module'].classes[0].name)
         assert_equal(["amethod"], project['good_module'].classes[0].methods)
@@ -65,7 +65,7 @@ class TestProject:
         project = ProjectWithModules(paths)
         new_module = project.create_module(new_module_path)
 
-        assert_length(project.modules, 3)
+        assert_length(project.get_modules(), 3)
         assert project["other/module.py"] is new_module
 
     def test_adds_new_test_methods_to_existing_test_classes_inside_application_modules(self):
