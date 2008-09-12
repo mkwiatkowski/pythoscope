@@ -237,6 +237,16 @@ class TestGenerator:
 
         assert re.search('test_square_returns_4_for_2.*test_square_returns_9_for_3', result, re.DOTALL)
 
+    def test_generates_proper_setup_for_test_objects_with_init(self):
+        klass = ClassWithMethods('Something', [('__init__', [({'arg1': 1, 'arg2': 2}, None)]),
+                                               ('sum', [({}, 3)])])
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_sum_returns_3_after_creation_with_arg1_equal_1_and_arg2_equal_2(self):")
+        assert_contains(result, "something = Something(arg1=1, arg2=2)")
+        assert_contains(result, "self.assertEqual(3, something.sum())")
+
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
         self.project = TestableProject()

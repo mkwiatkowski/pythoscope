@@ -424,6 +424,18 @@ class LiveObject(Callable):
     def add_call(self, call):
         self.calls.append(call)
 
+    def get_init_call(self):
+        """Return a call to __init__ or None if it wasn't called.
+        """
+        for call in self.calls:
+            if call.method_name == '__init__':
+                return call
+
+    def get_non_init_calls(self):
+        def is_not_init_call(call):
+            return call.method_name != '__init__'
+        return filter(is_not_init_call, self.calls)
+
     def __repr__(self):
         return "LiveObject(id=%d, klass=%r, calls=%r)" % (self.id, self.klass.name, self.calls)
 

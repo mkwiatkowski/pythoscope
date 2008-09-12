@@ -2,7 +2,8 @@ import os
 import re
 
 from astvisitor import EmptyCode, descend, parse, ASTVisitor
-from store import Class, Function, TestClass, TestMethod, ModuleNotFound, LiveObject
+from store import Class, Function, TestClass, TestMethod, ModuleNotFound, \
+     LiveObject, MethodCall
 from util import camelize, underscore, sorted
 
 
@@ -17,10 +18,17 @@ def constructor_as_string(object):
     >>> obj = LiveObject(None, Class('SomeClass'), None)
     >>> constructor_as_string(obj)
     'SomeClass()'
+    >>> obj.add_call(MethodCall({'arg': 'whatever'}, None, '__init__'))
+    >>> constructor_as_string(obj)
+    "SomeClass(arg='whatever')"
     """
     if isinstance(object, LiveObject):
-        # TODO: look for __init__ call and base the constructor on that.
-        return "%s()" % object.klass.name
+        args = {}
+        # Look for __init__ call and base the constructor on that.
+        init_call = object.get_init_call()
+        if init_call:
+            args = init_call.input
+        return call_as_string(object.klass.name, args)
     return repr(object)
 
 def call_as_string(object_name, input):
@@ -36,13 +44,32 @@ def call_as_string(object_name, input):
 def object2id(object):
     """Convert object to string that can be used as an identifier.
     """
+    if object is True:
+        return 'true'
+    elif object is False:
+        return 'false'
     return re.sub(r'\.|\!', '', re.sub(r'\s+', '_', str(object).strip()))
+
+def input_as_string(input):
+    """Generate an underscored description of given input arguments.
+
+    >>> input_as_string({})
+    ''
+    >>> input_as_string({'x': 7, 'y': 13})
+    'x_equal_7_and_y_equal_13'
+    """
+    if len(input) == 1:
+        return object2id(input.values()[0])
+    return "_and_".join(["%s_equal_%s" % (arg, object2id(value))
+                         for arg, value in sorted(input.iteritems())])
 
 def call2testname(object_name, input, output):
     """Generate a test method name that describes given object call.
 
     >>> call2testname('do_this', {}, True)
     'test_do_this_returns_true'
+    >>> call2testname('compute', {}, 'whatever you say')
+    'test_compute_returns_whatever_you_say'
     >>> call2testname('square', {'x': 7}, 49)
     'test_square_returns_49_for_7'
     >>> call2testname('capitalize', {'str': 'a word.'}, 'A word.')
@@ -61,13 +88,9 @@ def call2testname(object_name, input, output):
         'test_strip_returns_A_bit_of_whitespace_for_n_equal_1_and_s_equal_A_bit_of_whitespace'
     """
     if input:
-        if len(input) == 1:
-            arguments = object2id(input.values()[0])
-        else:
-            arguments = "_and_".join(["%s_equal_%s" % (arg, object2id(value)) for arg, value in sorted(input.iteritems())])
-        call_description = "%s_for_%s" % (object2id(output), arguments)
+        call_description = "%s_for_%s" % (object2id(output), input_as_string(input))
     else:
-        call_description = str(output).lower()
+        call_description = object2id(output)
     return "test_%s_returns_%s" % (underscore(object_name), call_description)
 
 def sorted_test_method_descriptions(descriptions):
@@ -89,9 +112,17 @@ def method_descriptions_from_function(function):
         yield TestMethodDescription(name, assertions)
 
 def method_description_from_live_object(live_object):
+    init_call = live_object.get_init_call()
+
     if len(live_object.calls) == 1:
         call = live_object.calls[0]
         test_name = call2testname(call.method_name, call.input, call.output)
+    elif len(live_object.calls) == 2 and init_call:
+        other_call = live_object.get_non_init_calls()[0]
+        test_name = "%s_after_creation_with_%s" % (call2testname(other_call.method_name,
+                                                                 other_call.input,
+                                                                 other_call.output),
+                                                   input_as_string(init_call.input))
     else:
         # TODO: come up with a nicer name for methods with more than one call.
         test_name = "%s_%s" % (underscore(live_object.klass.name), live_object.id)
@@ -101,7 +132,7 @@ def method_description_from_live_object(live_object):
     setup = "%s = %s\n" % (local_name, constructor_as_string(live_object))
 
     assertions = []
-    for call in live_object.calls:
+    for call in live_object.get_non_init_calls():
         name = "%s.%s" % (local_name, call.method_name)
         assertions.append((constructor_as_string(call.output),
                            call_as_string(name, call.input)))
