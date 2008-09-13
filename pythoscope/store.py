@@ -334,43 +334,50 @@ class Project(object):
 class Call(object):
     """Stores information about a single function or method call.
 
+    Includes reference to the caller, all call arguments, references to
+    other calls made inside this one and finally an output value.
+
     There's more to function/method call than arguments and outputs.
     They're the only attributes for now, but information on side effects
     will be added later.
+
+    __eq__ and __hash__ definitions provided for Function.get_unique_calls()
+    and LiveObject.get_external_calls().
     """
-    def __init__(self, input, output):
+    def __init__(self, callable, input, output=None):
+        self.callable = callable
         self.input = input
         self.output = output
+        self.caller = None
+        self.subcalls = []
 
-class FunctionCall(Call):
-    """__eq__ and __hash__ definitions provided for Function.get_unique_calls().
-    """
-    def __init__(self, input, output, point_of_entry):
-        Call.__init__(self, input, output)
-        self.point_of_entry = point_of_entry
+    def add_subcall(self, call):
+        if call.caller is not None:
+            raise TypeError("This Call already has a caller.")
+        call.caller = self
+        self.subcalls.append(call)
 
     def __eq__(self, other):
-        return self.point_of_entry is other.point_of_entry and \
+        return self.callable == other.callable and \
                self.input == other.input and \
                self.output == other.output
 
     def __hash__(self):
-        return hash((self.point_of_entry.name,
+        return hash((self.callable.name,
                      tuple(self.input.iteritems()),
                      self.output))
 
     def __repr__(self):
-        return "FunctionCall(input=%r, output=%r, poe=%r)" % \
-               (self.input, self.output, self.point_of_entry.name)
+        return "%s(callable=%r, input=%r, output=%r)" % \
+               (self.__class__.__name__, self.callable, self.input, self.output)
+
+class FunctionCall(Call):
+    def __init__(self, point_of_entry, function, input, output=None):
+        Call.__init__(self, function, input, output)
+        self.point_of_entry = point_of_entry
 
 class MethodCall(Call):
-    def __init__(self, input, output, method_name):
-        Call.__init__(self, input, output)
-        self.method_name = method_name
-
-    def __repr__(self):
-        return "MethodCall(input=%r, output=%r, method_name=%r)" % \
-               (self.input, self.output, self.method_name)
+    pass
 
 class Definition(object):
     def __init__(self, name, code=None):
@@ -428,13 +435,20 @@ class LiveObject(Callable):
         """Return a call to __init__ or None if it wasn't called.
         """
         for call in self.calls:
-            if call.method_name == '__init__':
+            if call.callable.name == '__init__':
                 return call
 
     def get_non_init_calls(self):
         def is_not_init_call(call):
-            return call.method_name != '__init__'
+            return call.callable.name != '__init__'
         return filter(is_not_init_call, self.calls)
+
+    def get_external_calls(self):
+        """Return all calls to this object made from the outside.
+        """
+        def is_external_call(call):
+            return (not call.caller) or (call.caller not in self.calls)
+        return filter(is_external_call, self.calls)
 
     def __repr__(self):
         return "LiveObject(id=%d, klass=%r, calls=%r)" % (self.id, self.klass.name, self.calls)
@@ -444,6 +458,7 @@ class Class(object):
         self.name = name
         self.methods = methods
         self.bases = bases
+        # TODO: identify live objects by id *and* point of entry.
         self.live_objects = {}
 
     def is_testable(self):
@@ -465,7 +480,7 @@ class Class(object):
         traced_method_names = set()
         for live_object in self.live_objects.values():
             for call in live_object.calls:
-                traced_method_names.add(call.method_name)
+                traced_method_names.add(call.callable.name)
         return traced_method_names
 
     def get_untraced_methods(self):
@@ -473,6 +488,11 @@ class Class(object):
         def is_untraced(method):
             return method.name not in traced_method_names
         return filter(is_untraced, self.methods)
+
+    def find_method_by_name(self, name):
+        for method in self.methods:
+            if method.name == name:
+                return method
 
 class TestCase(object):
     """A single test object, possibly contained within a test suite (denoted
@@ -773,6 +793,10 @@ class PointOfEntry(object):
     def __init__(self, project, name):
         self.project = project
         self.name = name
+        # After an inspection run, this will be a reference to the top level call.
+        self.call_graph = None
+
+        self._preserved_objects = []
 
     def get_path(self):
         return os.path.join(self.project._get_points_of_entry_path(), self.name)
@@ -785,20 +809,43 @@ class PointOfEntry(object):
             klass.remove_live_objects_from(self)
         for function in self.project.iter_functions():
             function.remove_calls_from(self)
+        self.call_graph = None
 
-    def add_method_call(self, name, classname, modulepath, object_id, input, output):
+    def create_method_call(self, name, classname, modulepath, object, input):
         klass = self.project.find_class(classname, modulepath)
+        if not klass:
+            return
 
-        if klass:
-            try:
-                live_object = klass.live_objects[object_id]
-            except KeyError:
-                live_object = LiveObject(object_id, klass, self)
-                klass.add_live_object(live_object)
-            live_object.add_call(MethodCall(input, output, name))
+        method = klass.find_method_by_name(name)
+        if not method:
+            return
 
-    def add_function_call(self, name, modulepath, input, output):
+        call = MethodCall(method, input)
+
+        try:
+            live_object = klass.live_objects[id(object)]
+        except KeyError:
+            live_object = LiveObject(id(object), klass, self)
+            klass.add_live_object(live_object)
+            self._preserve(object)
+
+        live_object.add_call(call)
+        return call
+
+    def create_function_call(self, name, modulepath, input):
         function = self.project.find_function(name, modulepath)
 
         if function:
-            function.add_call(FunctionCall(input, output, self))
+            call = FunctionCall(self, function, input)
+            function.add_call(call)
+            return call
+
+    def finalize_inspection(self):
+        # We can release preserved objects now.
+        self._preserved_objects = []
+
+    def _preserve(self, object):
+        """Preserve an object from garbage collection, so its id won't get
+        occupied by any other object.
+        """
+        self._preserved_objects.append(object)

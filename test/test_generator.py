@@ -28,9 +28,10 @@ def ClassWithMethods(classname, methods):
     method_calls = []
 
     for name, calls in methods:
-        method_objects.append(Method(name))
+        method = Method(name)
+        method_objects.append(method)
         for input, output in calls:
-            method_calls.append(MethodCall(input, output, name))
+            method_calls.append(MethodCall(method, input, output))
 
     klass = Class(classname, methods=method_objects)
     live_object = LiveObject(12345, klass, None)
@@ -41,8 +42,9 @@ def ClassWithMethods(classname, methods):
 
 def FunctionWithCalls(funcname, calls):
     poe = PointOfEntryMock()
-    function_calls = [FunctionCall(i, o, poe) for (i,o) in calls]
-    return Function(funcname, calls=function_calls)
+    function = Function(funcname)
+    function.calls = [FunctionCall(poe, function, i, o) for (i,o) in calls]
+    return function
 
 def FunctionWithSingleCall(funcname, input, output):
     return FunctionWithCalls(funcname, [(input, output)])

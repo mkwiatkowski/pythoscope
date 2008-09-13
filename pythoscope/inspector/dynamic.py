@@ -3,8 +3,6 @@ import optparse
 import sys
 import types
 
-from pythoscope.store import Call, Function, Method
-
 
 IGNORED_NAMES = ["<module>", "<genexpr>"]
 
@@ -12,6 +10,24 @@ _traced_callables = None
 _top_level_function = None
 _sys_modules = None
 _point_of_entry = None
+_call_stack = None
+
+class CallStack(object):
+    def __init__(self):
+        self.stack = []
+        self.top_level_calls = []
+
+    def called(self, call):
+        if self.stack:
+            self.stack[-1].add_subcall(call)
+        else:
+            self.top_level_calls.append(call)
+        self.stack.append(call)
+
+    def returned(self, output):
+        if self.stack:
+            caller = self.stack.pop()
+            caller.output = output
 
 def compact(list):
     "Remove all occurences of None from the given list."
@@ -89,10 +105,19 @@ def get_method_information(frame):
         raise NotMethodFrame
 
 def resolve_args(names, locals):
+    """Returns a list of tuples representing argument names and values.
+
+    Handles nested arguments lists well.
+        >>> resolve_args([['a', 'b'], 'c'], {'.0': (1, 2), 'c': 3})
+        [('a', 1), ('b', 2), ('c', 3)]
+
+        >>> resolve_args(['a', ['b', 'c']], {'.1': (8, 7), 'a': 9})
+        [('a', 9), ('b', 8), ('c', 7)]
+    """
     result = []
-    for name in names:
+    for i, name in enumerate(names):
         if isinstance(name, list):
-            result.extend(resolve_args(name, locals))
+            result.extend(zip(name, locals['.%d' % i]))
         else:
             result.append((name, locals[name]))
     return result
@@ -110,16 +135,6 @@ def get_code_from(thing):
     else:
         raise TypeError("Don't know how to get code from %s" % thing)
 
-def create_function_call(calling_frame, return_vaule):
-    input = input_from_argvalues(*inspect.getargvalues(calling_frame))
-    return FunctionCall(input, return_value)
-
-def create_method_call(calling_frame, return_vaule):
-    args, varargs, varkw, locals = argvalues_without_self(calling_frame)
-    input = dict(resolve_args(args + compact([varargs, varkw]), locals))
-
-    return FunctionCall(input, return_value)
-
 def is_ignored_code(code):
     if code.co_name in IGNORED_NAMES:
         return True
@@ -127,31 +142,34 @@ def is_ignored_code(code):
         return True
     return False
 
-def add_call_to(calling_frame, return_value):
-    code = get_code_from(calling_frame)
+def create_call(frame):
+    code = get_code_from(frame)
     name = code.co_name
     modulepath = code.co_filename
 
     if not is_ignored_code(code):
         try:
-            self, input = get_method_information(calling_frame)
+            self, input = get_method_information(frame)
             classname = self.__class__.__name__
-            _point_of_entry.add_method_call(name, classname, modulepath, id(self), input, return_value)
+            return _point_of_entry.create_method_call(name, classname, modulepath, self, input)
         except NotMethodFrame:
-            input = input_from_argvalues(*inspect.getargvalues(calling_frame))
-            _point_of_entry.add_function_call(name, modulepath, input, return_value)
+            input = input_from_argvalues(*inspect.getargvalues(frame))
+            return _point_of_entry.create_function_call(name, modulepath, input)
 
-def create_tracer(calling_frame):
+def create_tracer():
     def tracer(frame, event, arg):
         if event == 'call':
             if not is_class_definition(frame):
-                return create_tracer(frame)
+                call = create_call(frame)
+                if call:
+                    _call_stack.called(call)
+                return create_tracer()
         elif event == 'return':
-            add_call_to(calling_frame, arg)
+            _call_stack.returned(arg)
     return tracer
 
 def start_tracing():
-    sys.settrace(create_tracer(None))
+    sys.settrace(create_tracer())
 
 def stop_tracing():
     sys.settrace(None)
@@ -175,16 +193,18 @@ def trace_exec(exec_string, scope={}):
     return trace_function(fun)
 
 def setup_tracing(point_of_entry):
-    global _sys_modules, _point_of_entry
+    global _sys_modules, _point_of_entry, _call_stack
 
     # Put project's path into PYTHONPATH, so point of entry's imports work.
     sys.path.insert(0, point_of_entry.project.path)
     point_of_entry.clear_previous_run()    
+
+    _call_stack = CallStack()
     _point_of_entry = point_of_entry
     _sys_modules = sys.modules.keys()
 
 def teardown_tracing(point_of_entry):
-    global _sys_modules, _point_of_entry
+    global _sys_modules, _point_of_entry, _call_stack
 
     # Revert any changes to sys.modules.
     # This unfortunatelly doesn't include changes to the modules' state itself.
@@ -193,7 +213,12 @@ def teardown_tracing(point_of_entry):
     for modname in modnames:
         del sys.modules[modname]
 
+    # Copy the call graph structure to the point of entry.
+    _point_of_entry.call_graph = _call_stack.top_level_calls
+    _point_of_entry.finalize_inspection()
+
     _point_of_entry = None
+    _call_stack = None
     sys.path.remove(point_of_entry.project.path)
 
 def inspect_point_of_entry(point_of_entry):

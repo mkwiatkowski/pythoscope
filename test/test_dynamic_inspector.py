@@ -11,7 +11,23 @@ from helper import TestableProject, assert_length, PointOfEntryMock, \
      assert_equal_sets, ProjectWithModules, ProjectInDirectory
 
 
+class ClassMock(Class):
+    """Class that has all the methods you try to find inside it via
+    find_method_by_name().
+    """
+    def __init__(self, name):
+        Class.__init__(self, name)
+        self._methods = {}
+
+    def find_method_by_name(self, name):
+        if not self._methods.has_key(name):
+            self._methods[name] = Method(name)
+        return self._methods[name]
+
 class ProjectMock(object):
+    """Project that has all the classes and functions you try to find inside it
+    via find_class() and find_function().
+    """
     def __init__(self):
         self.path = "."
         self._classes = {}
@@ -20,7 +36,7 @@ class ProjectMock(object):
     def find_class(self, classname, modulepath):
         class_id = (classname, modulepath)
         if not self._classes.has_key(class_id):
-            self._classes[class_id] = Class(classname)
+            self._classes[class_id] = ClassMock(classname)
         return self._classes[class_id]
 
     def find_function(self, name, modulepath):
@@ -39,26 +55,20 @@ class ProjectMock(object):
     def get_callables(self):
         return list(self.iter_callables())
 
-def collect_callables(fun):
-    if isinstance(fun, str):
-        trace = trace_exec
-    else:
-        trace = trace_function
-
-    project = ProjectMock()
-    poe = PointOfEntryMock(project=project)
-
-    setup_tracing(poe)
-    try:
-        trace(fun)
-    finally:
-        teardown_tracing(poe)
-
-    return project.get_callables()
-
 def assert_function_call(expected_input, expected_output, function_call):
     assert_equal(expected_input, function_call.input)
     assert_equal(expected_output, function_call.output)
+
+def call_graph_as_string(call_or_calls, indentation=0):
+    def lines(call):
+        yield "%s%s()\n" % (" "*indentation, call.callable.name)
+        for subcall in call.subcalls:
+            yield call_graph_as_string(subcall, indentation+4)
+
+    if isinstance(call_or_calls, list):
+        return "".join([call_graph_as_string(call) for call in call_or_calls])
+    else:
+        return "".join(lines(call_or_calls))
 
 
 was_run = False
@@ -184,42 +194,112 @@ def function_calling_other_which_uses_name_and_module_variables():
             pass
     function()
 
-class TestTraceFunction:
+def function_calling_method_which_calls_other_method():
+    class Class(object):
+        def method(self):
+            self.other_method()
+        def other_method(self):
+            pass
+    Class().method()
+
+def function_changing_its_argument_binding():
+    def function((a, b), c):
+        a = 7
+        return (c, b, a)
+    function((1, 2), 3)
+
+def function_with_nested_calls():
+    def top():
+        obj = Class()
+        first(2)
+        obj.do_something()
+    class Class(object):
+        def __init__(self):
+            self._setup()
+        def _setup(self):
+            pass
+        def do_something(self):
+            self.do_this()
+            self.do_that()
+        def do_this(self):
+            pass
+        def do_that(self):
+            pass
+    def first(x):
+        if x > 0:
+            second(x)
+    def second(x):
+        first(x-1)
+    top()
+
+expected_call_graph_for_function_with_nested_calls = """top()
+    __init__()
+        _setup()
+    first()
+        second()
+            first()
+                second()
+                    first()
+    do_something()
+        do_this()
+        do_that()
+"""
+
+class DynamicInspectorTest:
+    def _collect_callables(self, fun):
+        if isinstance(fun, str):
+            trace = trace_exec
+        else:
+            trace = trace_function
+
+        self.project = ProjectMock()
+        self.poe = PointOfEntryMock(project=self.project)
+
+        setup_tracing(self.poe)
+        try:
+            trace(fun)
+        finally:
+            teardown_tracing(self.poe)
+
+        return self.project.get_callables()
+
+class TestTraceFunction(DynamicInspectorTest):
     "trace_function"
+
     def test_runs_given_function(self):
-        collect_callables(function_setting_was_run)
+        self._collect_callables(function_setting_was_run)
 
         assert was_run, "Function wasn't executed."
 
     def test_returns_empty_list_when_no_calls_to_other_functions_were_made(self):
-        trace = collect_callables(function_doing_nothing)
+        trace = self._collect_callables(function_doing_nothing)
 
         assert_equal([], trace)
 
     def test_returns_a_list_with_a_single_element_when_calls_to_a_single_functions_were_made(self):
-        trace = collect_callables(function_calling_other_function)
+        trace = self._collect_callables(function_calling_other_function)
 
         assert_equal(1, len(trace))
 
     def test_returns_a_list_with_function_objects(self):
-        trace = collect_callables(function_calling_two_different_functions)
+        trace = self._collect_callables(function_calling_two_different_functions)
 
         assert all(isinstance(obj, Function) for obj in trace)
 
     def test_returns_function_objects_corresponding_to_functions_that_were_called(self):
-        trace = collect_callables(function_calling_two_different_functions)
+        trace = self._collect_callables(function_calling_two_different_functions)
 
         assert_equal(set(['first_function', 'second_function']),
                      set(f.name for f in trace))
 
     def test_returns_function_objects_with_all_calls_recorded(self):
-        trace = collect_callables(function_calling_other_function)
+        trace = self._collect_callables(function_calling_other_function)
         function = trace.pop()
 
         assert_equal(2, len(function.calls))
 
     def test_returns_function_objects_with_calls_that_use_required_arguments(self):
-        trace = collect_callables(function_calling_another_with_two_required_arguments)
+        trace = self._collect_callables(function_calling_another_with_two_required_arguments)
         function = trace.pop()
 
         assert_function_call({'x':7,  'y':13},  20, function.calls[0])
@@ -227,7 +307,7 @@ class TestTraceFunction:
         assert_function_call({'x':42, 'y':43},  85, function.calls[2])
 
     def test_returns_function_objects_with_calls_that_use_optional_arguments(self):
-        trace = collect_callables(function_calling_another_with_optional_arguments)
+        trace = self._collect_callables(function_calling_another_with_optional_arguments)
         function = trace.pop()
 
         assert_function_call({'x': "Hello",  'y': "world", 'w': 4, 'z': "!"}, "Hello world!!!!", function.calls[0])
@@ -235,7 +315,7 @@ class TestTraceFunction:
         assert_function_call({'x': "Humble", 'y': "hello", 'w': 1, 'z': "."}, "Humble hello.",   function.calls[2])
 
     def test_returns_function_objects_with_calls_that_use_keyword_arguments(self):
-        trace = collect_callables(function_calling_another_with_keyword_arguments)
+        trace = self._collect_callables(function_calling_another_with_keyword_arguments)
         function = trace.pop()
 
         assert_function_call({'x': 1, 'y': 1},  0, function.calls[0])
@@ -244,7 +324,7 @@ class TestTraceFunction:
         assert_function_call({'x': 5, 'y': 6}, -1, function.calls[3])
 
     def test_returns_function_objects_with_calls_that_use_varargs(self):
-        trace = collect_callables(function_calling_another_with_varargs)
+        trace = self._collect_callables(function_calling_another_with_varargs)
         function = trace.pop()
 
         assert_function_call({'x': 1, 'rest': ()},     [1],     function.calls[0])
@@ -252,19 +332,19 @@ class TestTraceFunction:
         assert_function_call({'x': 4, 'rest': (5, 6)}, [5,6,4], function.calls[2])
 
     def test_returns_function_objects_with_calls_that_use_varargs(self):
-        trace = collect_callables(function_calling_another_with_varargs_only)
+        trace = self._collect_callables(function_calling_another_with_varargs_only)
         function = trace.pop()
 
         assert_function_call({'args': ()}, 0, function.calls[0])
 
     def test_returns_function_objects_with_calls_that_use_nested_arguments(self):
-        trace = collect_callables(function_calling_another_with_nested_arguments)
+        trace = self._collect_callables(function_calling_another_with_nested_arguments)
         function = trace.pop()
 
         assert_function_call({'a': 1, 'b': 2, 'c': 3}, [3, 2, 1], function.calls[0])
 
     def test_returns_function_objects_with_calls_that_use_varkw(self):
-        trace = collect_callables(function_calling_another_with_varkw)
+        trace = self._collect_callables(function_calling_another_with_varkw)
         function = trace.pop()
 
         assert_function_call({'x': 'a', 'kwds': {}},                       42, function.calls[0])
@@ -272,59 +352,87 @@ class TestTraceFunction:
         assert_function_call({'x': 'c', 'kwds': {'y': 3, 'w': 4, 'z': 5}}, 42, function.calls[2])
 
     def test_interprets_recursive_calls_properly(self):
-        trace = collect_callables(function_calling_recursive_function)
+        trace = self._collect_callables(function_calling_recursive_function)
         function = trace.pop()
 
-        assert_function_call({'x': 0}, 1, function.calls[0])
-        assert_function_call({'x': 1}, 1, function.calls[1])
+        assert_function_call({'x': 4}, 24, function.calls[0])
+        assert_function_call({'x': 3}, 6, function.calls[1])
         assert_function_call({'x': 2}, 2, function.calls[2])
-        assert_function_call({'x': 3}, 6, function.calls[3])
-        assert_function_call({'x': 4}, 24, function.calls[4])
+        assert_function_call({'x': 1}, 1, function.calls[3])
+        assert_function_call({'x': 0}, 1, function.calls[4])
 
     def test_ignores_new_style_class_creation(self):
-        trace = collect_callables(function_creating_new_style_class)
+        trace = self._collect_callables(function_creating_new_style_class)
 
         assert_equal([], trace)
 
     def test_ignores_old_style_class_creation(self):
-        trace = collect_callables(function_creating_old_style_class)
+        trace = self._collect_callables(function_creating_old_style_class)
 
         assert_equal([], trace)
 
     def test_traces_function_calls_inside_class_definitions(self):
-        trace = collect_callables(function_creating_class_with_function_calls)
+        trace = self._collect_callables(function_creating_class_with_function_calls)
         function = trace.pop()
 
         assert_function_call({'x': 42}, 43, function.calls[0])
 
     def test_returns_a_list_with_live_objects(self):
-        trace = collect_callables(function_calling_a_method)
+        trace = self._collect_callables(function_calling_a_method)
 
         assert all(isinstance(obj, LiveObject) for obj in trace)
 
     def test_handles_methods_with_strangely_named_self(self):
-        trace = collect_callables(function_calling_methods_with_strangely_named_self)
+        trace = self._collect_callables(function_calling_methods_with_strangely_named_self)
 
         assert_length(trace, 2)
         assert all(isinstance(obj, LiveObject) for obj in trace)
         assert_equal_sets(['strange_method', 'another_strange_method'],
-                          [obj.calls[0].method_name for obj in trace])
+                          [obj.calls[0].callable.name for obj in trace])
 
     def test_distinguishes_between_methods_with_the_same_name_from_different_classes(self):
-        trace = collect_callables(function_calling_two_methods_with_the_same_name_from_different_classes)
+        trace = self._collect_callables(function_calling_two_methods_with_the_same_name_from_different_classes)
 
         assert_equal_sets([('FirstClass', 1, 'method'), ('SecondClass', 1, 'method')],
-                          [(obj.klass.name, len(obj.calls), obj.calls[0].method_name) for obj in trace])
+                          [(obj.klass.name, len(obj.calls), obj.calls[0].callable.name) for obj in trace])
 
     def test_distinguishes_between_classes_and_functions(self):
-        trace = collect_callables(function_calling_other_which_uses_name_and_module_variables)
+        trace = self._collect_callables(function_calling_other_which_uses_name_and_module_variables)
 
         assert_equal(1, len(trace))
 
-class TestTraceExec:
+    def test_creates_a_call_graph_of_execution_for_live_objects(self):
+        trace = self._collect_callables(function_calling_method_which_calls_other_method)
+
+        assert_length(trace, 1)
+
+        live_object = trace[0]
+        assert isinstance(live_object, LiveObject)
+        assert_length(live_object.get_external_calls(), 1)
+
+        external_call = live_object.get_external_calls()[0]
+        assert_equal('method', external_call.callable.name)
+        assert_length(external_call.subcalls, 1)
+
+        subcall = external_call.subcalls[0]
+        assert_equal('other_method', subcall.callable.name)
+
+    def test_creates_a_call_graph_of_execution_for_nested_calls(self):
+        self._collect_callables(function_with_nested_calls)
+
+        assert_equal(expected_call_graph_for_function_with_nested_calls,
+                     call_graph_as_string(self.poe.call_graph))
+
+    def test_handles_functions_that_change_their_argument_bindings(self):
+        trace = self._collect_callables(function_changing_its_argument_binding)
+        function = trace.pop()
+
+        assert_function_call({'a': 1, 'b': 2, 'c': 3}, (3, 2, 7), function.calls[0])
+
+class TestTraceExec(DynamicInspectorTest):
     "trace_exec"
     def test_returns_function_objects_with_all_calls_recorded(self):
-        trace = collect_callables("f = lambda x: x + 1; f(5); f(42)")
+        trace = self._collect_callables("f = lambda x: x + 1; f(5); f(42)")
         function = trace.pop()
 
         assert_function_call({'x': 5},  6,  function.calls[0])

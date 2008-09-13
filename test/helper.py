@@ -57,8 +57,7 @@ def assert_not_raises(exception, callable):
 
 class PointOfEntryMock(PointOfEntry):
     def __init__(self, project=None, name="poe", content=""):
-        self.project = project
-        self.name = name
+        PointOfEntry.__init__(self, project, name)
         self.content = content
 
     def clear_previous_run(self):

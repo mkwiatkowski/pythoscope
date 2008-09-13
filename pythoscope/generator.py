@@ -3,7 +3,7 @@ import re
 
 from astvisitor import EmptyCode, descend, parse, ASTVisitor
 from store import Class, Function, TestClass, TestMethod, ModuleNotFound, \
-     LiveObject, MethodCall
+     LiveObject, MethodCall, Method
 from util import camelize, underscore, sorted
 
 
@@ -18,7 +18,7 @@ def constructor_as_string(object):
     >>> obj = LiveObject(None, Class('SomeClass'), None)
     >>> constructor_as_string(obj)
     'SomeClass()'
-    >>> obj.add_call(MethodCall({'arg': 'whatever'}, None, '__init__'))
+    >>> obj.add_call(MethodCall(Method('__init__'), {'arg': 'whatever'}, None))
     >>> constructor_as_string(obj)
     "SomeClass(arg='whatever')"
     """
@@ -116,10 +116,10 @@ def method_description_from_live_object(live_object):
 
     if len(live_object.calls) == 1:
         call = live_object.calls[0]
-        test_name = call2testname(call.method_name, call.input, call.output)
+        test_name = call2testname(call.callable.name, call.input, call.output)
     elif len(live_object.calls) == 2 and init_call:
         other_call = live_object.get_non_init_calls()[0]
-        test_name = "%s_after_creation_with_%s" % (call2testname(other_call.method_name,
+        test_name = "%s_after_creation_with_%s" % (call2testname(other_call.callable.name,
                                                                  other_call.input,
                                                                  other_call.output),
                                                    input_as_string(init_call.input))
@@ -133,7 +133,7 @@ def method_description_from_live_object(live_object):
 
     assertions = []
     for call in live_object.get_non_init_calls():
-        name = "%s.%s" % (local_name, call.method_name)
+        name = "%s.%s" % (local_name, call.callable.name)
         assertions.append((constructor_as_string(call.output),
                            call_as_string(name, call.input)))
 
