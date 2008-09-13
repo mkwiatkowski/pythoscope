@@ -249,6 +249,22 @@ class TestGenerator:
         assert_contains(result, "something = Something(arg1=1, arg2=2)")
         assert_contains(result, "self.assertEqual(3, something.sum())")
 
+    def test_ignores_internal_object_calls(self):
+        klass = ClassWithMethods('Something', [('method', [({'argument': 1}, 'result')])])
+        live_object = klass.live_objects[12345]
+        method_call = live_object.calls[0]
+
+        subcall = MethodCall(Method('private'), {'argument': 2}, False)
+        method_call.add_subcall(subcall)
+        live_object.add_call(subcall)
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_method_returns_result_for_1(self):")
+        assert_contains(result, "self.assertEqual('result', something.method(argument=1))")
+        assert_doesnt_contain(result, "def test_private_returns_false_for_2(self):")
+        assert_doesnt_contain(result, "self.assertEqual(False, something.private(argument=2))")
+
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
         self.project = TestableProject()

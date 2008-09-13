@@ -438,17 +438,16 @@ class LiveObject(Callable):
             if call.callable.name == '__init__':
                 return call
 
-    def get_non_init_calls(self):
-        def is_not_init_call(call):
-            return call.callable.name != '__init__'
-        return filter(is_not_init_call, self.calls)
-
     def get_external_calls(self):
         """Return all calls to this object made from the outside.
+
+        Note: __init__ is considered an internal call.
         """
+        def is_not_init_call(call):
+            return call.callable.name != '__init__'
         def is_external_call(call):
             return (not call.caller) or (call.caller not in self.calls)
-        return filter(is_external_call, self.calls)
+        return filter(is_not_init_call, filter(is_external_call, self.calls))
 
     def __repr__(self):
         return "LiveObject(id=%d, klass=%r, calls=%r)" % (self.id, self.klass.name, self.calls)

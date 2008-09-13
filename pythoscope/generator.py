@@ -112,17 +112,14 @@ def method_descriptions_from_function(function):
         yield TestMethodDescription(name, assertions)
 
 def method_description_from_live_object(live_object):
+    external_calls = live_object.get_external_calls()
     init_call = live_object.get_init_call()
 
-    if len(live_object.calls) == 1:
-        call = live_object.calls[0]
+    if len(external_calls) == 1:
+        call = external_calls[0]
         test_name = call2testname(call.callable.name, call.input, call.output)
-    elif len(live_object.calls) == 2 and init_call:
-        other_call = live_object.get_non_init_calls()[0]
-        test_name = "%s_after_creation_with_%s" % (call2testname(other_call.callable.name,
-                                                                 other_call.input,
-                                                                 other_call.output),
-                                                   input_as_string(init_call.input))
+        if init_call:
+            test_name += "_after_creation_with_%s" % input_as_string(init_call.input)
     else:
         # TODO: come up with a nicer name for methods with more than one call.
         test_name = "%s_%s" % (underscore(live_object.klass.name), live_object.id)
@@ -132,7 +129,7 @@ def method_description_from_live_object(live_object):
     setup = "%s = %s\n" % (local_name, constructor_as_string(live_object))
 
     assertions = []
-    for call in live_object.get_non_init_calls():
+    for call in external_calls:
         name = "%s.%s" % (local_name, call.callable.name)
         assertions.append((constructor_as_string(call.output),
                            call_as_string(name, call.input)))

@@ -408,6 +408,7 @@ class TestTraceFunction(DynamicInspectorTest):
 
         live_object = trace[0]
         assert isinstance(live_object, LiveObject)
+        assert_length(live_object.calls, 2)
         assert_length(live_object.get_external_calls(), 1)
 
         external_call = live_object.get_external_calls()[0]
