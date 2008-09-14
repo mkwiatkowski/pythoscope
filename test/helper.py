@@ -19,6 +19,9 @@ def data(name):
 def read_data(name):
     return read_file_contents(data(name))
 
+def quoted_block(text):
+    return ''.join(["> %s" % line for line in text.splitlines(True)])
+
 def assert_length(collection, expected_length):
     actual_length = len(collection)
     assert expected_length == actual_length,\
@@ -27,16 +30,16 @@ def assert_length(collection, expected_length):
 
 def assert_contains(haystack, needle):
     assert needle in haystack,\
-           "%r should contain %r, but it didn't." % (haystack, needle)
+           "Expected\n%s\nto contain %r, but it didn't." % (quoted_block(haystack), needle)
 
 def assert_contains_once(haystack, needle):
     repeated = len(re.findall(re.escape(needle), haystack))
-    assert repeated == 1, "Expected %r to contain %r once, but it contained it %d times instead." %\
-           (haystack, needle, repeated)
+    assert repeated == 1, "Expected\n%s\nto contain %r once, but it contained it %d times instead." %\
+           (quoted_block(haystack), needle, repeated)
 
 def assert_doesnt_contain(haystack, needle):
     assert needle not in haystack,\
-           "%r should NOT contain %r, but it did." % (haystack, needle)
+           "Expected\n%s\nto NOT contain %r, but it did." % (quoted_block(haystack), needle)
 
 def assert_single_class(info, name):
     assert_length(info.classes, 1)
