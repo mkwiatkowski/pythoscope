@@ -107,15 +107,17 @@ def should_ignore_method(method):
 def method_descriptions_from_function(function):
     for call in function.get_unique_calls():
         name = call2testname(function.name, call.input, call.output)
-        assertions = [(constructor_as_string(call.output),
-                       call_as_string(function.name, call.input))]
+        assertions = [EqualAssertion(constructor_as_string(call.output),
+                                     call_as_string(function.name, call.input))]
         yield TestMethodDescription(name, assertions)
 
 def method_description_from_live_object(live_object):
     external_calls = live_object.get_external_calls()
     init_call = live_object.get_init_call()
 
-    if len(external_calls) == 1:
+    if len(external_calls) == 0 and init_call:
+        test_name = "test_creation_with_%s" % input_as_string(init_call.input)
+    elif len(external_calls) == 1:
         call = external_calls[0]
         test_name = call2testname(call.callable.name, call.input, call.output)
         if init_call:
@@ -129,10 +131,12 @@ def method_description_from_live_object(live_object):
     setup = "%s = %s\n" % (local_name, constructor_as_string(live_object))
 
     assertions = []
+    if len(external_calls) == 0 and init_call:
+        assertions.append(CommentAssertion("# Make sure it doesn't raise any exceptions."))
     for call in external_calls:
         name = "%s.%s" % (local_name, call.callable.name)
-        assertions.append((constructor_as_string(call.output),
-                           call_as_string(name, call.input)))
+        assertions.append(EqualAssertion(constructor_as_string(call.output),
+                                         call_as_string(name, call.input)))
 
     return TestMethodDescription(test_name, assertions, setup)
 
@@ -156,15 +160,34 @@ def localize_method_code(code, method_name):
     return descend(code.children, LocalizeMethodVisitor).method_body
 
 class TestMethodDescription(object):
-    # Assertions should be a list of tuples in form (expected_value, actual_value).
     def __init__(self, name, assertions=[], setup=""):
         self.name = name
         self.assertions = assertions
         self.setup = setup
 
+class Assertion(object):
+    """Base class for all types of assertions.
+    """
+
+class EqualAssertion(Assertion):
+    def __init__(self, expected, actual):
+        self.expected = expected
+        self.actual = actual
+
+    def to_string(self, template):
+        return template % (self.expected, self.actual)
+
+class CommentAssertion(Assertion):
+    def __init__(self, comment):
+        self.comment = comment
+
+    def to_string(self, template):
+        return template % self.comment
+
 class TestGenerator(object):
     imports = []
     main_snippet = EmptyCode()
+    assertion_templates = {}
 
     def from_template(cls, template):
         if template == 'unittest':
@@ -183,6 +206,10 @@ class TestGenerator(object):
         for modname in modnames:
             module = project[modname]
             self._add_tests_for_module(module, project, force)
+
+    def apply_template(self, assertion):
+        template = self.assertion_templates[type(assertion)]
+        return assertion.to_string(template)
 
     def _add_tests_for_module(self, module, project, force):
         for test_case in self._generate_test_cases(module):
@@ -253,6 +280,10 @@ class TestGenerator(object):
 
 class UnittestTestGenerator(TestGenerator):
     main_snippet = parse("if __name__ == '__main__':\n    unittest.main()\n")
+    assertion_templates = {
+        EqualAssertion: "self.assertEqual(%s, %s)",
+        CommentAssertion: "%s",
+    }
 
     def __init__(self):
         self.imports = ['unittest']
@@ -264,7 +295,7 @@ class UnittestTestGenerator(TestGenerator):
                 result += "    def %s(self):\n" % method_description.name
                 result += "        " + method_description.setup
                 for assertion in method_description.assertions:
-                    result += "        self.assertEqual(%s, %s)\n" % assertion
+                    result += "        %s\n" % self.apply_template(assertion)
                 result += "\n"
             else:
                 result += "    def %s(self):\n" % method_description.name
@@ -272,6 +303,11 @@ class UnittestTestGenerator(TestGenerator):
         return result
 
 class NoseTestGenerator(TestGenerator):
+    assertion_templates = {
+        EqualAssertion: "assert_equal(%s, %s)",
+        CommentAssertion: "%s",
+    }
+
     def __init__(self):
         self.imports = []
 
@@ -282,7 +318,7 @@ class NoseTestGenerator(TestGenerator):
                 result += "    def %s(self):\n" % method_description.name
                 result += "        " + method_description.setup
                 for assertion in method_description.assertions:
-                    result += "        assert_equal(%s, %s)\n" % assertion
+                    result += "        %s\n" % self.apply_template(assertion)
                 result += "\n"
                 self.ensure_import(('nose.tools', 'assert_equal'))
             else:

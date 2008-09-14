@@ -265,6 +265,15 @@ class TestGenerator:
         assert_doesnt_contain(result, "def test_private_returns_false_for_2(self):")
         assert_doesnt_contain(result, "self.assertEqual(False, something.private(argument=2))")
 
+    def test_generates_nice_names_for_test_cases_that_test_init_only(self):
+        klass = ClassWithMethods('Something', [('__init__', [({'param': 1}, None)])])
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_creation_with_1(self):")
+        assert_contains(result, "# Make sure it doesn't raise any exceptions.")
+        assert_doesnt_contain(result, "assert False")
+
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
         self.project = TestableProject()
