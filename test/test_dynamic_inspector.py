@@ -466,7 +466,7 @@ class TestInspectPointOfEntry:
         assert_length(live_object.calls, 1)
         assert_function_call({'x': 42}, 43, live_object.calls[0])
 
-    def test_inspect_point_of_entry_properly_wipes_out_imports_from_sys_modules(self):
+    def test_properly_wipes_out_imports_from_sys_modules(self):
         project = ProjectWithModules(["whatever.py"], ProjectInDirectory)
         project.path.putfile("whatever.py", "")
         poe = PointOfEntryMock(project, content="import whatever")
