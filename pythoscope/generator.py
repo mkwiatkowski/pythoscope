@@ -48,7 +48,7 @@ def object2id(object):
         return 'true'
     elif object is False:
         return 'false'
-    return re.sub(r'\.|\!', '', re.sub(r'\s+', '_', str(object).strip()))
+    return re.sub(r'[^a-zA-Z0-9_]', '', re.sub(r'\s+', '_', str(object).strip()))
 
 def input_as_string(input):
     """Generate an underscored description of given input arguments.
