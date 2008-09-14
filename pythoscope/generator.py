@@ -107,8 +107,8 @@ def should_ignore_method(method):
 def method_descriptions_from_function(function):
     for call in function.get_unique_calls():
         name = call2testname(function.name, call.input, call.output)
-        assertions = [EqualAssertion(constructor_as_string(call.output),
-                                     call_as_string(function.name, call.input))]
+        assertions = [('equal', constructor_as_string(call.output),
+                       call_as_string(function.name, call.input))]
         yield TestMethodDescription(name, assertions)
 
 def method_description_from_live_object(live_object):
@@ -132,11 +132,11 @@ def method_description_from_live_object(live_object):
 
     assertions = []
     if len(external_calls) == 0 and init_call:
-        assertions.append(CommentAssertion("# Make sure it doesn't raise any exceptions."))
+        assertions.append(('comment', "# Make sure it doesn't raise any exceptions."))
     for call in external_calls:
         name = "%s.%s" % (local_name, call.callable.name)
-        assertions.append(EqualAssertion(constructor_as_string(call.output),
-                                         call_as_string(name, call.input)))
+        assertions.append(('equal', constructor_as_string(call.output),
+                           call_as_string(name, call.input)))
 
     return TestMethodDescription(test_name, assertions, setup)
 
@@ -160,34 +160,19 @@ def localize_method_code(code, method_name):
     return descend(code.children, LocalizeMethodVisitor).method_body
 
 class TestMethodDescription(object):
+    # Assertions should be tuples (type, attributes...), where type is a string
+    # denoting a type of an assertion, e.g. 'equal' is an equality assertion.
+    #
+    # During test generation assertion attributes are passed to the corresponding
+    # TestGenerator method as arguments. E.g. assertion of type 'equal' invokes
+    # 'equal_assertion' method of the TestGenerator.
     def __init__(self, name, assertions=[], setup=""):
         self.name = name
         self.assertions = assertions
         self.setup = setup
 
-class Assertion(object):
-    """Base class for all types of assertions.
-    """
-
-class EqualAssertion(Assertion):
-    def __init__(self, expected, actual):
-        self.expected = expected
-        self.actual = actual
-
-    def to_string(self, template):
-        return template % (self.expected, self.actual)
-
-class CommentAssertion(Assertion):
-    def __init__(self, comment):
-        self.comment = comment
-
-    def to_string(self, template):
-        return template % self.comment
-
 class TestGenerator(object):
-    imports = []
     main_snippet = EmptyCode()
-    assertion_templates = {}
 
     def from_template(cls, template):
         if template == 'unittest':
@@ -198,6 +183,9 @@ class TestGenerator(object):
             raise UnknownTemplate(template)
     from_template = classmethod(from_template)
 
+    def __init__(self):
+        self.imports = []
+
     def ensure_import(self, import_):
         if import_ not in self.imports:
             self.imports.append(import_)
@@ -207,9 +195,23 @@ class TestGenerator(object):
             module = project[modname]
             self._add_tests_for_module(module, project, force)
 
-    def apply_template(self, assertion):
-        template = self.assertion_templates[type(assertion)]
-        return assertion.to_string(template)
+    def create_test_class(self, class_name, method_descriptions):
+        result = "%s\n" % (self.test_class_header(class_name))
+        for method_description in method_descriptions:
+            if method_description.assertions:
+                result += "    def %s(self):\n" % method_description.name
+                result += "        " + method_description.setup
+                for assertion in method_description.assertions:
+                    apply_template = getattr(self, "%s_assertion" % assertion[0])
+                    result += "        %s\n" % apply_template(*assertion[1:])
+                result += "\n"
+            else:
+                result += "    def %s(self):\n" % method_description.name
+                result += "        %s\n\n" % self.missing_assertion()
+        return result
+
+    def comment_assertion(self, comment):
+        return comment
 
     def _add_tests_for_module(self, module, project, force):
         for test_case in self._generate_test_cases(module):
@@ -280,52 +282,28 @@ class TestGenerator(object):
 
 class UnittestTestGenerator(TestGenerator):
     main_snippet = parse("if __name__ == '__main__':\n    unittest.main()\n")
-    assertion_templates = {
-        EqualAssertion: "self.assertEqual(%s, %s)",
-        CommentAssertion: "%s",
-    }
 
-    def __init__(self):
-        self.imports = ['unittest']
+    def test_class_header(self, name):
+        self.ensure_import('unittest')
+        return "class %s(unittest.TestCase):" % name
 
-    def create_test_class(self, class_name, method_descriptions):
-        result = "class %s(unittest.TestCase):\n" % class_name
-        for method_description in method_descriptions:
-            if method_description.assertions:
-                result += "    def %s(self):\n" % method_description.name
-                result += "        " + method_description.setup
-                for assertion in method_description.assertions:
-                    result += "        %s\n" % self.apply_template(assertion)
-                result += "\n"
-            else:
-                result += "    def %s(self):\n" % method_description.name
-                result += "        assert False # TODO: implement your test here\n\n"
-        return result
+    def equal_assertion(self, expected, actual):
+        return "self.assertEqual(%s, %s)" % (expected, actual)
+
+    def missing_assertion(self):
+        return "assert False # TODO: implement your test here"
 
 class NoseTestGenerator(TestGenerator):
-    assertion_templates = {
-        EqualAssertion: "assert_equal(%s, %s)",
-        CommentAssertion: "%s",
-    }
+    def test_class_header(self, name):
+        return "class %s:" % name
 
-    def __init__(self):
-        self.imports = []
+    def equal_assertion(self, expected, actual):
+        self.ensure_import(('nose.tools', 'assert_equal'))
+        return "assert_equal(%s, %s)" % (expected, actual)
 
-    def create_test_class(self, class_name, method_descriptions):
-        result = "class %s:\n" % class_name
-        for method_description in method_descriptions:
-            if method_description.assertions:
-                result += "    def %s(self):\n" % method_description.name
-                result += "        " + method_description.setup
-                for assertion in method_description.assertions:
-                    result += "        %s\n" % self.apply_template(assertion)
-                result += "\n"
-                self.ensure_import(('nose.tools', 'assert_equal'))
-            else:
-                result += "    def %s(self):\n" % method_description.name
-                result += "        raise SkipTest # TODO: implement your test here\n\n"
-                self.ensure_import(('nose', 'SkipTest'))
-        return result
+    def missing_assertion(self):
+        self.ensure_import(('nose', 'SkipTest'))
+        return "raise SkipTest # TODO: implement your test here"
 
 def add_tests_to_project(project, modnames, template, force=False):
     generator = TestGenerator.from_template(template)
