@@ -6,6 +6,7 @@ from nose.plugins.skip import SkipTest
 from pythoscope.inspector.dynamic import trace_function, trace_exec, \
      inspect_point_of_entry, setup_tracing, teardown_tracing
 from pythoscope.store import Class, Function, Method, LiveObject
+from pythoscope.util import findfirst
 
 from helper import TestableProject, assert_length, PointOfEntryMock, \
      assert_equal_sets, ProjectWithModules, ProjectInDirectory
@@ -55,9 +56,15 @@ class ProjectMock(object):
     def get_callables(self):
         return list(self.iter_callables())
 
-def assert_function_call(expected_input, expected_output, function_call):
-    assert_equal(expected_input, function_call.input)
-    assert_equal(expected_output, function_call.output)
+def assert_call(expected_input, expected_output, call):
+    assert_equal(expected_input, call.input)
+    assert call.exception is None
+    assert_equal(expected_output, call.output)
+
+def assert_call_with_exception(expected_input, expected_exception, call):
+    assert_equal(expected_input, call.input)
+    assert call.output is None
+    assert_equal(expected_exception, call.exception)
 
 def call_graph_as_string(call_or_calls, indentation=0):
     def lines(call):
@@ -245,6 +252,23 @@ expected_call_graph_for_function_with_nested_calls = """top()
         do_that()
 """
 
+def function_raising_an_exception():
+    def function(x):
+        raise ValueError()
+    function(42)
+
+def function_handling_other_function_exception():
+    def other_function(x):
+        if not isinstance(x, int):
+            raise TypeError
+        return x + 1
+    def function(number):
+        try:
+            return other_function(number)
+        except TypeError:
+            return other_function(int(number))
+    function("123")
+
 class DynamicInspectorTest:
     def _collect_callables(self, fun):
         if isinstance(fun, str):
@@ -258,6 +282,8 @@ class DynamicInspectorTest:
         setup_tracing(self.poe)
         try:
             trace(fun)
+        except:
+            pass # Don't allow any POEs exceptions to propagate to testing code.
         finally:
             teardown_tracing(self.poe)
 
@@ -302,64 +328,64 @@ class TestTraceFunction(DynamicInspectorTest):
         trace = self._collect_callables(function_calling_another_with_two_required_arguments)
         function = trace.pop()
 
-        assert_function_call({'x':7,  'y':13},  20, function.calls[0])
-        assert_function_call({'x':1,  'y':2},    3, function.calls[1])
-        assert_function_call({'x':42, 'y':43},  85, function.calls[2])
+        assert_call({'x':7,  'y':13},  20, function.calls[0])
+        assert_call({'x':1,  'y':2},    3, function.calls[1])
+        assert_call({'x':42, 'y':43},  85, function.calls[2])
 
     def test_returns_function_objects_with_calls_that_use_optional_arguments(self):
         trace = self._collect_callables(function_calling_another_with_optional_arguments)
         function = trace.pop()
 
-        assert_function_call({'x': "Hello",  'y': "world", 'w': 4, 'z': "!"}, "Hello world!!!!", function.calls[0])
-        assert_function_call({'x': "Bye",    'y': "world", 'w': 2, 'z': "!"}, "Bye world!!",     function.calls[1])
-        assert_function_call({'x': "Humble", 'y': "hello", 'w': 1, 'z': "."}, "Humble hello.",   function.calls[2])
+        assert_call({'x': "Hello",  'y': "world", 'w': 4, 'z': "!"}, "Hello world!!!!", function.calls[0])
+        assert_call({'x': "Bye",    'y': "world", 'w': 2, 'z': "!"}, "Bye world!!",     function.calls[1])
+        assert_call({'x': "Humble", 'y': "hello", 'w': 1, 'z': "."}, "Humble hello.",   function.calls[2])
 
     def test_returns_function_objects_with_calls_that_use_keyword_arguments(self):
         trace = self._collect_callables(function_calling_another_with_keyword_arguments)
         function = trace.pop()
 
-        assert_function_call({'x': 1, 'y': 1},  0, function.calls[0])
-        assert_function_call({'x': 2, 'y': 1},  1, function.calls[1])
-        assert_function_call({'x': 3, 'y': 4}, -1, function.calls[2])
-        assert_function_call({'x': 5, 'y': 6}, -1, function.calls[3])
+        assert_call({'x': 1, 'y': 1},  0, function.calls[0])
+        assert_call({'x': 2, 'y': 1},  1, function.calls[1])
+        assert_call({'x': 3, 'y': 4}, -1, function.calls[2])
+        assert_call({'x': 5, 'y': 6}, -1, function.calls[3])
 
     def test_returns_function_objects_with_calls_that_use_varargs(self):
         trace = self._collect_callables(function_calling_another_with_varargs)
         function = trace.pop()
 
-        assert_function_call({'x': 1, 'rest': ()},     [1],     function.calls[0])
-        assert_function_call({'x': 2, 'rest': (3,)},   [3,2],   function.calls[1])
-        assert_function_call({'x': 4, 'rest': (5, 6)}, [5,6,4], function.calls[2])
+        assert_call({'x': 1, 'rest': ()},     [1],     function.calls[0])
+        assert_call({'x': 2, 'rest': (3,)},   [3,2],   function.calls[1])
+        assert_call({'x': 4, 'rest': (5, 6)}, [5,6,4], function.calls[2])
 
     def test_returns_function_objects_with_calls_that_use_varargs(self):
         trace = self._collect_callables(function_calling_another_with_varargs_only)
         function = trace.pop()
 
-        assert_function_call({'args': ()}, 0, function.calls[0])
+        assert_call({'args': ()}, 0, function.calls[0])
 
     def test_returns_function_objects_with_calls_that_use_nested_arguments(self):
         trace = self._collect_callables(function_calling_another_with_nested_arguments)
         function = trace.pop()
 
-        assert_function_call({'a': 1, 'b': 2, 'c': 3}, [3, 2, 1], function.calls[0])
+        assert_call({'a': 1, 'b': 2, 'c': 3}, [3, 2, 1], function.calls[0])
 
     def test_returns_function_objects_with_calls_that_use_varkw(self):
         trace = self._collect_callables(function_calling_another_with_varkw)
         function = trace.pop()
 
-        assert_function_call({'x': 'a', 'kwds': {}},                       42, function.calls[0])
-        assert_function_call({'x': 'b', 'kwds': {'a': 1, 'b': 2}},          2, function.calls[1])
-        assert_function_call({'x': 'c', 'kwds': {'y': 3, 'w': 4, 'z': 5}}, 42, function.calls[2])
+        assert_call({'x': 'a', 'kwds': {}},                       42, function.calls[0])
+        assert_call({'x': 'b', 'kwds': {'a': 1, 'b': 2}},          2, function.calls[1])
+        assert_call({'x': 'c', 'kwds': {'y': 3, 'w': 4, 'z': 5}}, 42, function.calls[2])
 
     def test_interprets_recursive_calls_properly(self):
         trace = self._collect_callables(function_calling_recursive_function)
         function = trace.pop()
 
-        assert_function_call({'x': 4}, 24, function.calls[0])
-        assert_function_call({'x': 3}, 6, function.calls[1])
-        assert_function_call({'x': 2}, 2, function.calls[2])
-        assert_function_call({'x': 1}, 1, function.calls[3])
-        assert_function_call({'x': 0}, 1, function.calls[4])
+        assert_call({'x': 4}, 24, function.calls[0])
+        assert_call({'x': 3}, 6, function.calls[1])
+        assert_call({'x': 2}, 2, function.calls[2])
+        assert_call({'x': 1}, 1, function.calls[3])
+        assert_call({'x': 0}, 1, function.calls[4])
 
     def test_ignores_new_style_class_creation(self):
         trace = self._collect_callables(function_creating_new_style_class)
@@ -375,7 +401,7 @@ class TestTraceFunction(DynamicInspectorTest):
         trace = self._collect_callables(function_creating_class_with_function_calls)
         function = trace.pop()
 
-        assert_function_call({'x': 42}, 43, function.calls[0])
+        assert_call({'x': 42}, 43, function.calls[0])
 
     def test_returns_a_list_with_live_objects(self):
         trace = self._collect_callables(function_calling_a_method)
@@ -428,7 +454,22 @@ class TestTraceFunction(DynamicInspectorTest):
         trace = self._collect_callables(function_changing_its_argument_binding)
         function = trace.pop()
 
-        assert_function_call({'a': 1, 'b': 2, 'c': 3}, (3, 2, 7), function.calls[0])
+        assert_call({'a': 1, 'b': 2, 'c': 3}, (3, 2, 7), function.calls[0])
+
+    def test_handles_functions_which_raise_exceptions(self):
+        trace = self._collect_callables(function_raising_an_exception)
+        function = trace.pop()
+
+        assert_call_with_exception({'x': 42}, ValueError, function.calls[0])
+
+    def test_handles_functions_which_handle_other_function_exceptions(self):
+        trace = self._collect_callables(function_handling_other_function_exception)
+        function = findfirst(lambda f: f.name == "function", trace)
+        other_function = findfirst(lambda f: f.name == "other_function", trace)
+
+        assert_call_with_exception({'x': "123"}, TypeError, other_function.calls[0])
+        assert_call({'x': 123}, 124, other_function.calls[1])
+        assert_call({'number': "123"}, 124, function.calls[0])
 
 class TestTraceExec(DynamicInspectorTest):
     "trace_exec"
@@ -436,8 +477,8 @@ class TestTraceExec(DynamicInspectorTest):
         trace = self._collect_callables("f = lambda x: x + 1; f(5); f(42)")
         function = trace.pop()
 
-        assert_function_call({'x': 5},  6,  function.calls[0])
-        assert_function_call({'x': 42}, 43, function.calls[1])
+        assert_call({'x': 5},  6,  function.calls[0])
+        assert_call({'x': 42}, 43, function.calls[1])
 
 class TestInspectPointOfEntry:
     def test_properly_gathers_all_input_and_output_values_of_a_function_call(self):
@@ -449,7 +490,7 @@ class TestInspectPointOfEntry:
 
         assert_length(project["module"].functions, 1)
         assert_length(project["module"].functions[0].calls, 1)
-        assert_function_call({'x': 42}, 43, project["module"].functions[0].calls[0])
+        assert_call({'x': 42}, 43, project["module"].functions[0].calls[0])
 
     def test_properly_gathers_all_input_and_output_values_of_a_method_call(self):
         method = Method("some_method")
@@ -464,7 +505,7 @@ class TestInspectPointOfEntry:
         assert_length(klass.live_objects, 1)
         live_object = klass.live_objects.popitem()[1]
         assert_length(live_object.calls, 1)
-        assert_function_call({'x': 42}, 43, live_object.calls[0])
+        assert_call({'x': 42}, 43, live_object.calls[0])
 
     def test_properly_wipes_out_imports_from_sys_modules(self):
         project = ProjectWithModules(["whatever.py"], ProjectInDirectory)

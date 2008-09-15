@@ -9,7 +9,7 @@ from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
 from util import all_of_type, max_by_not_zero, set, \
      write_string_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, python_modules_below, \
-     extract_subpath, directories_under
+     extract_subpath, directories_under, findfirst
 
 
 class ModuleNeedsAnalysis(Exception):
@@ -344,10 +344,14 @@ class Call(object):
     __eq__ and __hash__ definitions provided for Function.get_unique_calls()
     and LiveObject.get_external_calls().
     """
-    def __init__(self, callable, input, output=None):
+    def __init__(self, callable, input, output=None, exception=None):
         self.callable = callable
         self.input = input
+        if output and exception:
+            raise ValueError("Call shouldn't have a single point of return.")
         self.output = output
+        self.exception = exception
+
         self.caller = None
         self.subcalls = []
 
@@ -360,20 +364,23 @@ class Call(object):
     def __eq__(self, other):
         return self.callable == other.callable and \
                self.input == other.input and \
-               self.output == other.output
+               self.output == other.output and \
+               self.exception == other.exception
 
     def __hash__(self):
         return hash((self.callable.name,
                      tuple(self.input.iteritems()),
-                     self.output))
+                     self.output,
+                     self.exception))
 
     def __repr__(self):
-        return "%s(callable=%r, input=%r, output=%r)" % \
-               (self.__class__.__name__, self.callable, self.input, self.output)
+        return "%s(callable=%r, input=%r, output=%r, exception=%r)" % \
+               (self.__class__.__name__, self.callable, self.input,
+                self.output, self.exception)
 
 class FunctionCall(Call):
-    def __init__(self, point_of_entry, function, input, output=None):
-        Call.__init__(self, function, input, output)
+    def __init__(self, point_of_entry, function, input, output=None, exception=None):
+        Call.__init__(self, function, input, output, exception)
         self.point_of_entry = point_of_entry
 
 class MethodCall(Call):
@@ -434,9 +441,7 @@ class LiveObject(Callable):
     def get_init_call(self):
         """Return a call to __init__ or None if it wasn't called.
         """
-        for call in self.calls:
-            if call.callable.name == '__init__':
-                return call
+        return findfirst(lambda call: call.callable.name == '__init__', self.calls)
 
     def get_external_calls(self):
         """Return all calls to this object made from the outside.

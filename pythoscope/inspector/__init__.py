@@ -7,4 +7,9 @@ def inspect_project(project):
         static.inspect_module(project, modpath)
 
     for poe in project.points_of_entry.values():
-        dynamic.inspect_point_of_entry(poe)
+        try:
+            dynamic.inspect_point_of_entry(poe)
+        except SyntaxError, err:
+            print "Warning: Point of entry contains a syntax error:", err
+        except err:
+            print "Warning: Point of entry exited with error:", err

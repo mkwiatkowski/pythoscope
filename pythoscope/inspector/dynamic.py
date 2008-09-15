@@ -14,6 +14,7 @@ _call_stack = None
 
 class CallStack(object):
     def __init__(self):
+        self.last_traceback = None
         self.stack = []
         self.top_level_calls = []
 
@@ -28,6 +29,18 @@ class CallStack(object):
         if self.stack:
             caller = self.stack.pop()
             caller.output = output
+
+            # If the last exception is reported by sys.exc_info() it means
+            # it was handled inside the returning call.
+            handled_traceback = sys.exc_info()[2]
+            if handled_traceback is self.last_traceback:
+                caller.exception = None
+
+    def raised(self, exception, traceback):
+        if self.stack:
+            caller = self.stack[-1]
+            caller.exception = exception
+            self.last_traceback = traceback
 
 def compact(list):
     "Remove all occurences of None from the given list."
@@ -166,6 +179,8 @@ def create_tracer():
                 return create_tracer()
         elif event == 'return':
             _call_stack.returned(arg)
+        elif event == 'exception':
+            _call_stack.raised(arg[0], arg[2])
     return tracer
 
 def start_tracing():
@@ -183,7 +198,6 @@ def trace_function(fun):
     start_tracing()
     try:
         fun()
-    # TODO: Intercept and record unhandled exceptions.
     finally:
         stop_tracing()
 
@@ -223,5 +237,7 @@ def teardown_tracing(point_of_entry):
 
 def inspect_point_of_entry(point_of_entry):
     setup_tracing(point_of_entry)
-    calls = trace_exec(point_of_entry.get_content())
-    teardown_tracing(point_of_entry)
+    try:
+        trace_exec(point_of_entry.get_content())
+    finally:
+        teardown_tracing(point_of_entry)

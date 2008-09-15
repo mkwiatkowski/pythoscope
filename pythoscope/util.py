@@ -157,3 +157,10 @@ def directories_under(path):
     for entry in os.listdir(path):
         if os.path.isdir(os.path.join(path, entry)):
             yield entry
+
+def findfirst(pred, seq):
+    """Return the first element of given sequence that matches predicate.
+    """
+    for item in seq:
+        if pred(item):
+            return item
