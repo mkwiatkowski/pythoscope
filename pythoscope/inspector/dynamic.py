@@ -169,22 +169,20 @@ def create_call(frame):
             input = input_from_argvalues(*inspect.getargvalues(frame))
             return _point_of_entry.create_function_call(name, modulepath, input)
 
-def create_tracer():
-    def tracer(frame, event, arg):
-        if event == 'call':
-            if not is_class_definition(frame):
-                call = create_call(frame)
-                if call:
-                    _call_stack.called(call)
-                return create_tracer()
-        elif event == 'return':
-            _call_stack.returned(arg)
-        elif event == 'exception':
-            _call_stack.raised(arg[0], arg[2])
-    return tracer
+def tracer(frame, event, arg):
+    if event == 'call':
+        if not is_class_definition(frame):
+            call = create_call(frame)
+            if call:
+                _call_stack.called(call)
+            return tracer
+    elif event == 'return':
+        _call_stack.returned(arg)
+    elif event == 'exception':
+        _call_stack.raised(arg[0], arg[2])
 
 def start_tracing():
-    sys.settrace(create_tracer())
+    sys.settrace(tracer)
 
 def stop_tracing():
     sys.settrace(None)
