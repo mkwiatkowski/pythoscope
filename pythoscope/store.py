@@ -361,6 +361,9 @@ class Call(object):
         call.caller = self
         self.subcalls.append(call)
 
+    def raised_exception(self):
+        return self.exception is not None
+
     def __eq__(self, other):
         return self.callable == other.callable and \
                self.input == other.input and \

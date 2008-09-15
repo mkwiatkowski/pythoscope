@@ -50,6 +50,12 @@ def object2id(object):
         return 'false'
     return re.sub(r'[^a-zA-Z0-9_]', '', re.sub(r'\s+', '_', str(object).strip()))
 
+def exception2id(exception):
+    """Convert given exception class into a string that can be used as an
+    identifier,
+    """
+    return underscore(exception.__name__)
+
 def input_as_string(input):
     """Generate an underscored description of given input arguments.
 
@@ -93,6 +99,21 @@ def call2testname(object_name, input, output):
         call_description = object2id(output)
     return "test_%s_returns_%s" % (underscore(object_name), call_description)
 
+def exccall2testname(object_name, input, exception):
+    """Generate a test method name that describes given object call raising
+    an exception.
+
+    >>> exccall2testname('do_this', {}, Exception)
+    'test_do_this_raises_exception'
+    >>> exccall2testname('square', {'x': 'a string'}, TypeError)
+    'test_square_raises_type_error_for_a_string'
+    """
+    if input:
+        call_description = "%s_for_%s" % (exception2id(exception), input_as_string(input))
+    else:
+        call_description = exception2id(exception)
+    return "test_%s_raises_%s" % (underscore(object_name), call_description)
+
 def sorted_test_method_descriptions(descriptions):
     return sorted(descriptions, key=lambda md: md.name)
 
@@ -101,14 +122,22 @@ def name2testname(name):
         return "Test%s" % name
     return "test_%s" % name
 
+def in_lambda(string):
+    return "lambda: %s" % string
+
 def should_ignore_method(method):
     return method.name.startswith('_') and method.name != "__init__"
 
 def method_descriptions_from_function(function):
     for call in function.get_unique_calls():
-        name = call2testname(function.name, call.input, call.output)
-        assertions = [('equal', constructor_as_string(call.output),
-                       call_as_string(function.name, call.input))]
+        if call.raised_exception():
+            name = exccall2testname(function.name, call.input, call.exception)
+            assertions = [('raises', call.exception.__name__,
+                           in_lambda(call_as_string(function.name, call.input)))]
+        else:
+            name = call2testname(function.name, call.input, call.output)
+            assertions = [('equal', constructor_as_string(call.output),
+                           call_as_string(function.name, call.input))]
         yield TestMethodDescription(name, assertions)
 
 def method_description_from_live_object(live_object):
@@ -290,6 +319,9 @@ class UnittestTestGenerator(TestGenerator):
     def equal_assertion(self, expected, actual):
         return "self.assertEqual(%s, %s)" % (expected, actual)
 
+    def raises_assertion(self, exception, code):
+        return "self.assertRaises(%s, %s)" % (exception, code)
+
     def missing_assertion(self):
         return "assert False # TODO: implement your test here"
 
@@ -300,6 +332,10 @@ class NoseTestGenerator(TestGenerator):
     def equal_assertion(self, expected, actual):
         self.ensure_import(('nose.tools', 'assert_equal'))
         return "assert_equal(%s, %s)" % (expected, actual)
+
+    def raises_assertion(self, exception, code):
+        self.ensure_import(('nose.tools', 'assert_raises'))
+        return "assert_raises(%s, %s)" % (exception, code)
 
     def missing_assertion(self):
         self.ensure_import(('nose', 'SkipTest'))

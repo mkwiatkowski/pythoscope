@@ -49,6 +49,15 @@ def FunctionWithCalls(funcname, calls):
 def FunctionWithSingleCall(funcname, input, output):
     return FunctionWithCalls(funcname, [(input, output)])
 
+def FunctionWithExceptions(funcname, calls):
+    poe = PointOfEntryMock()
+    function = Function(funcname)
+    function.calls = [FunctionCall(poe, function, i, exception=e) for (i,e) in calls]
+    return function
+
+def FunctionWithSingleException(funcname, input, exception):
+    return FunctionWithExceptions(funcname, [(input, exception)])
+
 class TestGenerator:
     def test_generates_unittest_boilerplate(self):
         result = generate_single_test_module(objects=[Function('function')])
@@ -273,6 +282,14 @@ class TestGenerator:
         assert_contains(result, "def test_creation_with_1(self):")
         assert_contains(result, "# Make sure it doesn't raise any exceptions.")
         assert_doesnt_contain(result, "assert False")
+
+    def test_generates_assert_raises_for_functions_with_exceptions(self):
+        function = FunctionWithSingleException('square', {'x': 'hello'}, TypeError)
+
+        result = generate_single_test_module(objects=[function])
+
+        assert_contains(result, "def test_square_raises_type_error_for_hello(self):")
+        assert_contains(result, "self.assertRaises(TypeError, lambda: square(x='hello'))")
 
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
