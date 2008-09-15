@@ -23,7 +23,7 @@ TestClass.__test__ = False
 TestMethod.__test__ = False
 
 
-def ClassWithMethods(classname, methods):
+def ClassWithMethods(classname, methods, exit_point='output'):
     method_objects = []
     method_calls = []
 
@@ -31,7 +31,10 @@ def ClassWithMethods(classname, methods):
         method = Method(name)
         method_objects.append(method)
         for input, output in calls:
-            method_calls.append(MethodCall(method, input, output))
+            if exit_point == 'output':
+                method_calls.append(MethodCall(method, input, output=output))
+            elif exit_point == 'exception':
+                method_calls.append(MethodCall(method, input, exception=output))
 
     klass = Class(classname, methods=method_objects)
     live_object = LiveObject(12345, klass, None)
@@ -290,6 +293,23 @@ class TestGenerator:
 
         assert_contains(result, "def test_square_raises_type_error_for_hello(self):")
         assert_contains(result, "self.assertRaises(TypeError, lambda: square(x='hello'))")
+
+    def test_generates_assert_raises_for_init_methods_with_exceptions(self):
+        klass = ClassWithMethods('Something', [('__init__', [({'x': 123}, ValueError)])], 'exception')
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_creation_with_123_raises_value_error(self):")
+        assert_contains(result, "self.assertRaises(ValueError, lambda: Something(x=123))")
+
+    def test_generates_assert_raises_for_normal_methods_with_exceptions(self):
+        klass = ClassWithMethods('Something', [('method', [({}, KeyError)])], 'exception')
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_method_raises_key_error(self):")
+        assert_contains(result, "something = Something()")
+        assert_contains(result, "self.assertRaises(KeyError, lambda: something.method())")
 
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):

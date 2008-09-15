@@ -146,9 +146,14 @@ def method_description_from_live_object(live_object):
 
     if len(external_calls) == 0 and init_call:
         test_name = "test_creation_with_%s" % input_as_string(init_call.input)
+        if init_call.raised_exception():
+            test_name += "_raises_%s" % exception2id(init_call.exception)
     elif len(external_calls) == 1:
         call = external_calls[0]
-        test_name = call2testname(call.callable.name, call.input, call.output)
+        if call.raised_exception():
+            test_name = exccall2testname(call.callable.name, call.input, call.exception)
+        else:
+            test_name = call2testname(call.callable.name, call.input, call.output)
         if init_call:
             test_name += "_after_creation_with_%s" % input_as_string(init_call.input)
     else:
@@ -157,15 +162,27 @@ def method_description_from_live_object(live_object):
 
     # Before we call the method, we have to construct an object.
     local_name = underscore(live_object.klass.name)
-    setup = "%s = %s\n" % (local_name, constructor_as_string(live_object))
 
     assertions = []
+
+    # If the constructor raised an exception, object creation should be an assertion.
+    if init_call and init_call.raised_exception():
+        setup = ""
+        assertions.append(('raises', init_call.exception.__name__,
+                           in_lambda(constructor_as_string(live_object))))
+    else:
+        setup = "%s = %s\n" % (local_name, constructor_as_string(live_object))
+
     if len(external_calls) == 0 and init_call:
         assertions.append(('comment', "# Make sure it doesn't raise any exceptions."))
     for call in external_calls:
         name = "%s.%s" % (local_name, call.callable.name)
-        assertions.append(('equal', constructor_as_string(call.output),
-                           call_as_string(name, call.input)))
+        if call.raised_exception():
+            assertions.append(('raises', call.exception.__name__,
+                               in_lambda(call_as_string(name, call.input))))
+        else:
+            assertions.append(('equal', constructor_as_string(call.output),
+                               call_as_string(name, call.input)))
 
     return TestMethodDescription(test_name, assertions, setup)
 
