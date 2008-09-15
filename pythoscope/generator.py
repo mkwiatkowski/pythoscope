@@ -249,7 +249,8 @@ class TestGenerator(object):
         for method_description in method_descriptions:
             if method_description.assertions:
                 result += "    def %s(self):\n" % method_description.name
-                result += "        " + method_description.setup
+                if method_description.setup:
+                    result += "        " + method_description.setup
                 for assertion in method_description.assertions:
                     apply_template = getattr(self, "%s_assertion" % assertion[0])
                     result += "        %s\n" % apply_template(*assertion[1:])
