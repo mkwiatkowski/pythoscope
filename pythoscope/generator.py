@@ -145,7 +145,7 @@ class UnknownTemplate(Exception):
         Exception.__init__(self, "Couldn't find template %r." % template)
         self.template = template
 
-def localize_method_code(code, method_name):
+def find_method_code(code, method_name):
     """Return part of the code tree that corresponds to the given method
     definition.
     """
@@ -233,7 +233,7 @@ class TestGenerator(object):
             test_code = parse(test_body)
             def methoddesc2testmethod(method_description):
                 name = method_description.name
-                return TestMethod(name=name, code=localize_method_code(test_code, name))
+                return TestMethod(name=name, code=find_method_code(test_code, name))
             return TestClass(name=class_name,
                              code=test_code,
                              test_cases=map(methoddesc2testmethod, method_descriptions),
