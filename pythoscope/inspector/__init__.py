@@ -11,5 +11,5 @@ def inspect_project(project):
             dynamic.inspect_point_of_entry(poe)
         except SyntaxError, err:
             print "Warning: Point of entry contains a syntax error:", err
-        except err:
-            print "Warning: Point of entry exited with error:", err
+        except (Exception, KeyboardInterrupt, SystemExit), err:
+            print "Warning: Point of entry exited with error:", repr(err)
