@@ -1,3 +1,4 @@
+import __builtin__
 import os
 import pickle
 import re
@@ -12,6 +13,9 @@ from util import all_of_type, max_by_not_zero, set, \
      get_last_modification_time, read_file_contents, python_modules_below, \
      extract_subpath, directories_under, findfirst
 
+
+# So we can pickle the function type.
+__builtin__.function = types.FunctionType
 
 class ModuleNeedsAnalysis(Exception):
     def __init__(self, path, out_of_sync=False):

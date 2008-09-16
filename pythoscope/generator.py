@@ -349,7 +349,7 @@ class TestGenerator(object):
                 else:
                     # If we can't test for real values, let's at least test for the right type.
                     output_type = type_as_string(call.output)
-                    self.ensure_import(output_type)
+                    self.ensure_import('types')
                     assertions = [('equal', output_type,
                                    type_of(call_as_string(function.name, call.input)))]
             yield TestMethodDescription(name, assertions)
