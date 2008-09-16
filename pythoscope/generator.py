@@ -1,5 +1,6 @@
 import os
 import re
+import types
 
 from astvisitor import EmptyCode, descend, parse, ASTVisitor
 from store import Class, Function, TestClass, TestMethod, ModuleNotFound, \
@@ -10,6 +11,40 @@ from util import camelize, underscore, sorted
 class ValueNeeded(Exception):
     pass
 
+# :: ObjectWrapper -> type
+def unwrap_type(object):
+    """Get a type from given wrapped object.
+    """
+    if isinstance(object, Value):
+        return object.value.__class__
+    elif isinstance(object, Type):
+        return object.type
+    else:
+        raise ValueNeeded()
+
+# :: ObjectWrapper -> string
+def type_as_string(object):
+    """Return a most common representation of the wrapped object type.
+
+    >>> type_as_string(Type([]))
+    'list'
+    >>> type_as_string(Type({}))
+    'dict'
+    >>> type_as_string(Type(lambda: None))
+    'types.FunctionType'
+    """
+    mapping = {
+        list: 'list',
+        dict: 'dict',
+        tuple: 'tuple',
+        types.FunctionType: 'types.FunctionType'
+    }
+    try:
+        return mapping[unwrap_type(object)]
+    except KeyError:
+        raise ValueNeeded()
+
+# :: ObjectWrapper -> string
 def exception_as_string(exception):
     """Return a name of this wrapped exception class.
 
@@ -18,14 +53,9 @@ def exception_as_string(exception):
     >>> exception_as_string(Type(TypeError()))
     'TypeError'
     """
-    if isinstance(exception, Value):
-        exctype = exception.value.__class__
-    elif isinstance(exception, Type):
-        exctype = exception.type
-    else:
-        raise ValueNeeded()
-    return exctype.__name__
+    return unwrap_type(exception).__name__
 
+# :: ObjectWrapper -> string
 def constructor_as_string(object):
     """For a given object (either ObjectWrapper or a LiveObject instance) return
     a string representing a code that will construct it.
@@ -158,69 +188,11 @@ def name2testname(name):
 def in_lambda(string):
     return "lambda: %s" % string
 
+def type_of(string):
+    return "type(%s)" % string
+
 def should_ignore_method(method):
     return method.name.startswith('_') and method.name != "__init__"
-
-def method_descriptions_from_function(function):
-    for call in function.get_unique_calls():
-        if call.raised_exception():
-            name = exccall2testname(function.name, call.input, call.exception)
-            assertions = [('raises', exception_as_string(call.exception),
-                           in_lambda(call_as_string(function.name, call.input)))]
-        else:
-            name = call2testname(function.name, call.input, call.output)
-            assertions = [('equal', constructor_as_string(call.output),
-                           call_as_string(function.name, call.input))]
-        yield TestMethodDescription(name, assertions)
-
-def method_description_from_live_object(live_object):
-    init_call = live_object.get_init_call()
-    external_calls = live_object.get_external_calls()
-    local_name = underscore(live_object.klass.name)
-
-    def test_name():
-        if len(external_calls) == 0 and init_call:
-            test_name = "test_creation_with_%s" % input_as_string(init_call.input)
-            if init_call.raised_exception():
-                test_name += "_raises_%s" % object2id(init_call.exception)
-        elif len(external_calls) == 1:
-            call = external_calls[0]
-            if call.raised_exception():
-                test_name = exccall2testname(call.callable.name, call.input, call.exception)
-            else:
-                test_name = call2testname(call.callable.name, call.input, call.output)
-            if init_call:
-                test_name += "_after_creation_with_%s" % input_as_string(init_call.input)
-        else:
-            # TODO: come up with a nicer name for methods with more than one call.
-            test_name = "%s_%s" % (underscore(live_object.klass.name), live_object.id)    
-        return test_name
-
-    def assertions():
-        if init_call and len(external_calls) == 0:
-            # If the constructor raised an exception, object creation should be an assertion.
-            if init_call.raised_exception():
-                yield(('raises', exception_as_string(init_call.exception),
-                       in_lambda(constructor_as_string(live_object))))
-            else:
-                yield(('comment', "# Make sure it doesn't raise any exceptions."))
-    
-        for call in external_calls:
-            name = "%s.%s" % (local_name, call.callable.name)
-            if call.raised_exception():
-                yield(('raises', exception_as_string(call.exception),
-                       in_lambda(call_as_string(name, call.input))))
-            else:
-                yield(('equal', constructor_as_string(call.output),
-                       call_as_string(name, call.input)))
-
-    def setup():
-        if init_call and init_call.raised_exception():
-            return ""
-        else:
-            return "%s = %s\n" % (local_name, constructor_as_string(live_object))
-
-    return TestMethodDescription(test_name(), assertions(), setup())
 
 class UnknownTemplate(Exception):
     def __init__(self, template):
@@ -337,7 +309,7 @@ class TestGenerator(object):
             self.ensure_import((module.locator, function.name))
 
             # We have at least one call registered, so use it.
-            return method_descriptions_from_function(function)
+            return self._method_descriptions_from_function(function)
         else:
             # No calls were traced, so we're go for a single test stub.
             return [TestMethodDescription(name2testname(underscore(function.name)))]
@@ -349,7 +321,7 @@ class TestGenerator(object):
             self.ensure_import((module.locator, klass.name))
 
         for live_object in klass.live_objects.values():
-            yield method_description_from_live_object(live_object)
+            yield self._method_description_from_live_object(live_object)
 
         # No calls were traced for those methods, so we'll go for simple test stubs.
         for method in klass.get_untraced_methods():
@@ -362,6 +334,74 @@ class TestGenerator(object):
         else:
             name = method.name
         return TestMethodDescription(name2testname(name))
+
+    def _method_descriptions_from_function(self, function):
+        for call in function.get_unique_calls():
+            if call.raised_exception():
+                name = exccall2testname(function.name, call.input, call.exception)
+                assertions = [('raises', exception_as_string(call.exception),
+                               in_lambda(call_as_string(function.name, call.input)))]
+            else:
+                name = call2testname(function.name, call.input, call.output)
+                if call.output.can_be_constructed:
+                    assertions = [('equal', constructor_as_string(call.output),
+                                   call_as_string(function.name, call.input))]
+                else:
+                    # If we can't test for real values, let's at least test for the right type.
+                    output_type = type_as_string(call.output)
+                    self.ensure_import(output_type)
+                    assertions = [('equal', output_type,
+                                   type_of(call_as_string(function.name, call.input)))]
+            yield TestMethodDescription(name, assertions)
+
+    def _method_description_from_live_object(self, live_object):
+        init_call = live_object.get_init_call()
+        external_calls = live_object.get_external_calls()
+        local_name = underscore(live_object.klass.name)
+
+        def test_name():
+            if len(external_calls) == 0 and init_call:
+                test_name = "test_creation_with_%s" % input_as_string(init_call.input)
+                if init_call.raised_exception():
+                    test_name += "_raises_%s" % object2id(init_call.exception)
+            elif len(external_calls) == 1:
+                call = external_calls[0]
+                if call.raised_exception():
+                    test_name = exccall2testname(call.callable.name, call.input, call.exception)
+                else:
+                    test_name = call2testname(call.callable.name, call.input, call.output)
+                if init_call:
+                    test_name += "_after_creation_with_%s" % input_as_string(init_call.input)
+            else:
+                # TODO: come up with a nicer name for methods with more than one call.
+                test_name = "%s_%s" % (underscore(live_object.klass.name), live_object.id)    
+            return test_name
+
+        def assertions():
+            if init_call and len(external_calls) == 0:
+                # If the constructor raised an exception, object creation should be an assertion.
+                if init_call.raised_exception():
+                    yield(('raises', exception_as_string(init_call.exception),
+                           in_lambda(constructor_as_string(live_object))))
+                else:
+                    yield(('comment', "# Make sure it doesn't raise any exceptions."))
+    
+            for call in external_calls:
+                name = "%s.%s" % (local_name, call.callable.name)
+                if call.raised_exception():
+                    yield(('raises', exception_as_string(call.exception),
+                           in_lambda(call_as_string(name, call.input))))
+                else:
+                    yield(('equal', constructor_as_string(call.output),
+                           call_as_string(name, call.input)))
+
+        def setup():
+            if init_call and init_call.raised_exception():
+                return ""
+            else:
+                return "%s = %s\n" % (local_name, constructor_as_string(live_object))
+
+        return TestMethodDescription(test_name(), assertions(), setup())
 
 class UnittestTestGenerator(TestGenerator):
     main_snippet = parse("if __name__ == '__main__':\n    unittest.main()\n")

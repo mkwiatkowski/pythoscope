@@ -339,6 +339,8 @@ class Value(ObjectWrapper):
     """Wrapper of an object, which can be pickled, so we can save its real
     value.
     """
+    can_be_constructed = True
+
     def __init__(self, object):
         self.value = object
 
@@ -355,6 +357,8 @@ class Type(ObjectWrapper):
     """Placeholder for an object that cannot be pickled, thus have to be
     remembered as type only.
     """
+    can_be_constructed = False
+
     def __init__(self, object):
         self.type = type(object)
 
@@ -372,6 +376,8 @@ class Repr(ObjectWrapper):
     cannot be pickled as well, so it is remembered as its string representation
     only.
     """
+    can_be_constructed = False
+
     def __init__(self, object):
         self.repr = repr(object)
 

@@ -312,6 +312,15 @@ class TestGenerator:
         assert_contains(result, "something = Something()")
         assert_contains(result, "self.assertRaises(KeyError, lambda: something.method())")
 
+    def test_generates_assert_equal_type_for_functions_returning_functions(self):
+        objects = [FunctionWithSingleCall('higher', {}, lambda: 42)]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "import types")
+        assert_contains(result, "def test_higher_returns_function(self):")
+        assert_contains(result, "self.assertEqual(types.FunctionType, type(higher()))")
+
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
         self.project = TestableProject()
