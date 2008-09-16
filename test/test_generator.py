@@ -9,7 +9,8 @@ from pythoscope.astvisitor import parse
 from pythoscope.generator import add_tests_to_project
 from pythoscope.store import Project, Module, Class, Method, Function, \
      ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod, \
-     MethodCall, FunctionCall, LiveObject
+     MethodCall, FunctionCall, LiveObject, wrap_call_arguments, \
+     wrap_object
 from pythoscope.util import read_file_contents, get_last_modification_time
 
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
@@ -32,9 +33,9 @@ def ClassWithMethods(classname, methods, exit_point='output'):
         method_objects.append(method)
         for input, output in calls:
             if exit_point == 'output':
-                method_calls.append(MethodCall(method, input, output=output))
+                method_calls.append(MethodCall(method, wrap_call_arguments(input), output=wrap_object(output)))
             elif exit_point == 'exception':
-                method_calls.append(MethodCall(method, input, exception=output))
+                method_calls.append(MethodCall(method, wrap_call_arguments(input), exception=wrap_object(output())))
 
     klass = Class(classname, methods=method_objects)
     live_object = LiveObject(12345, klass, None)
@@ -46,7 +47,7 @@ def ClassWithMethods(classname, methods, exit_point='output'):
 def FunctionWithCalls(funcname, calls):
     poe = PointOfEntryMock()
     function = Function(funcname)
-    function.calls = [FunctionCall(poe, function, i, o) for (i,o) in calls]
+    function.calls = [FunctionCall(poe, function, wrap_call_arguments(i), wrap_object(o)) for (i,o) in calls]
     return function
 
 def FunctionWithSingleCall(funcname, input, output):
@@ -55,7 +56,7 @@ def FunctionWithSingleCall(funcname, input, output):
 def FunctionWithExceptions(funcname, calls):
     poe = PointOfEntryMock()
     function = Function(funcname)
-    function.calls = [FunctionCall(poe, function, i, exception=e) for (i,e) in calls]
+    function.calls = [FunctionCall(poe, function, wrap_call_arguments(i), exception=wrap_object(e())) for (i,e) in calls]
     return function
 
 def FunctionWithSingleException(funcname, input, exception):
@@ -266,7 +267,7 @@ class TestGenerator:
         live_object = klass.live_objects[12345]
         method_call = live_object.calls[0]
 
-        subcall = MethodCall(Method('private'), {'argument': 2}, False)
+        subcall = MethodCall(Method('private'), {'argument': wrap_object(2)}, wrap_object(False))
         method_call.add_subcall(subcall)
         live_object.add_call(subcall)
 

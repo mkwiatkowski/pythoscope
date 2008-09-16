@@ -28,18 +28,18 @@ class CallStack(object):
     def returned(self, output):
         if self.stack:
             caller = self.stack.pop()
-            caller.output = output
+            caller.set_output(output)
 
             # If the last exception is reported by sys.exc_info() it means
             # it was handled inside the returning call.
             handled_traceback = sys.exc_info()[2]
             if handled_traceback is self.last_traceback:
-                caller.exception = None
+                caller.clear_exception()
 
     def raised(self, exception, traceback):
         if self.stack:
             caller = self.stack[-1]
-            caller.exception = exception
+            caller.set_exception(exception)
             self.last_traceback = traceback
 
 def compact(list):
@@ -179,7 +179,7 @@ def tracer(frame, event, arg):
     elif event == 'return':
         _call_stack.returned(arg)
     elif event == 'exception':
-        _call_stack.raised(arg[0], arg[2])
+        _call_stack.raised(arg[1], arg[2])
 
 def start_tracing():
     sys.settrace(tracer)

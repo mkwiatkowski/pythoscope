@@ -3,22 +3,41 @@ import re
 
 from astvisitor import EmptyCode, descend, parse, ASTVisitor
 from store import Class, Function, TestClass, TestMethod, ModuleNotFound, \
-     LiveObject, MethodCall, Method
+     LiveObject, MethodCall, Method, Value, Type, Repr
 from util import camelize, underscore, sorted
 
 
-def constructor_as_string(object):
-    """For a given object return a string representing a code that will
-    construct it.
+class ValueNeeded(Exception):
+    pass
 
-    >>> constructor_as_string(123)
+def exception_as_string(exception):
+    """Return a name of this wrapped exception class.
+
+    >>> exception_as_string(Value(TypeError()))
+    'TypeError'
+    >>> exception_as_string(Type(TypeError()))
+    'TypeError'
+    """
+    if isinstance(exception, Value):
+        exctype = exception.value.__class__
+    elif isinstance(exception, Type):
+        exctype = exception.type
+    else:
+        raise ValueNeeded()
+    return exctype.__name__
+
+def constructor_as_string(object):
+    """For a given object (either ObjectWrapper or a LiveObject instance) return
+    a string representing a code that will construct it.
+
+    >>> constructor_as_string(Value(123))
     '123'
-    >>> constructor_as_string('string')
+    >>> constructor_as_string(Value('string'))
     "'string'"
     >>> obj = LiveObject(None, Class('SomeClass'), None)
     >>> constructor_as_string(obj)
     'SomeClass()'
-    >>> obj.add_call(MethodCall(Method('__init__'), {'arg': 'whatever'}, None))
+    >>> obj.add_call(MethodCall(Method('__init__'), {'arg': Value('whatever')}, None))
     >>> constructor_as_string(obj)
     "SomeClass(arg='whatever')"
     """
@@ -29,39 +48,53 @@ def constructor_as_string(object):
         if init_call:
             args = init_call.input
         return call_as_string(object.klass.name, args)
-    return repr(object)
+    elif isinstance(object, Value):
+        return repr(object.value)
+    else:
+        raise ValueNeeded()
 
 def call_as_string(object_name, input):
     """Generate code for calling an object with given input.
 
-    >>> call_as_string('fun', {'a': 1, 'b': 2})
+    >>> call_as_string('fun', {'a': Value(1), 'b': Value(2)})
     'fun(a=1, b=2)'
-    >>> call_as_string('capitalize', {'str': 'string'})
+    >>> call_as_string('capitalize', {'str': Value('string')})
     "capitalize(str='string')"
     """
-    return "%s(%s)" % (object_name, ', '.join(["%s=%s" % (arg, constructor_as_string(value)) for arg, value in input.iteritems()]))
+    arguments = []
+    for arg, value in input.iteritems():
+        arguments.append("%s=%s" % (arg, constructor_as_string(value)))
+    return "%s(%s)" % (object_name, ', '.join(arguments))
+
+def string2id(string):
+    """Remove from string all characters that cannot be used in an identifier.
+    """
+    return re.sub(r'[^a-zA-Z0-9_]', '', re.sub(r'\s+', '_', string.strip()))
 
 def object2id(object):
     """Convert object to string that can be used as an identifier.
     """
-    if object is True:
-        return 'true'
-    elif object is False:
-        return 'false'
-    return re.sub(r'[^a-zA-Z0-9_]', '', re.sub(r'\s+', '_', str(object).strip()))
-
-def exception2id(exception):
-    """Convert given exception class into a string that can be used as an
-    identifier,
-    """
-    return underscore(exception.__name__)
+    if isinstance(object, Value):
+        if object.value is True:
+            return 'true'
+        elif object.value is False:
+            return 'false'
+        elif isinstance(object.value, Exception):
+            return underscore(exception_as_string(object))
+        return string2id(str(object.value))
+    elif isinstance(object, Type):
+        return underscore(object.type.__name__)
+    elif isinstance(object, Repr):
+        return string2id(object.repr)
+    else:
+        raise TypeError("object2id() should be called with a ObjectWrapper argument, not %s" % object)
 
 def input_as_string(input):
     """Generate an underscored description of given input arguments.
 
     >>> input_as_string({})
     ''
-    >>> input_as_string({'x': 7, 'y': 13})
+    >>> input_as_string({'x': Value(7), 'y': Value(13)})
     'x_equal_7_and_y_equal_13'
     """
     if len(input) == 1:
@@ -72,25 +105,25 @@ def input_as_string(input):
 def call2testname(object_name, input, output):
     """Generate a test method name that describes given object call.
 
-    >>> call2testname('do_this', {}, True)
+    >>> call2testname('do_this', {}, Value(True))
     'test_do_this_returns_true'
-    >>> call2testname('compute', {}, 'whatever you say')
+    >>> call2testname('compute', {}, Value('whatever you say'))
     'test_compute_returns_whatever_you_say'
-    >>> call2testname('square', {'x': 7}, 49)
+    >>> call2testname('square', {'x': Value(7)}, Value(49))
     'test_square_returns_49_for_7'
-    >>> call2testname('capitalize', {'str': 'a word.'}, 'A word.')
+    >>> call2testname('capitalize', {'str': Value('a word.')}, Value('A word.'))
     'test_capitalize_returns_A_word_for_a_word'
 
     Two or more arguments are mentioned by name.
-        >>> call2testname('ackermann', {'m': 3, 'n': 2}, 29)
+        >>> call2testname('ackermann', {'m': Value(3), 'n': Value(2)}, Value(29))
         'test_ackermann_returns_29_for_m_equal_3_and_n_equal_2'
 
     Will sort arguments alphabetically.
-        >>> call2testname('concat', {'s1': 'Hello ', 's2': 'world!'}, 'Hello world!')
+        >>> call2testname('concat', {'s1': Value('Hello '), 's2': Value('world!')}, Value('Hello world!'))
         'test_concat_returns_Hello_world_for_s1_equal_Hello_and_s2_equal_world'
 
     Always starts and ends a word with a letter or number.
-        >>> call2testname('strip', {'n': 1, 's': '  A bit of whitespace  '}, ' A bit of whitespace ')
+        >>> call2testname('strip', {'n': Value(1), 's': Value('  A bit of whitespace  ')}, Value(' A bit of whitespace '))
         'test_strip_returns_A_bit_of_whitespace_for_n_equal_1_and_s_equal_A_bit_of_whitespace'
     """
     if input:
@@ -103,15 +136,15 @@ def exccall2testname(object_name, input, exception):
     """Generate a test method name that describes given object call raising
     an exception.
 
-    >>> exccall2testname('do_this', {}, Exception)
+    >>> exccall2testname('do_this', {}, Type(Exception()))
     'test_do_this_raises_exception'
-    >>> exccall2testname('square', {'x': 'a string'}, TypeError)
+    >>> exccall2testname('square', {'x': Value('a string')}, Type(TypeError()))
     'test_square_raises_type_error_for_a_string'
     """
     if input:
-        call_description = "%s_for_%s" % (exception2id(exception), input_as_string(input))
+        call_description = "%s_for_%s" % (object2id(exception), input_as_string(input))
     else:
-        call_description = exception2id(exception)
+        call_description = object2id(exception)
     return "test_%s_raises_%s" % (underscore(object_name), call_description)
 
 def sorted_test_method_descriptions(descriptions):
@@ -132,7 +165,7 @@ def method_descriptions_from_function(function):
     for call in function.get_unique_calls():
         if call.raised_exception():
             name = exccall2testname(function.name, call.input, call.exception)
-            assertions = [('raises', call.exception.__name__,
+            assertions = [('raises', exception_as_string(call.exception),
                            in_lambda(call_as_string(function.name, call.input)))]
         else:
             name = call2testname(function.name, call.input, call.output)
@@ -149,7 +182,7 @@ def method_description_from_live_object(live_object):
         if len(external_calls) == 0 and init_call:
             test_name = "test_creation_with_%s" % input_as_string(init_call.input)
             if init_call.raised_exception():
-                test_name += "_raises_%s" % exception2id(init_call.exception)
+                test_name += "_raises_%s" % object2id(init_call.exception)
         elif len(external_calls) == 1:
             call = external_calls[0]
             if call.raised_exception():
@@ -167,7 +200,7 @@ def method_description_from_live_object(live_object):
         if init_call and len(external_calls) == 0:
             # If the constructor raised an exception, object creation should be an assertion.
             if init_call.raised_exception():
-                yield(('raises', init_call.exception.__name__,
+                yield(('raises', exception_as_string(init_call.exception),
                        in_lambda(constructor_as_string(live_object))))
             else:
                 yield(('comment', "# Make sure it doesn't raise any exceptions."))
@@ -175,7 +208,7 @@ def method_description_from_live_object(live_object):
         for call in external_calls:
             name = "%s.%s" % (local_name, call.callable.name)
             if call.raised_exception():
-                yield(('raises', call.exception.__name__,
+                yield(('raises', exception_as_string(call.exception),
                        in_lambda(call_as_string(name, call.input))))
             else:
                 yield(('equal', constructor_as_string(call.output),

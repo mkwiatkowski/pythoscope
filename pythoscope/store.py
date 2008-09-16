@@ -2,6 +2,7 @@ import os
 import pickle
 import re
 import time
+import types
 
 from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
      get_starting_whitespace, is_node_of_type, regenerate, \
@@ -331,6 +332,78 @@ class Project(object):
         except ModuleNotFound:
             pass
 
+class ObjectWrapper(object):
+    pass
+
+class Value(ObjectWrapper):
+    """Wrapper of an object, which can be pickled, so we can save its real
+    value.
+    """
+    def __init__(self, object):
+        self.value = object
+
+    def __eq__(self, other):
+        return isinstance(other, Value) and self.value == other.value
+
+    def __hash__(self):
+        return hash(self.value)
+
+    def __repr__(self):
+        return "Value(%r)" % self.value
+
+class Type(ObjectWrapper):
+    """Placeholder for an object that cannot be pickled, thus have to be
+    remembered as type only.
+    """
+    def __init__(self, object):
+        self.type = type(object)
+
+    def __eq__(self, other):
+        return isinstance(other, Type) and self.type == other.type
+
+    def __hash__(self):
+        return hash(self.type)
+
+    def __repr__(self):
+        return "Type(%r)" % self.type
+
+class Repr(ObjectWrapper):
+    """Placeholder for an object which cannot be pickled and which type
+    cannot be pickled as well, so it is remembered as its string representation
+    only.
+    """
+    def __init__(self, object):
+        self.repr = repr(object)
+
+    def __eq__(self, other):
+        return isinstance(other, Repr) and self.repr == other.repr
+
+    def __hash__(self):
+        return hash(self.repr)
+
+    def __repr__(self):
+        return "Repr(%s)" % self.repr
+
+def is_pickable(object):
+    if isinstance(object, types.FunctionType):
+        return False
+    # TODO: handle more cases
+    return True
+
+def wrap_object(object):
+    if is_pickable(object):
+        return Value(object)
+    elif is_pickable(type(object)):
+        return Type(object)
+    else:
+        return Repr(object)
+
+def wrap_call_arguments(input):
+    new_input = {}
+    for key, value in input.iteritems():
+        new_input[key] = wrap_object(value)
+    return new_input
+
 class Call(object):
     """Stores information about a single function or method call.
 
@@ -345,10 +418,13 @@ class Call(object):
     and LiveObject.get_external_calls().
     """
     def __init__(self, callable, input, output=None, exception=None):
+        if [value for value in input.values() if not isinstance(value, ObjectWrapper)]:
+            raise ValueError("All input values should be instances of ObjectWrapper class.")
+        if output and exception:
+            raise ValueError("Call should have a single point of return.")
+
         self.callable = callable
         self.input = input
-        if output and exception:
-            raise ValueError("Call shouldn't have a single point of return.")
         self.output = output
         self.exception = exception
 
@@ -363,6 +439,15 @@ class Call(object):
 
     def raised_exception(self):
         return self.exception is not None
+
+    def set_output(self, output):
+        self.output = wrap_object(output)
+
+    def set_exception(self, exception):
+        self.exception = wrap_object(exception)
+
+    def clear_exception(self):
+        self.exception = None
 
     def __eq__(self, other):
         return self.callable == other.callable and \
@@ -827,7 +912,7 @@ class PointOfEntry(object):
         if not method:
             return
 
-        call = MethodCall(method, input)
+        call = MethodCall(method, wrap_call_arguments(input))
 
         try:
             live_object = klass.live_objects[id(object)]
@@ -843,7 +928,7 @@ class PointOfEntry(object):
         function = self.project.find_function(name, modulepath)
 
         if function:
-            call = FunctionCall(self, function, input)
+            call = FunctionCall(self, function, wrap_call_arguments(input))
             function.add_call(call)
             return call
 

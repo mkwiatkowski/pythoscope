@@ -1,11 +1,13 @@
 import sys
+import types
 
 from nose.tools import assert_equal
 from nose.plugins.skip import SkipTest
 
 from pythoscope.inspector.dynamic import trace_function, trace_exec, \
      inspect_point_of_entry, setup_tracing, teardown_tracing
-from pythoscope.store import Class, Function, Method, LiveObject
+from pythoscope.store import Class, Function, Method, LiveObject, \
+     wrap_call_arguments, wrap_object, Type
 from pythoscope.util import findfirst
 
 from helper import TestableProject, assert_length, PointOfEntryMock, \
@@ -57,14 +59,14 @@ class ProjectMock(object):
         return list(self.iter_callables())
 
 def assert_call(expected_input, expected_output, call):
-    assert_equal(expected_input, call.input)
-    assert call.exception is None
-    assert_equal(expected_output, call.output)
+    assert_equal(wrap_call_arguments(expected_input), call.input)
+    assert not call.raised_exception()
+    assert_equal(wrap_object(expected_output), call.output)
 
-def assert_call_with_exception(expected_input, expected_exception, call):
-    assert_equal(expected_input, call.input)
-    assert call.output is None
-    assert_equal(expected_exception, call.exception)
+def assert_call_with_exception(expected_input, expected_exception_type, call):
+    assert_equal(wrap_call_arguments(expected_input), call.input)
+    assert call.raised_exception()
+    assert_equal(expected_exception_type, type(call.exception.value))
 
 def call_graph_as_string(call_or_calls, indentation=0):
     def lines(call):
@@ -269,6 +271,11 @@ def function_handling_other_function_exception():
             return other_function(int(number))
     function("123")
 
+def function_returning_function():
+    def function(x):
+        return lambda y: x + y
+    function(13)
+
 class DynamicInspectorTest:
     def _collect_callables(self, fun):
         if isinstance(fun, str):
@@ -470,6 +477,14 @@ class TestTraceFunction(DynamicInspectorTest):
         assert_call_with_exception({'x': "123"}, TypeError, other_function.calls[0])
         assert_call({'x': 123}, 124, other_function.calls[1])
         assert_call({'number': "123"}, 124, function.calls[0])
+
+    def test_saves_function_objects_as_types(self):
+        trace = self._collect_callables(function_returning_function)
+        function = trace.pop()
+        call = function.calls[0]
+
+        assert_equal(Type, type(call.output))
+        assert_equal(types.FunctionType, call.output.type)
 
 class TestTraceExec(DynamicInspectorTest):
     "trace_exec"
