@@ -161,6 +161,10 @@ class Project(object):
         pickle.dump(self, fd)
         fd.close()
 
+    def find_module_by_full_path(self, path):
+        subpath = self._extract_subpath(path)
+        return self[subpath]
+
     def create_module(self, path, **kwds):
         """Create a module for this project located under given path.
 
@@ -753,6 +757,9 @@ class Localizable(object):
         """Is the object out of sync with its file.
         """
         return get_last_modification_time(self.get_path()) > self.created
+
+    def is_up_to_date(self):
+        return not self.is_out_of_sync()
 
     def get_path(self):
         """Return the full path to the file.

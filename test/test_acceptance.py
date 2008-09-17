@@ -40,6 +40,11 @@ class TestAppendingTestClasses:
         # Analyze the project with an existing test module.
         inspect_project(project)
 
+        # Filesystem stat has resolution of 1 second, and we don't want to
+        # sleep in a test, so we just fake the original files creation time.
+        project["module"].created = 0
+        project["test_module"].created = 0
+
         # Modify the application module and analyze it again.
         project.path.putfile("module.py", read_data(modified_input))
         inspect_project(project)

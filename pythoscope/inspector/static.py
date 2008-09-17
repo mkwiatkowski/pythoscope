@@ -81,5 +81,5 @@ def inspect_code(project, path, code):
         test_class.main_snippet = visitor.main_snippet
 
     return project.create_module(path, code=tree, objects=visitor.objects,
-                              imports=visitor.imports,
-                              main_snippet=visitor.main_snippet)
+                                 imports=visitor.imports,
+                                 main_snippet=visitor.main_snippet)
