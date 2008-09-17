@@ -168,10 +168,18 @@ class Project(object):
     def create_module(self, path, **kwds):
         """Create a module for this project located under given path.
 
+        If there already was a module with given subpath, it will get replaced
+        with a new instance using the _replace_references_to_module method.
+
         Returns the new Module object.
         """
         module = Module(subpath=self._extract_subpath(path), project=self, **kwds)
+
+        if module.subpath in self._modules.keys():
+            self._replace_references_to_module(module)
+
         self._modules[module.subpath] = module
+
         return module
 
     def remove_module(self, subpath):
@@ -185,6 +193,18 @@ class Project(object):
             except ValueError:
                 pass
         del self._modules[subpath]
+
+    def _replace_references_to_module(self, module):
+        """Remove a module with the same subpath as given module from this
+        Project and replace all references to it with the new instance.
+        """
+        old_module = self[module.subpath]
+        for test_case in self.iter_test_cases():
+            try:
+                test_case.associated_modules.remove(old_module)
+                test_case.associated_modules.append(module)
+            except ValueError:
+                pass        
 
     def _extract_point_of_entry_subpath(self, path):
         """Takes the file path and returns subpath relative to the
@@ -687,8 +707,6 @@ class TestClass(TestSuite):
     """
     allowed_test_case_classes = [TestMethod]
 
-    # TODO: what happens when a modules inside associated_modules list gets
-    # replaced with a new one?
     def __init__(self, name, code=None, parent=None, test_cases=[],
                  imports=None, main_snippet=None, associated_modules=None):
         TestSuite.__init__(self, name, code, parent, test_cases)

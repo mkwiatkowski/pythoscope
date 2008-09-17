@@ -60,13 +60,23 @@ class TestProject:
 
     def test_replaces_old_module_objects_with_new_ones_during_create_module(self):
         paths = ["module.py", "sub/dir/module.py", "other/module.py"]
-        new_module_path = "other/module.py"
-
         project = ProjectWithModules(paths)
-        new_module = project.create_module(new_module_path)
+
+        new_module = project.create_module("other/module.py")
 
         assert_length(project.get_modules(), 3)
         assert project["other/module.py"] is new_module
+
+    def test_replaces_module_instance_in_test_cases_associated_modules_during_module_replacement(self):
+        paths = ["module.py", "sub/dir/module.py", "other/module.py"]
+        project = ProjectWithModules(paths)
+        test_class = TestClass(name='TestAnything', associated_modules=[project["other/module.py"]])
+        project.add_test_case(test_class)
+
+        new_module = project.create_module("other/module.py")
+
+        assert_length(test_class.associated_modules, 1)
+        assert test_class.associated_modules[0] is new_module
 
     def test_adds_new_test_methods_to_existing_test_classes_inside_application_modules(self):
         project = EmptyProject()
