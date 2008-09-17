@@ -388,6 +388,8 @@ class TestGenerator(object):
         init_call = live_object.get_init_call()
         external_calls = live_object.get_external_calls()
         local_name = underscore(live_object.klass.name)
+        constructor = constructor_as_string(live_object)
+        stub_all = constructor.uncomplete
 
         def test_name():
             if len(external_calls) == 0 and init_call:
@@ -418,28 +420,33 @@ class TestGenerator(object):
     
             for call in external_calls:
                 name = "%s.%s" % (local_name, call.callable.name)
-                yield(self._create_assertion(name, call))
+                yield(self._create_assertion(name, call, stub_all))
 
         def setup():
             if init_call and init_call.raised_exception():
                 return ""
             else:
-                constructor = constructor_as_string(live_object)
                 setup = "%s = %s\n" % (local_name, constructor)
                 # Comment out the constructor if it isn't complete.
-                if constructor.uncomplete:
+                if stub_all:
                     setup = "# %s" % setup
                 return setup
 
         return TestMethodDescription(test_name(), assertions(), setup())
 
-    def _create_assertion(self, name, call):
+    def _create_assertion(self, name, call, stub=False):
+        """Create a new assertion based on a given call and a name provided
+        for it.
+
+        Generated assertion will be a stub if input of a call cannot be
+        constructed or if stub argument is True.
+        """
         input = call_as_string(name, call.input)
 
         if call.raised_exception():
             return ('raises', exception_as_string(call.exception), in_lambda(input))
         else:
-            if input.uncomplete:
+            if input.uncomplete or stub:
                 assertion_type = 'equal_stub'
             else:
                 assertion_type = 'equal'
