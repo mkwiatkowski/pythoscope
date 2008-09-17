@@ -85,7 +85,7 @@ def init_project(path):
         os.makedirs(pythoscope_path)
         os.makedirs(get_points_of_entry_path(path))
     except OSError, err:
-        print "Couldn't initialize Pythoscope directory: %s." % err.strerror
+        print "Error: Couldn't initialize Pythoscope directory: %s." % err.strerror
 
 def generate_tests(modules, force, template):
     try:
@@ -136,15 +136,20 @@ def main():
         elif opt in ("-t", "--template"):
             template = value
 
-    if init:
-        if args:
-            project_path = args[0]
+    try:
+        if init:
+            if args:
+                project_path = args[0]
+            else:
+                project_path = "."
+            init_project(project_path)
         else:
-            project_path = "."
-        init_project(project_path)
-    else:
-        if not args:
-            print "Error: You didn't specify any module to generate tests for.\n"
-            print USAGE % appname
-        else:
-            generate_tests(args, force, template)
+            if not args:
+                print "Error: You didn't specify any module to generate tests for.\n"
+                print USAGE % appname
+            else:
+                generate_tests(args, force, template)
+    except:
+        print "Ups, it seems internal Pythoscope error occured. Please file a bug report at https://bugs.launchpad.net/pythoscope"
+        print
+        raise
