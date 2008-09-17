@@ -55,7 +55,16 @@ def exception_as_string(exception):
     """
     return unwrap_type(exception).__name__
 
-# :: ObjectWrapper -> string
+class CallString(str):
+    """A string that holds information on whether it is a complete call
+    or just a template.
+    """
+    def __new__(cls, string, uncomplete=False):
+        call_string = str.__new__(cls, string)
+        call_string.uncomplete = uncomplete
+        return call_string
+
+# :: ObjectWrapper | LiveObject -> CallString
 def constructor_as_string(object):
     """For a given object (either ObjectWrapper or a LiveObject instance) return
     a string representing a code that will construct it.
@@ -79,10 +88,15 @@ def constructor_as_string(object):
             args = init_call.input
         return call_as_string(object.klass.name, args)
     elif isinstance(object, Value):
-        return repr(object.value)
+        return CallString(repr(object.value))
+    elif isinstance(object, Type):
+        return CallString("<TODO: %s>" % object.type.__name__, uncomplete=True)
+    elif isinstance(object, Repr):
+        return CallString("<TODO: %s>" % object.repr)
     else:
-        raise ValueNeeded()
+        raise TypeError("constructor_as_string expected ObjectWrapper or LiveObject object at input, not %s" % object)
 
+# :: (string, dict) -> CallString
 def call_as_string(object_name, input):
     """Generate code for calling an object with given input.
 
@@ -90,12 +104,21 @@ def call_as_string(object_name, input):
     'fun(a=1, b=2)'
     >>> call_as_string('capitalize', {'str': Value('string')})
     "capitalize(str='string')"
+    >>> result = call_as_string('map', {'f': Type(lambda x: 42), 'L': Value([1,2,3])})
+    >>> result
+    'map(L=[1, 2, 3], f=<TODO: function>)'
+    >>> result.uncomplete
+    True
     """
     arguments = []
+    uncomplete = False
     for arg, value in input.iteritems():
-        arguments.append("%s=%s" % (arg, constructor_as_string(value)))
-    return "%s(%s)" % (object_name, ', '.join(arguments))
+        constructor = constructor_as_string(value)
+        uncomplete = uncomplete or constructor.uncomplete
+        arguments.append("%s=%s" % (arg, constructor))
+    return CallString("%s(%s)" % (object_name, ', '.join(arguments)), uncomplete)
 
+# :: string -> string
 def string2id(string):
     """Remove from string all characters that cannot be used in an identifier.
     """
@@ -225,6 +248,12 @@ class TestMethodDescription(object):
         self.assertions = assertions
         self.setup = setup
 
+    def contains_code(self):
+        return self.setup or self._get_code_assertions()
+
+    def _get_code_assertions(self):
+        return [a for a in self.assertions if a[0] in ['equal', 'raises']]
+
 class TestGenerator(object):
     main_snippet = EmptyCode()
 
@@ -259,6 +288,9 @@ class TestGenerator(object):
                 for assertion in method_description.assertions:
                     apply_template = getattr(self, "%s_assertion" % assertion[0])
                     result += "        %s\n" % apply_template(*assertion[1:])
+                # We need at least one statement in a method to be syntatically correct.
+                if not method_description.contains_code():
+                    result += "        pass\n"
                 result += "\n"
             else:
                 result += "    def %s(self):\n" % method_description.name
@@ -267,6 +299,9 @@ class TestGenerator(object):
 
     def comment_assertion(self, comment):
         return comment
+
+    def equal_stub_assertion(self, expected, actual):
+        return "# %s" % self.equal_assertion(expected, actual)
 
     def _add_tests_for_module(self, module, project, force):
         for test_case in self._generate_test_cases(module):
@@ -337,21 +372,13 @@ class TestGenerator(object):
 
     def _method_descriptions_from_function(self, function):
         for call in function.get_unique_calls():
+            assertions = [self._create_assertion(function.name, call)]
+
             if call.raised_exception():
                 name = exccall2testname(function.name, call.input, call.exception)
-                assertions = [('raises', exception_as_string(call.exception),
-                               in_lambda(call_as_string(function.name, call.input)))]
             else:
                 name = call2testname(function.name, call.input, call.output)
-                if call.output.can_be_constructed:
-                    assertions = [('equal', constructor_as_string(call.output),
-                                   call_as_string(function.name, call.input))]
-                else:
-                    # If we can't test for real values, let's at least test for the right type.
-                    output_type = type_as_string(call.output)
-                    self.ensure_import('types')
-                    assertions = [('equal', output_type,
-                                   type_of(call_as_string(function.name, call.input)))]
+
             yield TestMethodDescription(name, assertions)
 
     def _method_description_from_live_object(self, live_object):
@@ -388,12 +415,7 @@ class TestGenerator(object):
     
             for call in external_calls:
                 name = "%s.%s" % (local_name, call.callable.name)
-                if call.raised_exception():
-                    yield(('raises', exception_as_string(call.exception),
-                           in_lambda(call_as_string(name, call.input))))
-                else:
-                    yield(('equal', constructor_as_string(call.output),
-                           call_as_string(name, call.input)))
+                yield(self._create_assertion(name, call))
 
         def setup():
             if init_call and init_call.raised_exception():
@@ -402,6 +424,25 @@ class TestGenerator(object):
                 return "%s = %s\n" % (local_name, constructor_as_string(live_object))
 
         return TestMethodDescription(test_name(), assertions(), setup())
+
+    def _create_assertion(self, name, call):
+        input = call_as_string(name, call.input)
+
+        if call.raised_exception():
+            return ('raises', exception_as_string(call.exception), in_lambda(input))
+        else:
+            if input.uncomplete:
+                assertion_type = 'equal_stub'
+            else:
+                assertion_type = 'equal'
+
+            if call.output.can_be_constructed:
+                return (assertion_type, constructor_as_string(call.output), input)
+            else:
+                # If we can't test for real values, let's at least test for the right type.
+                output_type = type_as_string(call.output)
+                self.ensure_import('types')
+                return (assertion_type, output_type, type_of(input))
 
 class UnittestTestGenerator(TestGenerator):
     main_snippet = parse("if __name__ == '__main__':\n    unittest.main()\n")
