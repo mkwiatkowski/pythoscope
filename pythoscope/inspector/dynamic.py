@@ -175,7 +175,7 @@ def tracer(frame, event, arg):
             call = create_call(frame)
             if call:
                 _call_stack.called(call)
-            return tracer
+                return tracer
     elif event == 'return':
         _call_stack.returned(arg)
     elif event == 'exception':

@@ -31,7 +31,8 @@ class ProjectMock(object):
     """Project that has all the classes and functions you try to find inside it
     via find_class() and find_function().
     """
-    def __init__(self):
+    def __init__(self, ignored_functions=[]):
+        self.ignored_functions = ignored_functions
         self.path = "."
         self._classes = {}
         self._functions = {}
@@ -43,6 +44,8 @@ class ProjectMock(object):
         return self._classes[class_id]
 
     def find_function(self, name, modulepath):
+        if name in self.ignored_functions:
+            return None
         function_id = (name, modulepath)
         if not self._functions.has_key(function_id):
             self._functions[function_id] = Function(name)
@@ -276,14 +279,23 @@ def function_returning_function():
         return lambda y: x + y
     function(13)
 
+def function_with_ignored_function():
+    def not_ignored_inner(x):
+        return x + 1
+    def ignored(y):
+        return not_ignored_inner(y*2)
+    def not_ignored_outer(z):
+        return ignored(z-1) * 3
+    not_ignored_outer(13)
+
 class DynamicInspectorTest:
-    def _collect_callables(self, fun):
+    def _collect_callables(self, fun, ignored_functions=[]):
         if isinstance(fun, str):
             trace = trace_exec
         else:
             trace = trace_function
 
-        self.project = ProjectMock()
+        self.project = ProjectMock(ignored_functions)
         self.poe = PointOfEntryMock(project=self.project)
 
         setup_tracing(self.poe)
@@ -485,6 +497,20 @@ class TestTraceFunction(DynamicInspectorTest):
 
         assert_equal(Type, type(call.output))
         assert_equal(types.FunctionType, call.output.type)
+
+    def test_correctly_recognizes_interleaved_ignored_and_traced_calls(self):
+        trace = self._collect_callables(function_with_ignored_function, ['ignored'])
+
+        assert_length(trace, 2)
+
+        outer_function = findfirst(lambda f: f.name == "not_ignored_outer", trace)
+        inner_function = findfirst(lambda f: f.name == "not_ignored_inner", trace)
+
+        assert_length(outer_function.calls, 1)
+        assert_length(inner_function.calls, 1)
+
+        assert_call({'z': 13}, 75, outer_function.calls[0])
+        assert_call({'x': 24}, 25, inner_function.calls[0])
 
 class TestTraceExec(DynamicInspectorTest):
     "trace_exec"
