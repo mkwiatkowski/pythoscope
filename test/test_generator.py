@@ -364,6 +364,14 @@ class TestGenerator:
         assert_contains(result, "def test_highest_returns_function_for_function(self):")
         assert_contains(result, "# self.assertEqual(types.FunctionType, type(highest(f=<TODO: function>)))")
 
+    def test_generates_assert_raises_test_stub_for_functions_which_take_functions_as_arguments(self):
+        function = FunctionWithSingleException('high', {'f': lambda: 42}, NotImplementedError)
+
+        result = generate_single_test_module(objects=[function])
+
+        assert_contains(result, "def test_high_raises_not_implemented_error_for_function(self):")
+        assert_contains(result, "# self.assertRaises(NotImplementedError, lambda: high(f=<TODO: function>))")
+
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
         self.project = TestableProject()
