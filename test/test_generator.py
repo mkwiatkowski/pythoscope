@@ -287,6 +287,15 @@ class TestGenerator:
         assert_contains(result, "# Make sure it doesn't raise any exceptions.")
         assert_doesnt_contain(result, "assert False")
 
+    def test_generates_object_creation_stub_for_init_with_uncomplete_arguments(self):
+        klass = ClassWithMethods('Something', [('__init__', [({'param': lambda: 42}, None)])])
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_creation_with_function(self):")
+        assert_contains(result, "# something = Something(param=<TODO: function>)")
+        assert_contains(result, "# Make sure it doesn't raise any exceptions.")
+
     def test_generates_assert_raises_for_functions_with_exceptions(self):
         function = FunctionWithSingleException('square', {'x': 'hello'}, TypeError)
 

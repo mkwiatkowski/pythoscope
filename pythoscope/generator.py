@@ -249,10 +249,13 @@ class TestMethodDescription(object):
         self.setup = setup
 
     def contains_code(self):
-        return self.setup or self._get_code_assertions()
+        return self._has_complete_setup() or self._get_code_assertions()
 
     def _get_code_assertions(self):
         return [a for a in self.assertions if a[0] in ['equal', 'raises']]
+
+    def _has_complete_setup(self):
+        return self.setup and not self.setup.startswith("#")
 
 class TestGenerator(object):
     main_snippet = EmptyCode()
@@ -421,7 +424,12 @@ class TestGenerator(object):
             if init_call and init_call.raised_exception():
                 return ""
             else:
-                return "%s = %s\n" % (local_name, constructor_as_string(live_object))
+                constructor = constructor_as_string(live_object)
+                setup = "%s = %s\n" % (local_name, constructor)
+                # Comment out the constructor if it isn't complete.
+                if constructor.uncomplete:
+                    setup = "# %s" % setup
+                return setup
 
         return TestMethodDescription(test_name(), assertions(), setup())
 
