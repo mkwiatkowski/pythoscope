@@ -10,7 +10,7 @@ from pythoscope.generator import add_tests_to_project
 from pythoscope.store import Project, Module, Class, Method, Function, \
      ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod, \
      MethodCall, FunctionCall, LiveObject, wrap_call_arguments, \
-     wrap_object
+     wrap_object, PointOfEntry
 from pythoscope.util import read_file_contents, get_last_modification_time
 
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
@@ -38,7 +38,7 @@ def ClassWithMethods(classname, methods, exit_point='output'):
                 method_calls.append(MethodCall(method, wrap_call_arguments(input), exception=wrap_object(output())))
 
     klass = Class(classname, methods=method_objects)
-    live_object = LiveObject(12345, klass, None)
+    live_object = LiveObject(12345, klass, PointOfEntry(None, 'poe'))
     live_object.calls = method_calls
     klass.add_live_object(live_object)
 
@@ -264,7 +264,7 @@ class TestGenerator:
 
     def test_ignores_internal_object_calls(self):
         klass = ClassWithMethods('Something', [('method', [({'argument': 1}, 'result')])])
-        live_object = klass.live_objects[12345]
+        live_object = klass.live_objects[('poe', 12345)]
         method_call = live_object.calls[0]
 
         subcall = MethodCall(Method('private'), {'argument': wrap_object(2)}, wrap_object(False))

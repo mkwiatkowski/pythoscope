@@ -526,11 +526,18 @@ class Method(Definition):
 class LiveObject(Callable):
     """Representation of an object which creation and usage was traced
     during dynamic inspection.
+
+    Note that the LiveObject.id is only unique to a given point of entry.
+    In other words, it is possible to have two points of entry holding
+    separate live objects with the same id. Use LiveObject.unique_id for
+    identification purposes.
     """
     def __init__(self, id, klass, point_of_entry):
         self.id = id
         self.klass = klass
         self.point_of_entry = point_of_entry
+
+        self.unique_id = (point_of_entry.name, id)
         self.calls = []
 
     def add_call(self, call):
@@ -560,7 +567,6 @@ class Class(object):
         self.name = name
         self.methods = methods
         self.bases = bases
-        # TODO: identify live objects by id *and* point of entry.
         self.live_objects = {}
 
     def is_testable(self):
@@ -571,7 +577,7 @@ class Class(object):
         return True
 
     def add_live_object(self, live_object):
-        self.live_objects[live_object.id] = live_object
+        self.live_objects[live_object.unique_id] = live_object
 
     def remove_live_objects_from(self, point_of_entry):
         for id, live_object in self.live_objects.iteritems():
@@ -925,7 +931,7 @@ class PointOfEntry(object):
         call = MethodCall(method, wrap_call_arguments(input))
 
         try:
-            live_object = klass.live_objects[id(object)]
+            live_object = klass.live_objects[(self.name, id(object))]
         except KeyError:
             live_object = LiveObject(id(object), klass, self)
             klass.add_live_object(live_object)
