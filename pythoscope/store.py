@@ -122,7 +122,7 @@ class Project(object):
 
     def __init__(self, path):
         self.path = path
-        self.new_tests_directory = "pythoscope-tests"
+        self.new_tests_directory = "tests"
         self.points_of_entry = {}
         self._modules = {}
 

@@ -82,7 +82,7 @@ class CustomSeparator:
 def EmptyProject():
     project = Project(path=os.path.realpath("."))
     # Preserve the default value.
-    project.new_tests_directory = "pythoscope-tests"
+    project.new_tests_directory = "tests"
     return project
 
 def ProjectInDirectory():
@@ -114,7 +114,7 @@ def get_test_module_contents(project):
     """Get contents of the first test module of a project.
     """
     try:
-        return project["pythoscope-tests/test_module.py"].get_content()
+        return project["tests/test_module.py"].get_content()
     except ModuleNotFound:
         return "" # No test module was generated.
 get_test_module_contents.__test__ = False
