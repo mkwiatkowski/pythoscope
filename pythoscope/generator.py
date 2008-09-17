@@ -306,6 +306,9 @@ class TestGenerator(object):
     def equal_stub_assertion(self, expected, actual):
         return "# %s" % self.equal_assertion(expected, actual)
 
+    def raises_stub_assertion(self, exception, code):
+        return "# %s" % self.raises_assertion(exception, code)
+
     def _add_tests_for_module(self, module, project, force):
         for test_case in self._generate_test_cases(module):
             project.add_test_case(test_case, force)
@@ -413,8 +416,7 @@ class TestGenerator(object):
             if init_call and len(external_calls) == 0:
                 # If the constructor raised an exception, object creation should be an assertion.
                 if init_call.raised_exception():
-                    yield(('raises', exception_as_string(init_call.exception),
-                           in_lambda(constructor_as_string(live_object))))
+                    yield self._create_assertion(live_object.klass.name, init_call, stub_all)
                 else:
                     yield(('comment', "# Make sure it doesn't raise any exceptions."))
     
@@ -444,7 +446,13 @@ class TestGenerator(object):
         input = call_as_string(name, call.input)
 
         if call.raised_exception():
-            return ('raises', exception_as_string(call.exception), in_lambda(input))
+            if input.uncomplete or stub:
+                assertion_type = 'raises_stub'
+            else:
+                assertion_type = 'raises'
+            return (assertion_type,
+                    exception_as_string(call.exception),
+                    in_lambda(input))
         else:
             if input.uncomplete or stub:
                 assertion_type = 'equal_stub'

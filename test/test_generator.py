@@ -322,6 +322,14 @@ class TestGenerator:
         assert_contains(result, "def test_creation_with_123_raises_value_error(self):")
         assert_contains(result, "self.assertRaises(ValueError, lambda: Something(x=123))")
 
+    def test_generates_assert_raises_stub_for_init_methods_with_exceptions(self):
+        klass = ClassWithMethods('Something', [('__init__', [({'x': lambda: 42}, ValueError)])], 'exception')
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_creation_with_function_raises_value_error(self):")
+        assert_contains(result, "# self.assertRaises(ValueError, lambda: Something(x=<TODO: function>))")
+
     def test_generates_assert_raises_for_normal_methods_with_exceptions(self):
         klass = ClassWithMethods('Something', [('method', [({}, KeyError)])], 'exception')
 
