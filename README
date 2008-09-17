@@ -14,18 +14,18 @@ or get a copy of a development branch using `bazaar <http://bazaar-vcs.org/>`_::
 Usage
 -----
 
-You can use the tool through a single **pythoscope** command. To analyze
-one of your projects, type::
+You can use the tool through a single **pythoscope** command. To prepare
+your project for use with Pythoscope, type::
 
- $ pythoscope  inspect  path/to/your/project/
+ $ pythoscope  --init  path/to/your/project/
 
 It's only doing static analysis, and doesn't import your modules or
 execute your code in any way, so you're perfectly safe to run it on
-anything you want. After that, a file named **.pythoscope** will be
+anything you want. After that, a directory named **.pythoscope** will be
 created in the current directory. To generate test stubs based on your
 project, select files you want to generate tests for::
 
- $ pythoscope  generate  path/to/your/project/specific/file.py  path/to/your/project/other/*.py
+ $ pythoscope  path/to/your/project/specific/file.py  path/to/your/project/other/*.py
 
 Test files will be saved to your test directory, if you have one, or
 into a new **tests/** directory otherwise. Test cases are aggregated
@@ -38,7 +38,7 @@ others.
 
 Generator itself is configurable to some extent, see::
 
- $ pythoscope  generate  --help
+ $ pythoscope  --help
 
 for more information on available options.
 
