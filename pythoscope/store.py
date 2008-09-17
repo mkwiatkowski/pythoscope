@@ -584,7 +584,8 @@ class Class(object):
         self.live_objects[live_object.unique_id] = live_object
 
     def remove_live_objects_from(self, point_of_entry):
-        for id, live_object in self.live_objects.iteritems():
+        # We're removing elements, so iterate over a shallow copy.
+        for id, live_object in self.live_objects.copy().iteritems():
             if live_object.point_of_entry is point_of_entry:
                 del self.live_objects[id]
 

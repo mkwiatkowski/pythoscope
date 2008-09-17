@@ -1,9 +1,14 @@
 from nose.tools import assert_equal
 
 from pythoscope.astvisitor import parse
-from pythoscope.store import Module, TestClass, module_path_to_test_path
+from pythoscope.store import Class, LiveObject, Module, PointOfEntry, \
+     TestClass, module_path_to_test_path
 
-from helper import CustomSeparator
+from helper import CustomSeparator, assert_length
+
+# Let nose know that this isn't a test class.
+TestClass.__test__ = False
+
 
 class TestModule:
     def test_can_add_test_cases_to_empty_modules(self):
@@ -22,3 +27,19 @@ class TestStoreWithCustomSeparator(CustomSeparator):
                      module_path_to_test_path("pythoscope#store.py"))
         assert_equal("test_pythoscope.py",
                      module_path_to_test_path("pythoscope#__init__.py"))
+
+# Avoid a name clash with pythoscope.store.TestClass.
+class TestForClass:
+    def test_remove_live_objects_from(self):
+        klass = Class('SomeClass')
+        first = PointOfEntry(None, 'first')
+        second = PointOfEntry(None, 'second')
+        live_objects = [LiveObject(1, klass, first), LiveObject(2, klass, first), LiveObject(1, klass, second)]
+
+        for lo in live_objects:
+            klass.add_live_object(lo)
+
+        klass.remove_live_objects_from(first)
+
+        assert_length(klass.live_objects.values(), 1)
+        assert_equal(('second', 1), klass.live_objects.values()[0].unique_id)
