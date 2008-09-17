@@ -6,7 +6,7 @@ from astvisitor import EmptyCode, descend, parse, ASTVisitor
 from store import Class, Function, TestClass, TestMethod, ModuleNotFound, \
      LiveObject, MethodCall, Method, Value, Type, Repr
 from util import RePatternType, camelize, underscore, sorted, \
-     regexp_flags_as_string
+     regexp_flags_as_string, groupby
 
 
 class ValueNeeded(Exception):
@@ -431,17 +431,26 @@ class TestGenerator(object):
                 test_name = "test_creation_with_%s" % input_as_string(init_call.input)
                 if init_call.raised_exception():
                     test_name += "_raises_%s" % object2id(init_call.exception)
-            elif len(external_calls) == 1:
-                call = external_calls[0]
-                if call.raised_exception():
-                    test_name = exccall2testname(call.callable.name, call.input, call.exception)
+            else:
+                if len(external_calls) == 1:
+                    call = external_calls[0]
+                    if call.raised_exception():
+                        test_name = exccall2testname(call.callable.name, call.input, call.exception)
+                    else:
+                        test_name = call2testname(call.callable.name, call.input, call.output)
+                # Methods with more than one external call use more brief
+                # descriptions that don't include inputs and outputs.
                 else:
-                    test_name = call2testname(call.callable.name, call.input, call.output)
+                    methods = []
+                    for method, icalls in groupby(sorted([call.callable.name for call in external_calls])):
+                        calls = list(icalls)
+                        if len(calls) == 1:
+                            methods.append(method)
+                        else:
+                            methods.append("%s_%d_times" % (method, len(calls)))
+                    test_name = "test_%s" % '_and_'.join(methods)
                 if init_call:
                     test_name += "_after_creation_with_%s" % input_as_string(init_call.input)
-            else:
-                # TODO: come up with a nicer name for methods with more than one call.
-                test_name = "%s_%s" % (underscore(live_object.klass.name), live_object.id)    
             return test_name
 
         def assertions():

@@ -381,6 +381,24 @@ class TestGenerator:
         assert_contains(result, "def test_matches_returns_true_for_abcd_pattern(self):")
         assert_contains(result, "self.assertEqual(True, matches(x=re.compile('abcd')))")
 
+    def test_lists_names_of_tested_methods_in_longer_test_cases(self):
+        klass = ClassWithMethods('Something', [('__init__', [({'arg1': 1, 'arg2': 2}, None)]),
+                                               ('sum', [({}, 3)]),
+                                               ('power', [({}, 1)])])
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_power_and_sum_after_creation_with_arg1_equal_1_and_arg2_equal_2(self):")
+
+    def test_lists_names_of_tested_methods_called_multiple_times_in_longer_test_cases(self):
+        klass = ClassWithMethods('Developer', [('look_at', [({'what': 'bad code'}, 'sad'),
+                                                            ({'what': 'good code'}, 'happy')]),
+                                               ('modify', [({}, True)])])
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_look_at_2_times_and_modify(self):")
+
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
         self.project = TestableProject()
