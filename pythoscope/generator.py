@@ -5,7 +5,8 @@ import types
 from astvisitor import EmptyCode, descend, parse, ASTVisitor
 from store import Class, Function, TestClass, TestMethod, ModuleNotFound, \
      LiveObject, MethodCall, Method, Value, Type, Repr
-from util import camelize, underscore, sorted
+from util import RePatternType, camelize, underscore, sorted, \
+     regexp_flags_as_string
 
 
 class ValueNeeded(Exception):
@@ -56,13 +57,39 @@ def exception_as_string(exception):
     return unwrap_type(exception).__name__
 
 class CallString(str):
-    """A string that holds information on whether it is a complete call
+    """A string that holds information on the function/method call it
+    represents.
+
+    `uncomplete` attribute denotes whether it is a complete call
     or just a template.
+
+    `imports` is a list of imports that this call requires.
     """
-    def __new__(cls, string, uncomplete=False):
+    def __new__(cls, string, uncomplete=False, imports=[]):
         call_string = str.__new__(cls, string)
         call_string.uncomplete = uncomplete
+        call_string.imports = imports
         return call_string
+
+# :: object -> CallString
+def standard_constructor_as_string(object):
+    """For a given Python object return a string representing a code that will
+    construct it.
+
+    >>> standard_constructor_as_string(re.compile('abcd'))
+    "re.compile('abcd')"
+    >>> standard_constructor_as_string(re.compile('abcd', re.I | re.M))
+    "re.compile('abcd', re.IGNORECASE | re.MULTILINE)"
+    """
+    if isinstance(object, RePatternType):
+        flags = regexp_flags_as_string(object.flags)
+        if flags:
+            return CallString('re.compile(%r, %s)' % (object.pattern, flags), imports=['re'])
+        else:
+            return CallString('re.compile(%r)' % object.pattern, imports=['re'])
+    else:
+        # This may not always be right, but it's worth a try.
+        return CallString(repr(object))
 
 # :: ObjectWrapper | LiveObject -> CallString
 def constructor_as_string(object):
@@ -88,11 +115,11 @@ def constructor_as_string(object):
             args = init_call.input
         return call_as_string(object.klass.name, args)
     elif isinstance(object, Value):
-        return CallString(repr(object.value))
+        return standard_constructor_as_string(object.value)
     elif isinstance(object, Type):
         return CallString("<TODO: %s>" % object.type.__name__, uncomplete=True)
     elif isinstance(object, Repr):
-        return CallString("<TODO: %s>" % object.repr)
+        return CallString("<TODO: %s>" % object.repr, uncomplete=True)
     else:
         raise TypeError("constructor_as_string expected ObjectWrapper or LiveObject object at input, not %s" % object)
 
@@ -112,11 +139,14 @@ def call_as_string(object_name, input):
     """
     arguments = []
     uncomplete = False
+    imports = set()
     for arg, value in input.iteritems():
         constructor = constructor_as_string(value)
         uncomplete = uncomplete or constructor.uncomplete
+        imports.update(constructor.imports)
         arguments.append("%s=%s" % (arg, constructor))
-    return CallString("%s(%s)" % (object_name, ', '.join(arguments)), uncomplete)
+    return CallString("%s(%s)" % (object_name, ', '.join(arguments)),
+                      uncomplete=uncomplete, imports=imports)
 
 # :: string -> string
 def string2id(string):
@@ -134,6 +164,8 @@ def object2id(object):
             return 'false'
         elif isinstance(object.value, Exception):
             return underscore(exception_as_string(object))
+        elif isinstance(object.value, RePatternType):
+            return "%s_pattern" % string2id(object.value.pattern)
         return string2id(str(object.value))
     elif isinstance(object, Type):
         return underscore(object.type.__name__)
@@ -444,6 +476,9 @@ class TestGenerator(object):
         constructed or if stub argument is True.
         """
         input = call_as_string(name, call.input)
+
+        for import_ in input.imports:
+            self.ensure_import(import_)
 
         if call.raised_exception():
             if input.uncomplete or stub:

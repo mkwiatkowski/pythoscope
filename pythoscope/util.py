@@ -164,3 +164,26 @@ def findfirst(pred, seq):
     for item in seq:
         if pred(item):
             return item
+
+# Regular expressions helpers.
+
+RePatternType = type(re.compile(''))
+
+def regexp_flags_as_string(flags):
+    """Return an expression in string form that corresponds to given set of
+    regexp flags.
+    """
+    strings = []
+    if flags & re.IGNORECASE:
+        strings.append('re.IGNORECASE')
+    if flags & re.LOCALE:
+        strings.append('re.LOCALE')
+    if flags & re.MULTILINE:
+        strings.append('re.MULTILINE')
+    if flags & re.DOTALL:
+        strings.append('re.DOTALL')
+    if flags & re.VERBOSE:
+        strings.append('re.VERBOSE')
+    if flags & re.UNICODE:
+        strings.append('re.UNICODE')
+    return " | ".join(strings)

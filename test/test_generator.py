@@ -372,6 +372,15 @@ class TestGenerator:
         assert_contains(result, "def test_high_raises_not_implemented_error_for_function(self):")
         assert_contains(result, "# self.assertRaises(NotImplementedError, lambda: high(f=<TODO: function>))")
 
+    def test_handles_regular_expression_pattern_objects(self):
+        objects = [FunctionWithSingleCall('matches', {'x': re.compile('abcd')}, True)]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "import re")
+        assert_contains(result, "def test_matches_returns_true_for_abcd_pattern(self):")
+        assert_contains(result, "self.assertEqual(True, matches(x=re.compile('abcd')))")
+
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
         self.project = TestableProject()
