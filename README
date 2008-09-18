@@ -42,6 +42,193 @@ Generator itself is configurable to some extent, see::
 
 for more information on available options.
 
+Tutorial
+--------
+
+Let's say you're working on this old Python project. It's ugly and
+unpredictable, but you have no choice but to keep it alive. Luckily
+you've heard about this new tool called Pythoscope, which can help
+you cure the old guy.
+
+You start by descending to the project directory::
+
+  $ cd wild_pythons/
+
+and initializing Pythoscope internal structures::
+
+  $ pythoscope --init
+
+This command creates **.pythoscope/** subdirectory, which will hold all
+information related to Pythoscope. You look at the poor snake::
+
+  $ cat old_python.py
+  class OldPython(object):
+      def __init__(self, age):
+          pass # more code...
+
+      def hiss(self):
+          pass # even more code...
+
+and decide that it requires immediate attention. So you run Pythoscope
+on it::
+
+  $ pythoscope old_python.py
+
+and see a test module generated in the **tests/** directory::
+
+  $ cat tests/test_old_python.py
+  import unittest
+
+  class TestOldPython(unittest.TestCase):
+      def test_hiss(self):
+          assert False # TODO: implement your test here
+
+      def test_object_initialization(self):
+          assert False # TODO: implement your test here
+
+  if __name__ == '__main__':
+      unittest.main()
+
+That's a starting point for your testing struggle, but there's much more
+Pythoscope can help you with. All you have to do is give it some more
+information about your project.
+
+Since Python is a very dynamic language it's no surprise that most
+information about the application can be gathered during runtime. But legacy
+applications can be tricky and dangerous, so Pythoscope won't run any code
+at all unless you explicitly tell it to do so. You can specify which code
+is safe to run through, so called, points of entry.
+
+Point of entry is a plain Python module that executes some parts of your code.
+You should keep each point of entry in a separate file in the
+**.pythoscope/points-of-entry/** directory. Let's look closer at our old friend::
+
+  $ cat old_python.py
+  class OldPython(object):
+      def __init__(self, age):
+          if age < 50:
+              raise ValueError("%d isn't old" % age)
+          self.age = age
+
+      def hiss(self):
+          if self.age < 60:
+              return "sss sss"
+          elif self.age < 70:
+              return "SSss SSss"
+          else:
+              return "sss... *cough* *cough*"
+
+Based on that definition we come up with the following point of entry::
+
+  $ cat .pythoscope/points-of-entry/123_years_old_python.py
+  from old_python import OldPython
+  OldPython(123).hiss()
+
+Once we have that we may try to generate new test cases. Simply call pythoscope
+on the old python again::
+
+  $ pythoscope old_python.py
+
+Pythoscope will execute our new point of entry, gathering as much dynamic
+information as possible. If you look at your test module now you'll notice
+that a new test case has been added::
+
+  $ cat old_python.py
+  from old_python import OldPython
+  import unittest
+
+  class TestOldPython(unittest.TestCase):
+      def test_hiss(self):
+          assert False # TODO: implement your test here
+
+      def test_object_initialization(self):
+          assert False # TODO: implement your test here
+
+      def test_hiss_returns_sss_cough_cough_after_creation_with_123(self):
+          old_python = OldPython(age=123)
+          self.assertEqual('sss... *cough* *cough*', old_python.hiss())
+
+  if __name__ == '__main__':
+      unittest.main()
+
+Pythoscope correctly captured creation of the **OldPython** object and call to
+its **hiss()** method. Congratulations, you have a first working test case without
+doing much work! But Pythoscope can generate more than just invdividual test
+cases. It all depends on the points of entry you define. More high-level they
+are, the more information Pythoscope will be able to gather, which directly
+translates to the number of generated test cases.
+
+So let's try writing another point of entry. But first look at another module
+we have in our project::
+
+  $ cat old_nest.py
+  from old_python import OldPython
+
+  class OldNest(object):
+      def __init__(self, ages):
+          self.pythons = []
+          for age in ages:
+              try:
+                  self.pythons.append(OldPython(age))
+              except ValueError:
+                  pass # Ignore the youngsters.
+      def put_hand(self):
+          for python in self.pythons:
+              python.hiss()
+
+This module seems a bit higher-level than **old_python.py**. Yet, writing a point
+of entry for it is also straightforward::
+
+  $ cat .pythoscope/points-of-entry/old_nest_with_four_pythons.py
+  from old_nest import OldNest
+  OldNest([45, 55, 65, 75]).put_hand()
+
+Don't hesitate and run Pythoscope right away. Note that you can provide many
+modules as arguments - all of them will be handled at once::
+
+  $ pythoscope old_python.py old_nest.py
+
+This new point of entry not only allowed to create a test case for **OldNest**::
+
+  $ cat tests/test_old_nest.py
+  import unittest
+  from old_nest import OldNest
+
+  class TestOldNest(unittest.TestCase):
+      def test_put_hand_returns_sss_sss_SSss_SSss_sss_cough_cough_after_creation_with_45_55_65_75(self):
+          old_nest = OldNest(ages=[45, 55, 65, 75])
+          self.assertEqual('sss sss\nSSss SSss\nsss... *cough* *cough*', old_nest.put_hand())
+
+  if __name__ == '__main__':
+      unittest.main()
+
+but also added 4 new test cases for **OldPython**::
+
+    def test_creation_with_45_raises_value_error(self):
+        self.assertRaises(ValueError, lambda: OldPython(age=45))
+
+    def test_hiss_returns_SSss_SSss_after_creation_with_65(self):
+        old_python = OldPython(age=65)
+        self.assertEqual('SSss SSss', old_python.hiss())
+
+    def test_hiss_returns_sss_cough_cough_after_creation_with_75(self):
+        old_python = OldPython(age=75)
+        self.assertEqual('sss... *cough* *cough*', old_python.hiss())
+
+    def test_hiss_returns_sss_sss_after_creation_with_55(self):
+        old_python = OldPython(age=55)
+        self.assertEqual('sss sss', old_python.hiss())
+
+You got all of that for mere 2 additional lines of code. What's even better
+is the fact that you can safely modify and extend test cases generated by
+Pythoscope. Once you write another point of entry or add new behavior to your
+system you can run Pythoscope again and it will only append new test cases
+to existing test modules, preserving any modifications you could have made
+to them.
+
+That sums up this basic tutorial. If you have any questions feel free to
+ask them on the `pythoscope google group <http://groups.google.com/group/pythoscope>`_.
+
 License
 -------
 
