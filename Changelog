@@ -10,6 +10,8 @@ Changelog
 * Added a notion of points of entry introducing dynamic analysis.
 * Pythoscope can now generate assert_equal and assert_raises type of assertions.
 * Implemented `no more inspect command blueprint <https://blueprints.launchpad.net/pythoscope/+spec/remove-inspect-command>`_.
+* Changed the default test directory from pythoscope-tests/ to tests/.
+* Added a tutorial to the README file.
 
 0.2.2
 -----
