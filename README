@@ -133,7 +133,7 @@ Pythoscope will execute our new point of entry, gathering as much dynamic
 information as possible. If you look at your test module now you'll notice
 that a new test case has been added::
 
-  $ cat old_python.py
+  $ cat tests/test_old_python.py
   from old_python import OldPython
   import unittest
 
@@ -173,8 +173,7 @@ we have in our project::
               except ValueError:
                   pass # Ignore the youngsters.
       def put_hand(self):
-          for python in self.pythons:
-              python.hiss()
+          return '\n'.join([python.hiss() for python in self.pythons])
 
 This module seems a bit higher-level than **old_python.py**. Yet, writing a point
 of entry for it is also straightforward::
