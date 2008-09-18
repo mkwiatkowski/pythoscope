@@ -1,6 +1,16 @@
 Changelog
 =========
 
+0.3
+---
+
+* Fixed generate bug for test modules (`#264449 <https://bugs.launchpad.net/pythoscope/+bug/264449>`_).
+* .pythoscope became a directory.
+* Introduced --init option for initializing .pythoscope/ directory.
+* Added a notion of points of entry introducing dynamic analysis.
+* Pythoscope can now generate assert_equal and assert_raises type of assertions.
+* Implemented `no more inspect command blueprint <https://blueprints.launchpad.net/pythoscope/+spec/remove-inspect-command>`_.
+
 0.2.2
 -----
 

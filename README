@@ -6,7 +6,7 @@ Easiest way to get Pythoscope is via setuptools::
  $ easy_install  pythoscope
 
 You can also download a source package from
-http://pythoscope.org/local--files/download/pythoscope-0.2.2.tar.gz.
+http://pythoscope.org/local--files/download/pythoscope-0.3.tar.gz.
 or get a copy of a development branch using `bazaar <http://bazaar-vcs.org/>`_::
 
   bzr branch lp:pythoscope
