@@ -45,7 +45,8 @@ class ModuleVisitor(ASTVisitor):
 
     def visit_import(self, names, import_from):
         if import_from:
-            self.imports.append((import_from, names))
+            for name in names:
+                self.imports.append((import_from, name))
         else:
             self.imports.extend(names)
 
