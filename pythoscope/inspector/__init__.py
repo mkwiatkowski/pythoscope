@@ -4,14 +4,21 @@ from pythoscope.util import python_modules_below
 
 
 def inspect_project(project):
-    # If nothing new was discovered statically, it's also no use to run
-    # dynamic inspection.
-    if inspect_project_statically(project) > 0:
+    remove_deleted_modules(project)
+    updates = add_and_update_modules(project) + add_points_of_entry(project)
+    # If nothing new was discovered statically and there are no new points of
+    # entry, don't run dynamic inspection.
+    if updates:
         inspect_project_dynamically(project)
     else:
         print "Info: No changes discovered in the source code, skipping dynamic inspection."
 
-def inspect_project_statically(project):
+def remove_deleted_modules(project):
+    subpaths = [mod.subpath for mod in project.iter_modules() if not mod.exists()]
+    for subpath in subpaths:
+        project.remove_module(subpath)
+
+def add_and_update_modules(project):
     count = 0
     for modpath in python_modules_below(project.path):
         try:
@@ -23,6 +30,13 @@ def inspect_project_statically(project):
             pass
         static.inspect_module(project, modpath)
         count += 1
+    return count
+
+def add_points_of_entry(project):
+    count = 0
+    for path in python_modules_below(project._get_points_of_entry_path()):
+        if project.ensure_point_of_entry(path):
+            count += 1
     return count
 
 def inspect_project_dynamically(project):

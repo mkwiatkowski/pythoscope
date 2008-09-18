@@ -111,10 +111,6 @@ class Project(object):
             fd.close()
             # Update project's path, as the directory could've been moved.
             project.path = project_path
-            # Those are listed in the filesystem, so make sure we're up-to-date.
-            project._update_list_of_points_of_entry()
-            # Some modules may have been removed since the last inspection.
-            project._remove_non_existing_modules()
         except IOError:
             project = Project(project_path)
         return project
@@ -126,7 +122,6 @@ class Project(object):
         self.points_of_entry = {}
         self._modules = {}
 
-        self._update_list_of_points_of_entry()
         self._find_new_tests_directory()
 
     def _get_pickle_path(self):
@@ -135,21 +130,10 @@ class Project(object):
     def _get_points_of_entry_path(self):
         return get_points_of_entry_path(self.path)
 
-    def _update_list_of_points_of_entry(self):
-        for path in python_modules_below(self._get_points_of_entry_path()):
-            name = self._extract_point_of_entry_subpath(path)
-            if name not in self.points_of_entry:
-                self.points_of_entry[name] = PointOfEntry(project=self, name=name)
-
     def _find_new_tests_directory(self):
         for path in directories_under(self.path):
             if re.search(r'[_-]?tests?([_-]|$)', path):
                 self.new_tests_directory = path
-
-    def _remove_non_existing_modules(self):
-        subpaths = [mod.subpath for mod in self.iter_modules() if not mod.exists()]
-        for subpath in subpaths:
-            self.remove_module(subpath)
 
     def save(self):
         # To avoid inconsistencies try to save all project's modules first. If
@@ -164,6 +148,13 @@ class Project(object):
     def find_module_by_full_path(self, path):
         subpath = self._extract_subpath(path)
         return self[subpath]
+
+    def ensure_point_of_entry(self, path):
+        name = self._extract_point_of_entry_subpath(path)
+        if name not in self.points_of_entry:
+            poe = PointOfEntry(project=self, name=name)
+            self.points_of_entry[name] = poe
+            return poe
 
     def create_module(self, path, **kwds):
         """Create a module for this project located under given path.

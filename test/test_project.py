@@ -5,6 +5,7 @@ from nose.tools import assert_equal, assert_raises
 
 from pythoscope.store import Project, Module, Class, Function, TestClass, \
      TestMethod, ModuleNotFound
+from pythoscope.inspector import remove_deleted_modules
 
 from helper import assert_length, assert_equal_sets, EmptyProject, \
      ProjectWithModules, ProjectWithRealModules, ProjectInDirectory, \
@@ -137,10 +138,7 @@ class TestProject:
 
         os.remove(os.path.join(project.path, "other_module.py"))
 
-        # Make a reference to TempIO, so it doesn't auto-destruct.
-        tmpdir = project._tmpdir
-
-        project = Project.from_directory(project.path)
+        remove_deleted_modules(project)
 
         assert_not_raises(ModuleNotFound, lambda: project["module"])
         assert_raises(ModuleNotFound, lambda: project["other_module"])
