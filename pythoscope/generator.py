@@ -475,7 +475,7 @@ class TestGenerator(object):
                     setup = "# %s" % setup
                 return setup
 
-        return TestMethodDescription(test_name(), assertions(), setup())
+        return TestMethodDescription(test_name(), list(assertions()), setup())
 
     def _create_assertion(self, name, call, stub=False):
         """Create a new assertion based on a given call and a name provided
