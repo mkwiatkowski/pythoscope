@@ -250,6 +250,7 @@ class Project(object):
                 test_class.add_test_case(method)
             elif force:
                 test_class.replace_test_case(existing_test_method, method)
+        test_class.ensure_imports(other_test_class.imports)
 
     def _find_test_case_by_name(self, name):
         for tcase in self.iter_test_cases():
@@ -648,11 +649,15 @@ class TestSuite(TestCase):
     """
     allowed_test_case_classes = []
 
-    def __init__(self, name, code=None, parent=None, test_cases=[]):
+    def __init__(self, name, code=None, parent=None, test_cases=[], imports=None):
         TestCase.__init__(self, name, code, parent)
+
+        if imports is None:
+            imports = []
 
         self.changed = False
         self.test_cases = []
+        self.imports = imports
 
     def add_test_cases(self, test_cases, append_code=True):
         for test_case in test_cases:
@@ -689,6 +694,20 @@ class TestSuite(TestCase):
         if self.parent:
             self.parent.mark_as_changed()
 
+    def ensure_imports(self, imports):
+        "Make sure that all required imports are present."
+        for imp in imports:
+            self._ensure_import(imp)
+        if self.parent:
+            self.parent.ensure_imports(imports)
+
+    def _ensure_import(self, import_desc):
+        if not self._contains_import(import_desc):
+            self.imports.append(import_desc)
+
+    def _contains_import(self, import_desc):
+        return import_desc in self.imports
+
     def _check_test_case_type(self, test_case):
         if not isinstance(test_case, tuple(self.allowed_test_case_classes)):
             raise TypeError("Given test case isn't allowed to be added to this test suite.")
@@ -709,14 +728,11 @@ class TestClass(TestSuite):
 
     def __init__(self, name, code=None, parent=None, test_cases=[],
                  imports=None, main_snippet=None, associated_modules=None):
-        TestSuite.__init__(self, name, code, parent, test_cases)
+        TestSuite.__init__(self, name, code, parent, test_cases, imports)
 
-        if imports is None:
-            imports = []
         if associated_modules is None:
             associated_modules = []
 
-        self.imports = imports
         self.main_snippet = main_snippet
         self.associated_modules = associated_modules
 
@@ -804,15 +820,12 @@ class Module(Localizable, TestSuite):
                  main_snippet=None, errors=[]):
         if objects is None:
             objects = []
-        if imports is None:
-            imports = []
         test_cases = get_test_objects(objects)
 
         Localizable.__init__(self, project, subpath)
-        TestSuite.__init__(self, self.locator, code, None, test_cases)
+        TestSuite.__init__(self, self.locator, code, None, test_cases, imports)
 
         self.objects = objects
-        self.imports = imports
         self.main_snippet = main_snippet
         self.errors = errors
 
@@ -839,7 +852,7 @@ class Module(Localizable, TestSuite):
     def add_test_case(self, test_case, append_code=True):
         TestSuite.add_test_case(self, test_case, append_code)
 
-        self._ensure_imports(test_case.imports)
+        self.ensure_imports(test_case.imports)
         self._ensure_main_snippet(test_case.main_snippet)
 
     # def replace_test_case:
@@ -870,11 +883,6 @@ class Module(Localizable, TestSuite):
             self.main_snippet = main_snippet
             self.mark_as_changed()
 
-    def _ensure_imports(self, imports):
-        "Make sure that all required imports are present."
-        for imp in imports:
-            self._ensure_import(imp)
-
     def _ensure_import(self, import_desc):
         # Add an extra newline separating imports from the code.
         if not self.imports:
@@ -882,9 +890,6 @@ class Module(Localizable, TestSuite):
             self.mark_as_changed()
         if not self._contains_import(import_desc):
             self._add_import(import_desc)
-
-    def _contains_import(self, import_desc):
-        return import_desc in self.imports
 
     def _add_import(self, import_desc):
         self.imports.append(import_desc)

@@ -16,7 +16,7 @@ from pythoscope.util import read_file_contents, get_last_modification_time
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
      CustomSeparator, generate_single_test_module, ProjectInDirectory, \
      ProjectWithModules, TestableProject, assert_contains_once, \
-     PointOfEntryMock, get_test_cases
+     PointOfEntryMock, get_test_cases, assert_equal_sets
 
 # Let nose know that those aren't test functions/classes.
 add_tests_to_project.__test__ = False
@@ -423,13 +423,13 @@ class TestGeneratorWithSingleModule:
         self.project["module"].objects = [Function("function")]
 
     def test_adds_imports_to_existing_test_files_only_if_they_arent_present(self):
-        imports = ["unittest", ("nose", "SkipTest")]
-        for imp in imports:
-            self.project["test_module"].imports = [imp]
+        self.project["test_module"].imports = ['unittest']
+        add_tests_to_project(self.project, ["module"], 'unittest')
+        assert_equal(['unittest'], self.project["test_module"].imports)
 
-            add_tests_to_project(self.project, ["module"], 'unittest')
-
-            assert_equal([imp], self.project["test_module"].imports)
+        self.project["test_module"].imports = [('nose', 'SkipTest')]
+        add_tests_to_project(self.project, ["module"], 'unittest')
+        assert_equal_sets(['unittest', ('nose', 'SkipTest')], self.project["test_module"].imports)
 
     def test_appends_new_test_classes_to_existing_test_files(self):
         TEST_CONTENTS = "class TestSomething: pass\n\n"

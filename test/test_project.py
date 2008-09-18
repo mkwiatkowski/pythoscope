@@ -190,6 +190,12 @@ class TestProjectWithTestModule:
 
         assert self.test_module.changed
 
+    def test_merges_imports_during_merging_of_test_classes(self):
+        test_class = TestClass("TestSomething", imports=['new_import'])
+        self.project.add_test_case(test_class)
+
+        assert_equal(['new_import'], self.test_module.imports)
+
     def test_doesnt_overwrite_existing_test_methods_by_default(self):
         test_method = TestMethod("test_method")
         test_class = TestClass("TestSomething", test_cases=[test_method])

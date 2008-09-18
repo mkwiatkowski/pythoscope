@@ -390,7 +390,7 @@ class TestGenerator(object):
     def _generate_test_method_descriptions_for_class(self, klass, module):
         if klass.live_objects:
             # We're calling the method, so we have to make sure its class
-            # will be imported in the test
+            # will be imported in the test.
             self.ensure_import((module.locator, klass.name))
 
         for live_object in klass.live_objects.values():
