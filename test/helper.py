@@ -60,6 +60,8 @@ def assert_not_raises(exception, callable):
 
 class PointOfEntryMock(PointOfEntry):
     def __init__(self, project=None, name="poe", content=""):
+        if project is None:
+            project = Project('.')
         PointOfEntry.__init__(self, project, name)
         self.content = content
 

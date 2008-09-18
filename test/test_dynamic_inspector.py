@@ -7,7 +7,7 @@ from nose.plugins.skip import SkipTest
 from pythoscope.inspector.dynamic import trace_function, trace_exec, \
      inspect_point_of_entry, setup_tracing, teardown_tracing
 from pythoscope.store import Class, Function, Method, LiveObject, \
-     wrap_call_arguments, wrap_object, Type
+     Project, wrap_call_arguments, wrap_object, Type
 from pythoscope.util import findfirst
 
 from helper import TestableProject, assert_length, PointOfEntryMock, \
@@ -27,7 +27,7 @@ class ClassMock(Class):
             self._methods[name] = Method(name)
         return self._methods[name]
 
-class ProjectMock(object):
+class ProjectMock(Project):
     """Project that has all the classes and functions you try to find inside it
     via find_class() and find_function().
     """

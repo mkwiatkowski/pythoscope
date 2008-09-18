@@ -4,7 +4,7 @@ import types
 
 from astvisitor import EmptyCode, descend, parse, ASTVisitor
 from store import Class, Function, TestClass, TestMethod, ModuleNotFound, \
-     LiveObject, MethodCall, Method, Value, Type, Repr, PointOfEntry
+     LiveObject, MethodCall, Method, Value, Type, Repr, Project, PointOfEntry
 from util import RePatternType, camelize, underscore, sorted, \
      regexp_flags_as_string, groupby
 
@@ -100,7 +100,7 @@ def constructor_as_string(object):
     '123'
     >>> constructor_as_string(Value('string'))
     "'string'"
-    >>> obj = LiveObject(None, Class('SomeClass'), PointOfEntry(None, 'poe'))
+    >>> obj = LiveObject(None, Class('SomeClass'), PointOfEntry(Project('.'), 'poe'))
     >>> constructor_as_string(obj)
     'SomeClass()'
     >>> obj.add_call(MethodCall(Method('__init__'), {'arg': Value('whatever')}, None))

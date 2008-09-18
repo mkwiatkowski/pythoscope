@@ -156,6 +156,10 @@ class Project(object):
             self.points_of_entry[name] = poe
             return poe
 
+    def remove_point_of_entry(self, name):
+        poe = self.points_of_entry.pop(name)
+        poe.clear_previous_run()
+
     def create_module(self, path, **kwds):
         """Create a module for this project located under given path.
 
@@ -913,7 +917,7 @@ class Module(Localizable, TestSuite):
                 raise ModuleSaveError(self.subpath, err.message)
             self.changed = False
 
-class PointOfEntry(object):
+class PointOfEntry(Localizable):
     """Piece of code provided by the user that allows dynamic analysis.
 
     In add_method_call/add_function_call if we can't find a class or function
@@ -921,7 +925,9 @@ class PointOfEntry(object):
     about thid-party and dynamically created code.
     """
     def __init__(self, project, name):
-        self.project = project
+        poes_subpath = project._extract_subpath(project._get_points_of_entry_path())
+        Localizable.__init__(self, project, os.path.join(poes_subpath, name))
+
         self.name = name
         # After an inspection run, this will be a reference to the top level call.
         self.call_graph = None

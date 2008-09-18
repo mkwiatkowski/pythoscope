@@ -38,7 +38,7 @@ def ClassWithMethods(classname, methods, exit_point='output'):
                 method_calls.append(MethodCall(method, wrap_call_arguments(input), exception=wrap_object(output())))
 
     klass = Class(classname, methods=method_objects)
-    live_object = LiveObject(12345, klass, PointOfEntry(None, 'poe'))
+    live_object = LiveObject(12345, klass, PointOfEntry(Project('.'), 'poe'))
     live_object.calls = method_calls
     klass.add_live_object(live_object)
 

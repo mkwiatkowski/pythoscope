@@ -2,7 +2,7 @@ from nose.tools import assert_equal
 
 from pythoscope.astvisitor import parse
 from pythoscope.store import Class, LiveObject, Module, PointOfEntry, \
-     TestClass, module_path_to_test_path
+     TestClass, Project, module_path_to_test_path
 
 from helper import CustomSeparator, assert_length
 
@@ -31,9 +31,10 @@ class TestStoreWithCustomSeparator(CustomSeparator):
 # Avoid a name clash with pythoscope.store.TestClass.
 class TestForClass:
     def test_remove_live_objects_from(self):
+        project = Project('.')
         klass = Class('SomeClass')
-        first = PointOfEntry(None, 'first')
-        second = PointOfEntry(None, 'second')
+        first = PointOfEntry(project, 'first')
+        second = PointOfEntry(project, 'second')
         live_objects = [LiveObject(1, klass, first), LiveObject(2, klass, first), LiveObject(1, klass, second)]
 
         for lo in live_objects:
