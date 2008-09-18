@@ -77,7 +77,10 @@ def inspect_code(project, path, code):
     # We assume that all test classes in this module has dependencies on
     # imports and a main snippet the module contains.
     for test_class in [o for o in visitor.objects if isinstance(o, TestClass)]:
-        test_class.imports = visitor.imports
+        # We gathered all imports in a single list, but import lists of those
+        # classes may diverge in time, so we don't want to share their
+        # structure.
+        test_class.imports = visitor.imports[:]
         test_class.main_snippet = visitor.main_snippet
 
     return project.create_module(path, code=tree, objects=visitor.objects,
