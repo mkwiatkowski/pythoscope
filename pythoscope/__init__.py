@@ -6,6 +6,7 @@ from inspector import inspect_project
 from generator import add_tests_to_project, UnknownTemplate
 from store import Project, ModuleNotFound, ModuleNeedsAnalysis, \
      ModuleSaveError, get_pythoscope_path, get_points_of_entry_path
+from util import samefile
 
 
 USAGE = """Pythoscope usage:
@@ -71,7 +72,7 @@ def find_project_directory(path):
     parent_path = os.path.join(path, os.path.pardir)
 
     # We reached the root.
-    if os.path.samefile(path, parent_path):
+    if samefile(path, parent_path):
         raise PythoscopeDirectoryMissing()
     elif os.path.isdir(pythoscope_path):
         return path

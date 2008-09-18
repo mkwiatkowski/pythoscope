@@ -40,6 +40,12 @@ except ImportError:
                 self.currvalue = self.it.next() # Exit on StopIteration
                 self.currkey = self.keyfunc(self.currvalue)
 
+try:
+    from os.path import samefile
+except ImportError:
+    def samefile(file1, file2):
+        return os.path.realpath(file1) == os.path.realpath(file2)
+
 def camelize(name):
     """Covert name into CamelCase.
 
