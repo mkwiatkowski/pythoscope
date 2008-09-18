@@ -158,7 +158,7 @@ class TestGenerator:
         project = ProjectWithModules(["module.py"], ProjectInDirectory)
         test_file = os.path.join(project.path, "test_module.py")
 
-        add_tests_to_project(project, ["module"], 'unittest')
+        add_tests_to_project(project, [os.path.join(project.path, "module.py")], 'unittest')
 
         assert not os.path.exists(test_file)
 
@@ -170,7 +170,7 @@ class TestGenerator:
         project.path.putfile(existing_file, TEST_CONTENTS)
 
         def add_and_save():
-            add_tests_to_project(project, ["module"], 'unittest')
+            add_tests_to_project(project, [os.path.join(project.path, "module.py")], 'unittest')
             project.save()
 
         assert_raises(ModuleNeedsAnalysis, add_and_save)
@@ -179,7 +179,7 @@ class TestGenerator:
     def test_creates_new_test_module_if_no_of_the_existing_match(self):
         project = TestableProject(["test_other.py"], ProjectInDirectory)
 
-        add_tests_to_project(project, ["module"], 'unittest')
+        add_tests_to_project(project, [os.path.join(project.path, "module.py")], 'unittest')
 
         project_test_cases = get_test_cases(project)
         assert_length(project_test_cases, 1)
@@ -193,7 +193,7 @@ class TestGenerator:
         project["test_module"].created = time.time() - 3600
 
         def add_and_save():
-            add_tests_to_project(project, ["module"], 'unittest')
+            add_tests_to_project(project, [os.path.join(project.path, "module.py")], 'unittest')
             project.save()
 
         assert_raises(ModuleNeedsAnalysis, add_and_save)
@@ -402,9 +402,10 @@ class TestGenerator:
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
         self.project = TestableProject()
-        destfile = self.project.path.putfile(self.project.new_tests_directory, "its content")
+        self.project.path.putfile(self.project.new_tests_directory, "its content")
+        self.module_path = os.path.join(self.project.path, "module.py")
         def add_and_save():
-            add_tests_to_project(self.project, ["module"], 'unittest')
+            add_tests_to_project(self.project, [self.module_path], 'unittest')
             self.project.save()
         self.add_and_save = add_and_save
 
@@ -421,27 +422,28 @@ class TestGeneratorWithSingleModule:
     def setUp(self):
         self.project = ProjectWithModules(["module.py", "test_module.py"])
         self.project["module"].objects = [Function("function")]
+        self.module_path = os.path.join(self.project.path, "module.py")
 
     def test_adds_imports_to_existing_test_files_only_if_they_arent_present(self):
         self.project["test_module"].imports = ['unittest']
-        add_tests_to_project(self.project, ["module"], 'unittest')
+        add_tests_to_project(self.project, [self.module_path], 'unittest')
         assert_equal(['unittest'], self.project["test_module"].imports)
 
         self.project["test_module"].imports = [('nose', 'SkipTest')]
-        add_tests_to_project(self.project, ["module"], 'unittest')
+        add_tests_to_project(self.project, [self.module_path], 'unittest')
         assert_equal_sets(['unittest', ('nose', 'SkipTest')], self.project["test_module"].imports)
 
     def test_appends_new_test_classes_to_existing_test_files(self):
         TEST_CONTENTS = "class TestSomething: pass\n\n"
         self.project["test_module"].code = parse(TEST_CONTENTS)
 
-        add_tests_to_project(self.project, ["module"], 'unittest')
+        add_tests_to_project(self.project, [self.module_path], 'unittest')
 
         assert_contains(self.project["test_module"].get_content(), TEST_CONTENTS)
         assert_contains(self.project["test_module"].get_content(), "class TestFunction(unittest.TestCase):")
 
     def test_associates_test_cases_with_application_modules(self):
-        add_tests_to_project(self.project, ["module"], 'unittest')
+        add_tests_to_project(self.project, [self.module_path], 'unittest')
 
         project_test_cases = get_test_cases(self.project)
         assert_length(project_test_cases, 1)
@@ -450,7 +452,7 @@ class TestGeneratorWithSingleModule:
     def test_chooses_the_right_existing_test_module_for_new_test_case(self):
         self.project.create_module("test_other.py")
 
-        add_tests_to_project(self.project, ["module"], 'unittest')
+        add_tests_to_project(self.project, [self.module_path], 'unittest')
 
         assert_length(self.project["test_module"].test_cases, 1)
         assert_length(self.project["test_other"].test_cases, 0)

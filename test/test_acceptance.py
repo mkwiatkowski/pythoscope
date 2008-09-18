@@ -14,10 +14,10 @@ class TestStaticAnalysis:
     def test_generates_test_stubs(self):
         expected_result = read_data("static_analysis_output.py")
         project = ProjectInDirectory()
-        project.path.putfile("module.py", read_data("static_analysis_module.py"))
+        module_path = project.path.putfile("module.py", read_data("static_analysis_module.py"))
 
         inspect_project(project)
-        add_tests_to_project(project, ["module"], 'unittest')
+        add_tests_to_project(project, [module_path], 'unittest')
         result = get_test_module_contents(project)
 
         assert_equal(expected_result, result)
@@ -34,7 +34,7 @@ class TestAppendingTestClasses:
     def _test_appending(self, modified_input, expected_output):
         project = ProjectInDirectory()
 
-        project.path.putfile("module.py", read_data("appending_test_cases_module_initial.py"))
+        module_path = project.path.putfile("module.py", read_data("appending_test_cases_module_initial.py"))
         test_module_path = project.path.putfile("test_module.py", read_data("appending_test_cases_output_initial.py"))
 
         # Analyze the project with an existing test module.
@@ -50,7 +50,7 @@ class TestAppendingTestClasses:
         inspect_project(project)
 
         # Regenerate the tests.
-        add_tests_to_project(project, ["module.py"], 'unittest')
+        add_tests_to_project(project, [module_path], 'unittest')
         project.save()
 
         assert_length(project.get_modules(), 2)

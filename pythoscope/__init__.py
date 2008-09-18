@@ -104,7 +104,10 @@ def generate_tests(modules, force, template):
             print "Error: Tried to generate tests for test module located at %r, " \
                   "but it was created during this run. Please try running pythoscope again." % err.path
     except ModuleNotFound, err:
-        print "Error: Couldn't find information on module %r. This shouldn't happen, please file a bug report." % err.module
+        if os.path.exists(err.module):
+            print "Error: Couldn't find information on module %r. This shouldn't happen, please file a bug report." % err.module
+        else:
+            print "Error: File doesn't exist: %s." % err.module
     except ModuleSaveError, err:
         print "Error: Couldn't save module %r: %s." % (err.module, err.reason)
     except UnknownTemplate, err:

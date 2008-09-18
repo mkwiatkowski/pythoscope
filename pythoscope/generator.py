@@ -310,7 +310,7 @@ class TestGenerator(object):
 
     def add_tests_to_project(self, project, modnames, force=False):
         for modname in modnames:
-            module = project[modname]
+            module = project.find_module_by_full_path(modname)
             self._add_tests_for_module(module, project, force)
 
     def create_test_class(self, class_name, method_descriptions):
