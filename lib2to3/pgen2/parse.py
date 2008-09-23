@@ -30,6 +30,15 @@ class ParseError(Exception):
         self.value = value
         self.context = context
 
+    def __reduce__(self):
+        """Implemented so pickle can serialize this object.
+
+        >>> import pickle
+        >>> pickle.loads(pickle.dumps(ParseError(1, 2, 3, 4)))
+        ParseError('1: type=2, value=3, context=4',)
+        """
+        return (ParseError, (self.msg, self.type, self.value, self.context))
+
 class Parser(object):
     """Parser engine.
 
