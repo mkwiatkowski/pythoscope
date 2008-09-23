@@ -1,3 +1,4 @@
+import difflib
 import os
 import re
 
@@ -51,6 +52,9 @@ def assert_single_function(info, name):
 
 def assert_equal_sets(collection1, collection2):
     assert_equal(set(collection1), set(collection2))
+
+def assert_equal_strings(s1, s2):
+    assert_equal(s1, s2, "Strings not equal. Diff:\n\n%s" % ''.join(difflib.ndiff(s1.splitlines(True), s2.splitlines(True))))
 
 def assert_not_raises(exception, callable):
     try:
