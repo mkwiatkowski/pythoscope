@@ -154,7 +154,7 @@ class Project(object):
         if name not in self.points_of_entry:
             poe = PointOfEntry(project=self, name=name)
             self.points_of_entry[name] = poe
-            return poe
+        return self.points_of_entry[name]
 
     def remove_point_of_entry(self, name):
         poe = self.points_of_entry.pop(name)
@@ -926,7 +926,9 @@ class PointOfEntry(Localizable):
     """
     def __init__(self, project, name):
         poes_subpath = project._extract_subpath(project._get_points_of_entry_path())
-        Localizable.__init__(self, project, os.path.join(poes_subpath, name))
+        # Points of entry start with created attribute equal to 0, as they are
+        # not up-to-date until they're run. See finalize_inspection().
+        Localizable.__init__(self, project, os.path.join(poes_subpath, name), created=0)
 
         self.name = name
         # After an inspection run, this will be a reference to the top level call.
@@ -979,6 +981,8 @@ class PointOfEntry(Localizable):
     def finalize_inspection(self):
         # We can release preserved objects now.
         self._preserved_objects = []
+        # Mark the point of entry as up-to-date.
+        self.created = time.time()
 
     def _preserve(self, object):
         """Preserve an object from garbage collection, so its id won't get
