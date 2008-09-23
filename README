@@ -61,7 +61,7 @@ and initializing Pythoscope internal structures::
 This command creates **.pythoscope/** subdirectory, which will hold all
 information related to Pythoscope. You look at the poor snake::
 
-  $ cat old_python.py
+  # old_python.py
   class OldPython(object):
       def __init__(self, age):
           pass # more code...
@@ -76,7 +76,7 @@ on it::
 
 and see a test module generated in the **tests/** directory::
 
-  $ cat tests/test_old_python.py
+  # tests/test_old_python.py
   import unittest
 
   class TestOldPython(unittest.TestCase):
@@ -103,7 +103,7 @@ Point of entry is a plain Python module that executes some parts of your code.
 You should keep each point of entry in a separate file in the
 **.pythoscope/points-of-entry/** directory. Let's look closer at our old friend::
 
-  $ cat old_python.py
+  # old_python.py
   class OldPython(object):
       def __init__(self, age):
           if age < 50:
@@ -120,7 +120,7 @@ You should keep each point of entry in a separate file in the
 
 Based on that definition we come up with the following point of entry::
 
-  $ cat .pythoscope/points-of-entry/123_years_old_python.py
+  # .pythoscope/points-of-entry/123_years_old_python.py
   from old_python import OldPython
   OldPython(123).hiss()
 
@@ -133,7 +133,7 @@ Pythoscope will execute our new point of entry, gathering as much dynamic
 information as possible. If you look at your test module now you'll notice
 that a new test case has been added::
 
-  $ cat tests/test_old_python.py
+  # tests/test_old_python.py
   from old_python import OldPython
   import unittest
 
@@ -161,7 +161,7 @@ translates to the number of generated test cases.
 So let's try writing another point of entry. But first look at another module
 we have in our project::
 
-  $ cat old_nest.py
+  # old_nest.py
   from old_python import OldPython
 
   class OldNest(object):
@@ -178,7 +178,7 @@ we have in our project::
 This module seems a bit higher-level than **old_python.py**. Yet, writing a point
 of entry for it is also straightforward::
 
-  $ cat .pythoscope/points-of-entry/old_nest_with_four_pythons.py
+  # .pythoscope/points-of-entry/old_nest_with_four_pythons.py
   from old_nest import OldNest
   OldNest([45, 55, 65, 75]).put_hand()
 
@@ -189,7 +189,7 @@ modules as arguments - all of them will be handled at once::
 
 This new point of entry not only allowed to create a test case for **OldNest**::
 
-  $ cat tests/test_old_nest.py
+  # tests/test_old_nest.py
   import unittest
   from old_nest import OldNest
 
