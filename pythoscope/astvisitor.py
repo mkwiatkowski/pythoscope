@@ -96,6 +96,18 @@ def parse(code):
 
     return result
 
+def parse_fragment(code):
+    """Works like parse() but returns an object stripped of the file_input
+    wrapper. This eases merging this piece of code into other ones.
+    """
+    parsed_code = parse(code)
+
+    if is_node_of_type(parsed_code, 'file_input') and \
+           len(parsed_code.children) == 2 and \
+           is_leaf_of_type(parsed_code.children[-1], token.ENDMARKER):
+        return parsed_code.children[0]
+    return parsed_code
+
 def regenerate(tree):
     """AST -> String
 

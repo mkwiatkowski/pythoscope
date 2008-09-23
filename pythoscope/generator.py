@@ -2,7 +2,7 @@ import os
 import re
 import types
 
-from astvisitor import EmptyCode, descend, parse, ASTVisitor
+from astvisitor import EmptyCode, descend, parse_fragment, ASTVisitor
 from store import Class, Function, TestClass, TestMethod, ModuleNotFound, \
      LiveObject, MethodCall, Method, Value, Type, Repr, Project, PointOfEntry
 from util import RePatternType, camelize, underscore, sorted, \
@@ -358,7 +358,7 @@ class TestGenerator(object):
         # Don't generate empty test classes.
         if method_descriptions:
             test_body = self.create_test_class(class_name, method_descriptions)
-            test_code = parse(test_body)
+            test_code = parse_fragment(test_body)
             def methoddesc2testmethod(method_description):
                 name = method_description.name
                 return TestMethod(name=name, code=find_method_code(test_code, name))
@@ -512,7 +512,7 @@ class TestGenerator(object):
                 return (assertion_type, output_type, type_of(input))
 
 class UnittestTestGenerator(TestGenerator):
-    main_snippet = parse("if __name__ == '__main__':\n    unittest.main()\n")
+    main_snippet = parse_fragment("if __name__ == '__main__':\n    unittest.main()\n")
 
     def test_class_header(self, name):
         self.ensure_import('unittest')

@@ -3,13 +3,15 @@ import os
 from fixture import TempIO
 from nose.tools import assert_equal, assert_raises
 
+from pythoscope.astvisitor import parse_fragment
+from pythoscope.generator import find_method_code
 from pythoscope.store import Project, Module, Class, Function, TestClass, \
      TestMethod, ModuleNotFound
 from pythoscope.inspector import remove_deleted_modules
 
 from helper import assert_length, assert_equal_sets, EmptyProject, \
      ProjectWithModules, ProjectWithRealModules, ProjectInDirectory, \
-     assert_not_raises, get_test_cases
+     assert_not_raises, get_test_cases, assert_equal_strings
 
 # Let nose know that those aren't test classes.
 TestClass.__test__ = False
@@ -151,12 +153,15 @@ class TestProjectWithTestModule:
         self.test_module = self.project.create_module("test_module.py")
         self.test_module.add_test_case(self.existing_test_class)
 
-    def test_attaches_test_class_to_test_module_with_most_test_cases_for_associated_module(self):
-        module = self.project.create_module("module.py")
-        irrelevant_test_module = self.project.create_module("irrelevant_test_module.py")
-        self.existing_test_class.associated_modules = [module]
+    def _associate_module_with_existing_test_class(self):
+        self.associated_module = self.project.create_module("module.py")
+        self.existing_test_class.associated_modules = [self.associated_module]
 
-        new_test_class = TestClass("new", associated_modules=[module])
+    def test_attaches_test_class_to_test_module_with_most_test_cases_for_associated_module(self):
+        irrelevant_test_module = self.project.create_module("irrelevant_test_module.py")
+        self._associate_module_with_existing_test_class()
+
+        new_test_class = TestClass("new", associated_modules=[self.associated_module])
         self.project.add_test_case(new_test_class)
 
         assert new_test_class in self.test_module.test_cases
@@ -230,3 +235,41 @@ class TestProjectWithTestModule:
         # But the method got replaced.
         assert_equal([new_test_method],
                      get_test_cases(self.project)[0].test_cases)
+
+    def test_appends_new_test_methods_to_test_classes_with_proper_indentation(self):
+        self._associate_module_with_existing_test_class()
+
+        klass = self._test_class_from_code(
+            "class NewTestClass(unittest.TestCase):\n"\
+            "    def test_some_method(self):\n"\
+            "        assert False # c'mon, implement me\n",
+            "NewTestClass",
+            ["test_some_method"],
+            [self.associated_module])
+        another_klass = self._test_class_from_code(
+            "class NewTestClass(unittest.TestCase):\n"\
+            "    def test_new_method(self):\n"\
+            "        assert True # ha!\n",
+            "NewTestClass",
+            ["test_new_method"],
+            [self.associated_module])
+        expected_output = "class NewTestClass(unittest.TestCase):\n"\
+                          "    def test_some_method(self):\n"\
+                          "        assert False # c'mon, implement me\n\n"\
+                          "    def test_new_method(self):\n"\
+                          "        assert True # ha!\n"
+
+        self.project.add_test_case(klass)
+        self.project.add_test_case(another_klass)
+
+        assert_equal_strings(expected_output, self.test_module.get_content())
+
+    def _test_class_from_code(self, code, name, method_names, associated_modules):
+        # TODO: this may too easily get out of sync with the code in
+        # generator:TestGenerator._generate_test_case, so refactor common things out.
+        parsed_code = parse_fragment(code)
+        def name2method(name):
+            return TestMethod(name=name, code=find_method_code(parsed_code, name))
+        return TestClass(name=name, code=parsed_code,
+                         test_cases=map(name2method, method_names),
+                         associated_modules=associated_modules)
