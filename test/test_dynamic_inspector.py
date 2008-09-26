@@ -6,12 +6,12 @@ from nose.plugins.skip import SkipTest
 
 from pythoscope.inspector.dynamic import trace_function, trace_exec, \
      inspect_point_of_entry, setup_tracing, teardown_tracing
-from pythoscope.store import Class, Function, Method, LiveObject, \
-     Project, wrap_call_arguments, wrap_object, Type
+from pythoscope.store import Class, Function, Generator, GeneratorObject, \
+     Method, LiveObject, Project, wrap_call_arguments, wrap_object, Type
 from pythoscope.util import findfirst
 
 from helper import TestableProject, assert_length, PointOfEntryMock, \
-     assert_equal_sets, ProjectWithModules, ProjectInDirectory
+     assert_equal_sets, ProjectWithModules, ProjectInDirectory, assert_instance
 
 
 class ClassMock(Class):
@@ -28,28 +28,26 @@ class ClassMock(Class):
         return self._methods[name]
 
 class ProjectMock(Project):
-    """Project that has all the classes and functions you try to find inside it
-    via find_class() and find_function().
+    """Project that has all the classes, functions and generators you try to
+    find inside it via find_object().
     """
     def __init__(self, ignored_functions=[]):
         self.ignored_functions = ignored_functions
         self.path = "."
         self._classes = {}
         self._functions = {}
+        self._generators = {}
 
-    def find_class(self, classname, modulepath):
-        class_id = (classname, modulepath)
-        if not self._classes.has_key(class_id):
-            self._classes[class_id] = ClassMock(classname)
-        return self._classes[class_id]
-
-    def find_function(self, name, modulepath):
-        if name in self.ignored_functions:
+    def find_object(self, type, name, modulepath):
+        if type in [Function, Generator] and name in self.ignored_functions:
             return None
-        function_id = (name, modulepath)
-        if not self._functions.has_key(function_id):
-            self._functions[function_id] = Function(name)
-        return self._functions[function_id]
+
+        object_id = (name, modulepath)
+        container = self._get_container_for(type)
+
+        if not container.has_key(object_id):
+            container[object_id] = self._create_object(type, name)
+        return container[object_id]
 
     def iter_callables(self):
         for klass in self._classes.values():
@@ -57,9 +55,32 @@ class ProjectMock(Project):
                 yield live_object
         for function in self._functions.values():
             yield function
+        for generator in self._generators.values():
+            yield generator
 
     def get_callables(self):
         return list(self.iter_callables())
+
+    def iter_generator_objects(self):
+        for generator in self._generators.values():
+            for gobject in generator.objects.values():
+                yield gobject
+
+    def _get_container_for(self, type):
+        if type is Class:
+            return self._classes
+        elif type is Function:
+            return self._functions
+        elif type is Generator:
+            return self._generators
+        else:
+            raise TypeError("Cannot store %r inside a module." % type)
+
+    def _create_object(self, type, name):
+        if type is Class:
+            return ClassMock(name)
+        else:
+            return type(name)
 
 def assert_call(expected_input, expected_output, call):
     assert_equal(wrap_call_arguments(expected_input), call.input)
@@ -70,6 +91,11 @@ def assert_call_with_exception(expected_input, expected_exception_type, call):
     assert_equal(wrap_call_arguments(expected_input), call.input)
     assert call.raised_exception()
     assert_equal(expected_exception_type, type(call.exception.value))
+
+def assert_generator_object(expected_input, expected_yields, object):
+    assert_instance(object, GeneratorObject)
+    assert_equal(wrap_call_arguments(expected_input), object.input)
+    assert_equal(map(wrap_object, expected_yields), object.output)
 
 def call_graph_as_string(call_or_calls, indentation=0):
     def lines(call):
@@ -287,6 +313,14 @@ def function_with_ignored_function():
     def not_ignored_outer(z):
         return ignored(z-1) * 3
     not_ignored_outer(13)
+
+def function_calling_generator():
+    def generator(x):
+        yield x
+        yield x + 1
+        yield x * 2
+        yield x ** 3
+    [x for x in generator(2)]
 
 class DynamicInspectorTest:
     def _collect_callables(self, fun, ignored_functions=[]):
@@ -511,6 +545,18 @@ class TestTraceFunction(DynamicInspectorTest):
 
         assert_call({'z': 13}, 75, outer_function.calls[0])
         assert_call({'x': 24}, 25, inner_function.calls[0])
+
+    def test_handles_yielded_values(self):
+        trace = self._collect_callables(function_calling_generator)
+
+        assert_length(trace, 1)
+        generator = trace.pop()
+
+        assert_instance(generator, Generator)
+        assert_length(generator.objects, 1)
+        gobject = generator.objects.popitem()[1]
+
+        assert_generator_object({'x': 2}, [2, 3, 4, 8], gobject)
 
 class TestTraceExec(DynamicInspectorTest):
     "trace_exec"

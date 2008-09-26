@@ -3,7 +3,7 @@ import sys
 from nose.tools import assert_equal
 from nose.exc import SkipTest
 from helper import assert_length, assert_single_class, assert_single_function, \
-     assert_equal_sets, EmptyProject
+     assert_single_generator, assert_equal_sets, EmptyProject
 
 from pythoscope.inspector.static import inspect_code
 from pythoscope.astvisitor import regenerate
@@ -178,6 +178,17 @@ if __name__ == '__main__':
     unittest.main()
 """
 
+standard_generator_definition = """def gen(x):
+    yield x
+    yield x + 1
+"""
+
+function_returning_generator_object = """def fun():
+    def gen():
+        yield 1
+    return gen()
+"""
+
 class TestStaticInspector:
     def _inspect_code(self, code):
         return inspect_code(EmptyProject(), "module.py", code)
@@ -305,3 +316,13 @@ class TestStaticInspector:
         assert info.main_snippet is not None
         assert_equal(["TestFib"], get_names(info.test_classes))
         assert_equal(["fib"], get_names(info.functions))
+
+    def test_recognizes_generator_definitions(self):
+        info = self._inspect_code(standard_generator_definition)
+
+        assert_single_generator(info, "gen")
+
+    def test_treats_functions_returning_generator_objects_as_functions(self):
+        info = self._inspect_code(function_returning_generator_object)
+
+        assert_single_function(info, "fun")

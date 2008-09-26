@@ -2,7 +2,8 @@ import os.path
 import re
 
 from pythoscope.astvisitor import descend, parse, ParseError, ASTVisitor
-from pythoscope.store import Module, Class, Function, Method, TestClass, TestMethod
+from pythoscope.store import Module, Class, Function, Generator, Method, \
+     TestClass, TestMethod
 from pythoscope.util import read_file_contents
 
 
@@ -19,6 +20,44 @@ def is_test_class(name, bases):
     """
     return name.startswith("Test") or name.endswith("Test") \
            or "unittest.TestCase" in bases
+
+def unindent(string):
+    """Remove the initial part of whitespace from string.
+
+    >>> unindent("1 + 2 + 3\\n")
+    '1 + 2 + 3\\n'
+    >>> unindent("  def fun():\\n    return 42\\n")
+    'def fun():\\n  return 42\\n'
+    """
+    match = re.match(r'^([\t ]+)', string)
+    if not match:
+        return string
+    whitespace = match.group(1)
+
+    lines = []
+    for line in string.splitlines(True):
+        if line.startswith(whitespace):
+            lines.append(line[len(whitespace):])
+        else:
+            return string
+    return ''.join(lines)
+
+def is_generator_definition(code):
+    """Return True if given piece of code is a generator definition.
+
+    >>> is_generator_definition("def f():\\n  return 1\\n")
+    False
+    >>> is_generator_definition("def g():\\n  yield 2\\n")
+    True
+    >>> is_generator_definition("  def indented_gen():\\n    yield 3\\n")
+    True
+    """
+    try:
+        return compile(unindent(str(code)), '', 'single').co_consts[0].co_flags & 0x20 != 0
+    except SyntaxError:
+        # This most likely means given code used "return" with argument
+        # inside generator.
+        return False
 
 class ModuleVisitor(ASTVisitor):
     def __init__(self):
@@ -38,7 +77,10 @@ class ModuleVisitor(ASTVisitor):
         self.objects.append(klass)
 
     def visit_function(self, name, args, body):
-        self.objects.append(Function(name))
+        if is_generator_definition(body):
+            self.objects.append(Generator(name, body))
+        else:
+            self.objects.append(Function(name, body))
 
     def visit_lambda_assign(self, name):
         self.objects.append(Function(name))

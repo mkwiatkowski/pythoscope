@@ -138,16 +138,6 @@ def resolve_args(names, locals):
 def input_from_argvalues(args, varargs, varkw, locals):
     return dict(resolve_args(args + compact([varargs, varkw]), locals))
 
-def get_code_from(thing):
-    # Frames have f_code attribute.
-    if hasattr(thing, 'f_code'):
-        return thing.f_code
-    # Function objects have func_code attribute.
-    elif hasattr(thing, 'func_code'):
-        return thing.func_code
-    else:
-        raise TypeError("Don't know how to get code from %s" % thing)
-
 def is_ignored_code(code):
     if code.co_name in IGNORED_NAMES:
         return True
@@ -155,8 +145,11 @@ def is_ignored_code(code):
         return True
     return False
 
+def is_generator_code(code):
+    return code.co_flags & 0x20 != 0
+
 def create_call(frame):
-    code = get_code_from(frame)
+    code = frame.f_code
     name = code.co_name
     modulepath = code.co_filename
 
@@ -167,7 +160,10 @@ def create_call(frame):
             return _point_of_entry.create_method_call(name, classname, modulepath, self, input)
         except NotMethodFrame:
             input = input_from_argvalues(*inspect.getargvalues(frame))
-            return _point_of_entry.create_function_call(name, modulepath, input)
+            if is_generator_code(code):
+                return _point_of_entry.create_generator_yield(name, modulepath, input, code)
+            else:
+                return _point_of_entry.create_function_call(name, modulepath, input)
 
 def tracer(frame, event, arg):
     if event == 'call':
