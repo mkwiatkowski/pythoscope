@@ -1,5 +1,7 @@
+import gc
 import os
 import re
+import types
 
 # Portability code.
 try:
@@ -195,6 +197,9 @@ def findfirst(pred, seq):
     for item in seq:
         if pred(item):
             return item
+
+def contains_active_generator(frame):
+    return bool(all_of_type(gc.get_referrers(frame), types.GeneratorType))
 
 # Regular expressions helpers.
 

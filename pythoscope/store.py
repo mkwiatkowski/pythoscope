@@ -11,7 +11,7 @@ from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
 from util import all_of_type, max_by_not_zero, set, \
      write_string_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, python_modules_below, \
-     extract_subpath, directories_under, findfirst
+     extract_subpath, directories_under, findfirst, contains_active_generator
 
 
 # So we can pickle the function type.
@@ -199,7 +199,7 @@ class Project(object):
                 test_case.associated_modules.remove(old_module)
                 test_case.associated_modules.append(module)
             except ValueError:
-                pass        
+                pass
 
     def _extract_point_of_entry_subpath(self, path):
         """Takes the file path and returns subpath relative to the
@@ -586,7 +586,7 @@ class GeneratorObject(Call):
 
     def __repr__(self):
         return "GeneratorObject(id=%d, generator=%r, yields=%r)" % \
-               (self.id, self.generator.name, self.output)
+               (self.id, self.callable.name, self.output)
 
 class LiveObject(Callable):
     """Representation of an object which creation and usage was traced
@@ -1025,7 +1025,7 @@ class PointOfEntry(Localizable):
             function.add_call(call)
             return call
 
-    def create_generator_yield(self, name, modulepath, input, code):
+    def create_generator_yield(self, name, modulepath, input, code, frame):
         generator = self.project.find_object(Generator, name, modulepath)
         if not generator:
             return
@@ -1036,6 +1036,14 @@ class PointOfEntry(Localizable):
             gobject = GeneratorObject(id(code), generator, self, wrap_call_arguments(input))
             generator.add_generator_object(gobject)
             self._preserve(code)
+
+            # Generator objects return None to the tracer when stopped. That
+            # extra None we have to filter out manually (see
+            # _fix_generator_objects method). The only way to distinguish
+            # between active and stopped generators is to ask garbage collector
+            # about them. So we temporarily save the generator frame inside the
+            # GeneratorObject, so it can be inspected later.
+            gobject._frame = frame
 
         return gobject
 
@@ -1054,8 +1062,14 @@ class PointOfEntry(Localizable):
         self._preserved_objects.append(object)
 
     def _fix_generator_objects(self):
-        """Remove last values of yields of generator objects, as those are
+        """Remove last yielded values of generator objects, as those are
         just bogus Nones placed on generator stop.
         """
         for gobject in self.project.iter_generator_objects():
-            gobject.output.pop()
+            if not contains_active_generator(gobject._frame) \
+                   and gobject.output \
+                   and gobject.output[-1] == Value(None):
+                gobject.output.pop()
+            # Once we know if the generator is active or not, we can discard
+            # the frame.
+            del gobject._frame

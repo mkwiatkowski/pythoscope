@@ -161,7 +161,7 @@ def create_call(frame):
         except NotMethodFrame:
             input = input_from_argvalues(*inspect.getargvalues(frame))
             if is_generator_code(code):
-                return _point_of_entry.create_generator_yield(name, modulepath, input, code)
+                return _point_of_entry.create_generator_yield(name, modulepath, input, code, frame)
             else:
                 return _point_of_entry.create_function_call(name, modulepath, input)
 
@@ -205,7 +205,7 @@ def setup_tracing(point_of_entry):
 
     # Put project's path into PYTHONPATH, so point of entry's imports work.
     sys.path.insert(0, point_of_entry.project.path)
-    point_of_entry.clear_previous_run()    
+    point_of_entry.clear_previous_run()
 
     _call_stack = CallStack()
     _point_of_entry = point_of_entry

@@ -322,6 +322,38 @@ def function_calling_generator():
         yield x ** 3
     [x for x in generator(2)]
 
+def function_calling_generator_that_yields_one():
+    def generator():
+        yield 1
+    g = generator()
+    g.next()
+
+def function_calling_generator_that_yields_none():
+    def generator():
+        yield None
+    g = generator()
+    g.next()
+
+def function_calling_empty_generator():
+    def generator(x):
+        if False:
+            yield 'something'
+    [x for x in generator(123)]
+
+def function_calling_generator_that_doesnt_get_destroyed():
+    def generator():
+        yield 1
+    g = generator()
+    g.next()
+    globals()['__generator_yielding_one'] = g
+
+def function_calling_generator_that_yields_none_and_doesnt_get_destroyed():
+    def generator():
+        yield None
+    g = generator()
+    g.next()
+    globals()['__generator_yielding_none'] = g
+
 class DynamicInspectorTest:
     def _collect_callables(self, fun, ignored_functions=[]):
         if isinstance(fun, str):
@@ -557,6 +589,46 @@ class TestTraceFunction(DynamicInspectorTest):
         gobject = generator.objects.popitem()[1]
 
         assert_generator_object({'x': 2}, [2, 3, 4, 8], gobject)
+
+    def test_handles_single_yielded_value(self):
+        trace = self._collect_callables(function_calling_generator_that_yields_one)
+
+        assert_length(trace, 1)
+        generator = trace.pop()
+
+        assert_instance(generator, Generator)
+        assert_length(generator.objects, 1)
+        gobject = generator.objects.popitem()[1]
+
+        assert_generator_object({}, [1], gobject)
+
+    def test_handles_yielded_nones(self):
+        trace = self._collect_callables(function_calling_generator_that_yields_none)
+
+        gobject = trace.pop().objects.popitem()[1]
+
+        assert_generator_object({}, [None], gobject)
+
+    def test_handles_empty_generators(self):
+        trace = self._collect_callables(function_calling_empty_generator)
+
+        gobject = trace.pop().objects.popitem()[1]
+
+        assert_generator_object({'x': 123}, [], gobject)
+
+    def test_handles_generator_objects_that_werent_destroyed(self):
+        trace = self._collect_callables(function_calling_generator_that_doesnt_get_destroyed)
+
+        gobject = trace.pop().objects.popitem()[1]
+
+        assert_generator_object({}, [1], gobject)
+
+    def test_handles_generator_objects_that_yield_none_and_dont_get_destroyed(self):
+        trace = self._collect_callables(function_calling_generator_that_yields_none_and_doesnt_get_destroyed)
+
+        gobject = trace.pop().objects.popitem()[1]
+
+        assert_generator_object({}, [None], gobject)
 
 class TestTraceExec(DynamicInspectorTest):
     "trace_exec"
