@@ -1,9 +1,8 @@
-import os.path
 import re
 
 from pythoscope.astvisitor import descend, parse, ParseError, ASTVisitor
-from pythoscope.store import Module, Class, Function, Generator, Method, \
-     TestClass, TestMethod
+from pythoscope.store import Class, Function, Generator, Method, TestClass,\
+    TestMethod
 from pythoscope.util import read_file_contents
 
 

@@ -6,8 +6,7 @@ from fixture import TempIO
 from nose.tools import assert_equal
 
 from pythoscope.generator import add_tests_to_project
-from pythoscope.store import Module, Project, Function, ModuleNotFound, \
-     PointOfEntry
+from pythoscope.store import Function, ModuleNotFound, PointOfEntry, Project
 from pythoscope.util import read_file_contents, set
 
 

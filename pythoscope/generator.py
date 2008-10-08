@@ -1,4 +1,3 @@
-import os
 import re
 import types
 
@@ -460,7 +459,7 @@ class TestGenerator(object):
                     yield self._create_assertion(live_object.klass.name, init_call, stub_all)
                 else:
                     yield(('comment', "# Make sure it doesn't raise any exceptions."))
-    
+
             for call in external_calls:
                 name = "%s.%s" % (local_name, call.callable.name)
                 yield(self._create_assertion(name, call, stub_all))

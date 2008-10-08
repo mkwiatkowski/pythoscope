@@ -2,7 +2,6 @@ import sys
 import types
 
 from nose.tools import assert_equal
-from nose.plugins.skip import SkipTest
 
 from pythoscope.inspector.dynamic import trace_function, trace_exec, \
      inspect_point_of_entry, setup_tracing, teardown_tracing
@@ -442,7 +441,7 @@ class TestTraceFunction(DynamicInspectorTest):
         assert_call({'x': 2, 'rest': (3,)},   [3,2],   function.calls[1])
         assert_call({'x': 4, 'rest': (5, 6)}, [5,6,4], function.calls[2])
 
-    def test_returns_function_objects_with_calls_that_use_varargs(self):
+    def test_returns_function_objects_with_calls_that_use_varargs_only(self):
         trace = self._collect_callables(function_calling_another_with_varargs_only)
         function = trace.pop()
 

@@ -2,19 +2,18 @@ import os
 import re
 import time
 
-from fixture import TempIO
 from nose.tools import assert_equal, assert_not_equal, assert_raises
 
 from pythoscope.astvisitor import parse
 from pythoscope.generator import add_tests_to_project
-from pythoscope.store import Project, Module, Class, Method, Function, \
+from pythoscope.store import Project, Class, Method, Function, \
      ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod, \
      MethodCall, FunctionCall, LiveObject, wrap_call_arguments, \
      wrap_object, PointOfEntry
 from pythoscope.util import read_file_contents, get_last_modification_time
 
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
-     CustomSeparator, generate_single_test_module, ProjectInDirectory, \
+     generate_single_test_module, ProjectInDirectory, \
      ProjectWithModules, TestableProject, assert_contains_once, \
      PointOfEntryMock, get_test_cases, assert_equal_sets
 

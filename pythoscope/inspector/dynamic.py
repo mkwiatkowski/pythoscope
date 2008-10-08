@@ -1,5 +1,4 @@
 import inspect
-import optparse
 import sys
 import types
 
@@ -42,9 +41,9 @@ class CallStack(object):
             caller.set_exception(exception)
             self.last_traceback = traceback
 
-def compact(list):
+def compact(lst):
     "Remove all occurences of None from the given list."
-    return [x for x in list if x is not None]
+    return [x for x in lst if x is not None]
 
 def find_variable(frame, varname):
     """Find variable named varname in the scope of a frame.
@@ -225,8 +224,10 @@ def teardown_tracing(point_of_entry):
     _point_of_entry.call_graph = _call_stack.top_level_calls
     _point_of_entry.finalize_inspection()
 
+    _sys_modules = None
     _point_of_entry = None
     _call_stack = None
+
     sys.path.remove(point_of_entry.project.path)
 
 def inspect_point_of_entry(point_of_entry):

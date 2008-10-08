@@ -3,7 +3,6 @@ from nose.tools import assert_equal
 from pythoscope.astvisitor import parse, regenerate, ASTVisitor
 
 
-
 class TestParser:
     def test_handles_inputs_without_newline(self):
         tree = parse("42 # answer")

@@ -5,12 +5,12 @@ from nose.tools import assert_equal, assert_raises
 
 from pythoscope.astvisitor import parse_fragment
 from pythoscope.generator import find_method_code
-from pythoscope.store import Project, Module, Class, Function, TestClass, \
+from pythoscope.store import Project, Class, Function, TestClass, \
      TestMethod, ModuleNotFound
 from pythoscope.inspector import remove_deleted_modules
 
 from helper import assert_length, assert_equal_sets, EmptyProject, \
-     ProjectWithModules, ProjectWithRealModules, ProjectInDirectory, \
+     ProjectWithModules, ProjectWithRealModules, \
      assert_not_raises, get_test_cases, assert_equal_strings
 
 # Let nose know that those aren't test classes.
@@ -83,7 +83,6 @@ class TestProject:
 
     def test_adds_new_test_methods_to_existing_test_classes_inside_application_modules(self):
         project = EmptyProject()
-        application_class = Class("Something", [])
         test_class = TestClass("TestSomething")
         module = project.create_module("somethings.py")
         module.add_test_case(test_class)
@@ -158,7 +157,7 @@ class TestProjectWithTestModule:
         self.existing_test_class.associated_modules = [self.associated_module]
 
     def test_attaches_test_class_to_test_module_with_most_test_cases_for_associated_module(self):
-        irrelevant_test_module = self.project.create_module("irrelevant_test_module.py")
+        self.project.create_module("irrelevant_test_module.py")
         self._associate_module_with_existing_test_class()
 
         new_test_class = TestClass("new", associated_modules=[self.associated_module])
