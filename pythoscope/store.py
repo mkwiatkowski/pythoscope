@@ -610,9 +610,11 @@ class LiveObject(Callable):
 
         self.unique_id = (point_of_entry.name, id)
 
-    def add_generator_object(self, gobject):
-        if gobject not in self.calls:
-            self.add_call(gobject)
+    def add_call(self, call):
+        # Don't add the same GeneratorObject more than once.
+        if isinstance(call, GeneratorObject) and call in self.calls:
+            return
+        Callable.add_call(self, call)
 
     def get_init_call(self):
         """Return a call to __init__ or None if it wasn't called.
@@ -972,6 +974,9 @@ class Module(Localizable, TestSuite):
                 raise ModuleSaveError(self.subpath, err.message)
             self.changed = False
 
+def is_generator_code(code):
+    return code.co_flags & 0x20 != 0
+
 class PointOfEntry(Localizable):
     """Piece of code provided by the user that allows dynamic analysis.
 
@@ -1005,92 +1010,29 @@ class PointOfEntry(Localizable):
             function.remove_calls_from(self)
         self.call_graph = None
 
-    def create_method_yield(self, name, classname, modulepath, object, input, code, frame):
-        klass = self.project.find_object(Class, classname, modulepath)
-        if not klass:
-            return
-
-        generator = klass.find_method_by_name(name)
-        if not generator:
-            return
-
+    def create_method_call(self, name, classname, modulepath, object, input, code, frame):
         try:
-            gobject = generator.objects[(self.name, id(code))]
-        except KeyError:
-            gobject = GeneratorObject(id(code), generator, self, wrap_call_arguments(input))
-            generator.add_generator_object(gobject)
-            self._gobjects.append(gobject)
-            self._preserve(code)
-
-            # Generator objects return None to the tracer when stopped. That
-            # extra None we have to filter out manually (see
-            # _fix_generator_objects method). The only way to distinguish
-            # between active and stopped generators is to ask garbage collector
-            # about them. So we temporarily save the generator frame inside the
-            # GeneratorObject, so it can be inspected later.
-            gobject._frame = frame
-
-        try:
-            live_object = klass.live_objects[(self.name, id(object))]
-        except KeyError:
-            live_object = LiveObject(id(object), klass, self)
-            klass.add_live_object(live_object)
-            self._preserve(object)
-
-        live_object.add_generator_object(gobject)
-        return gobject
-
-    def create_method_call(self, name, classname, modulepath, object, input):
-        klass = self.project.find_object(Class, classname, modulepath)
-        if not klass:
-            return
-
-        method = klass.find_method_by_name(name)
-        if not method:
-            return
-
-        call = MethodCall(method, wrap_call_arguments(input))
-
-        try:
-            live_object = klass.live_objects[(self.name, id(object))]
-        except KeyError:
-            live_object = LiveObject(id(object), klass, self)
-            klass.add_live_object(live_object)
-            self._preserve(object)
-
-        live_object.add_call(call)
-        return call
-
-    def create_function_call(self, name, modulepath, input):
-        function = self.project.find_object(Function, name, modulepath)
-
-        if function:
-            call = FunctionCall(self, function, wrap_call_arguments(input))
-            function.add_call(call)
+            live_object, method = self._retrieve_live_object_for_method(object, name, classname, modulepath)
+            if is_generator_code(code):
+                call = self._retrieve_generator_object(method, input, code, frame)
+            else:
+                call = MethodCall(method, wrap_call_arguments(input))
+            live_object.add_call(call)
             return call
+        except LookupError:
+            pass
 
-    def create_generator_yield(self, name, modulepath, input, code, frame):
-        generator = self.project.find_object(Generator, name, modulepath)
-        if not generator:
-            return
-
-        try:
-            gobject = generator.objects[(self.name, id(code))]
-        except KeyError:
-            gobject = GeneratorObject(id(code), generator, self, wrap_call_arguments(input))
-            generator.add_generator_object(gobject)
-            self._gobjects.append(gobject)
-            self._preserve(code)
-
-            # Generator objects return None to the tracer when stopped. That
-            # extra None we have to filter out manually (see
-            # _fix_generator_objects method). The only way to distinguish
-            # between active and stopped generators is to ask garbage collector
-            # about them. So we temporarily save the generator frame inside the
-            # GeneratorObject, so it can be inspected later.
-            gobject._frame = frame
-
-        return gobject
+    def create_function_call(self, name, modulepath, input, code, frame):
+        if is_generator_code(code):
+            generator = self.project.find_object(Generator, name, modulepath)
+            if generator:
+                return self._retrieve_generator_object(generator, input, code, frame)
+        else:
+            function = self.project.find_object(Function, name, modulepath)
+            if function:
+                call = FunctionCall(self, function, wrap_call_arguments(input))
+                function.add_call(call)
+                return call
 
     def finalize_inspection(self):
         # We can release preserved objects now.
@@ -1099,6 +1041,49 @@ class PointOfEntry(Localizable):
         self.created = time.time()
         # Fix output of generator objects.
         self._fix_generator_objects()
+
+    def _retrieve_live_object_for_method(self, object, name, classname, modulepath):
+        klass = self.project.find_object(Class, classname, modulepath)
+        if not klass:
+            raise LookupError("Couldn't find class %s in %s." %\
+                                  (classname, modulepath))
+
+        method = klass.find_method_by_name(name)
+        if not method:
+            raise LookupError("Couldn't find method %s in %s:%s." %\
+                                  (name, modulepath, classname))
+
+        live_object = self._retrieve_live_object(object, klass)
+
+        return live_object, method
+
+    def _retrieve_generator_object(self, generator, input, code, frame):
+        try:
+            gobject = generator.objects[(self.name, id(code))]
+        except KeyError:
+            gobject = GeneratorObject(id(code), generator, self, wrap_call_arguments(input))
+            generator.add_generator_object(gobject)
+            self._gobjects.append(gobject)
+            self._preserve(code)
+
+            # Generator objects return None to the tracer when stopped. That
+            # extra None we have to filter out manually (see
+            # _fix_generator_objects method). The only way to distinguish
+            # between active and stopped generators is to ask garbage collector
+            # about them. So we temporarily save the generator frame inside the
+            # GeneratorObject, so it can be inspected later.
+            gobject._frame = frame
+
+        return gobject
+
+    def _retrieve_live_object(self, object, klass):
+        try:
+            live_object = klass.live_objects[(self.name, id(object))]
+        except KeyError:
+            live_object = LiveObject(id(object), klass, self)
+            klass.add_live_object(live_object)
+            self._preserve(object)
+        return live_object
 
     def _preserve(self, object):
         """Preserve an object from garbage collection, so its id won't get

@@ -144,9 +144,6 @@ def is_ignored_code(code):
         return True
     return False
 
-def is_generator_code(code):
-    return code.co_flags & 0x20 != 0
-
 def create_call(frame):
     code = frame.f_code
     name = code.co_name
@@ -156,16 +153,10 @@ def create_call(frame):
         try:
             self, input = get_method_information(frame)
             classname = self.__class__.__name__
-            if is_generator_code(code):
-                return _point_of_entry.create_method_yield(name, classname, modulepath, self, input, code, frame)
-            else:
-                return _point_of_entry.create_method_call(name, classname, modulepath, self, input)
+            return _point_of_entry.create_method_call(name, classname, modulepath, self, input, code, frame)
         except NotMethodFrame:
             input = input_from_argvalues(*inspect.getargvalues(frame))
-            if is_generator_code(code):
-                return _point_of_entry.create_generator_yield(name, modulepath, input, code, frame)
-            else:
-                return _point_of_entry.create_function_call(name, modulepath, input)
+            return _point_of_entry.create_function_call(name, modulepath, input, code, frame)
 
 def tracer(frame, event, arg):
     if event == 'call':
