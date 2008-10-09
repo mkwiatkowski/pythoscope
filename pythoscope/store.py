@@ -10,7 +10,7 @@ from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
      remove_trailing_whitespace
 from util import all_of_type, max_by_not_zero, set, \
      write_string_to_file, ensure_directory, DirectoryException, \
-     get_last_modification_time, read_file_contents, python_modules_below, \
+     get_last_modification_time, read_file_contents, \
      extract_subpath, directories_under, findfirst, contains_active_generator
 
 
