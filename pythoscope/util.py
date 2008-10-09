@@ -201,6 +201,9 @@ def findfirst(pred, seq):
 def contains_active_generator(frame):
     return bool(all_of_type(gc.get_referrers(frame), types.GeneratorType))
 
+def is_generator_code(code):
+    return code.co_flags & 0x20 != 0
+
 # Regular expressions helpers.
 
 RePatternType = type(re.compile(''))

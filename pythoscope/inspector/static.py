@@ -1,9 +1,10 @@
 import re
+import types
 
 from pythoscope.astvisitor import descend, parse, ParseError, ASTVisitor
 from pythoscope.store import Class, Function, Generator, Method, TestClass,\
     TestMethod
-from pythoscope.util import read_file_contents
+from pythoscope.util import all_of_type, is_generator_code, read_file_contents
 
 
 def is_test_class(name, bases):
@@ -41,7 +42,15 @@ def unindent(string):
             return string
     return ''.join(lines)
 
-def is_generator_definition(code):
+def function_code_from_definition(definition):
+    """Return a code object of a given function definition.
+
+    Can raise SyntaxError if the definition is not valid.
+    """
+    consts = compile(unindent(str(definition)), '', 'single').co_consts
+    return all_of_type(consts, types.CodeType)[0]
+
+def is_generator_definition(definition):
     """Return True if given piece of code is a generator definition.
 
     >>> is_generator_definition("def f():\\n  return 1\\n")
@@ -52,7 +61,7 @@ def is_generator_definition(code):
     True
     """
     try:
-        return compile(unindent(str(code)), '', 'single').co_consts[0].co_flags & 0x20 != 0
+        return is_generator_code(function_code_from_definition(definition))
     except SyntaxError:
         # This most likely means given code used "return" with argument
         # inside generator.

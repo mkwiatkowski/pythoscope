@@ -10,7 +10,7 @@ from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
      remove_trailing_whitespace
 from util import all_of_type, max_by_not_zero, set, \
      write_string_to_file, ensure_directory, DirectoryException, \
-     get_last_modification_time, read_file_contents, \
+     get_last_modification_time, read_file_contents, is_generator_code, \
      extract_subpath, directories_under, findfirst, contains_active_generator
 
 
@@ -973,9 +973,6 @@ class Module(Localizable, TestSuite):
             except DirectoryException, err:
                 raise ModuleSaveError(self.subpath, err.message)
             self.changed = False
-
-def is_generator_code(code):
-    return code.co_flags & 0x20 != 0
 
 class PointOfEntry(Localizable):
     """Piece of code provided by the user that allows dynamic analysis.

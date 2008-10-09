@@ -195,6 +195,10 @@ class_with_method_generator_definition = """class SomeClass(object):
         yield 2
 """
 
+function_with_default_argument_value = """def nofun(to='day'):
+    return 'home'
+"""
+
 class TestStaticInspector:
     def _inspect_code(self, code):
         return inspect_code(EmptyProject(), "module.py", code)
@@ -339,3 +343,8 @@ class TestStaticInspector:
         method = info.classes[0].methods[0]
         assert_equal("method_generator", method.name)
         assert_instance(method, Generator)
+
+    def test_handles_functions_with_default_argument_values(self):
+        info = self._inspect_code(function_with_default_argument_value)
+
+        assert_single_function(info, "nofun")
