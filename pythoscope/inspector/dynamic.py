@@ -156,7 +156,10 @@ def create_call(frame):
         try:
             self, input = get_method_information(frame)
             classname = self.__class__.__name__
-            return _point_of_entry.create_method_call(name, classname, modulepath, self, input)
+            if is_generator_code(code):
+                return _point_of_entry.create_method_yield(name, classname, modulepath, self, input, code, frame)
+            else:
+                return _point_of_entry.create_method_call(name, classname, modulepath, self, input)
         except NotMethodFrame:
             input = input_from_argvalues(*inspect.getargvalues(frame))
             if is_generator_code(code):

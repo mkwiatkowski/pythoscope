@@ -17,21 +17,26 @@ class ClassMock(Class):
     """Class that has all the methods you try to find inside it via
     find_method_by_name().
     """
-    def __init__(self, name):
+    def __init__(self, name, generator_methods):
         Class.__init__(self, name)
+        self.generator_methods = generator_methods
         self._methods = {}
 
     def find_method_by_name(self, name):
         if not self._methods.has_key(name):
-            self._methods[name] = Method(name)
+            if name in self.generator_methods:
+                self._methods[name] = Generator(name)
+            else:
+                self._methods[name] = Method(name)
         return self._methods[name]
 
 class ProjectMock(Project):
     """Project that has all the classes, functions and generators you try to
     find inside it via find_object().
     """
-    def __init__(self, ignored_functions=[]):
+    def __init__(self, ignored_functions=[], generator_methods=[]):
         self.ignored_functions = ignored_functions
+        self.generator_methods = generator_methods
         self.path = "."
         self._classes = {}
         self._functions = {}
@@ -77,7 +82,7 @@ class ProjectMock(Project):
 
     def _create_object(self, type, name):
         if type is Class:
-            return ClassMock(name)
+            return ClassMock(name, self.generator_methods)
         else:
             return type(name)
 
@@ -353,14 +358,22 @@ def function_calling_generator_that_yields_none_and_doesnt_get_destroyed():
     g.next()
     globals()['__generator_yielding_none'] = g
 
+def function_calling_generator_method():
+    class Class(object):
+        def genmeth(self):
+            yield 0
+            yield 1
+            yield 0
+    [x for x in Class().genmeth()]
+
 class DynamicInspectorTest:
-    def _collect_callables(self, fun, ignored_functions=[]):
+    def _collect_callables(self, fun, ignored_functions=[], generator_methods=[]):
         if isinstance(fun, str):
             trace = trace_exec
         else:
             trace = trace_function
 
-        self.project = ProjectMock(ignored_functions)
+        self.project = ProjectMock(ignored_functions, generator_methods)
         self.poe = PointOfEntryMock(project=self.project)
 
         setup_tracing(self.poe)
@@ -517,7 +530,7 @@ class TestTraceFunction(DynamicInspectorTest):
         assert_length(trace, 1)
 
         live_object = trace[0]
-        assert isinstance(live_object, LiveObject)
+        assert_instance(live_object, LiveObject)
         assert_length(live_object.calls, 2)
         assert_length(live_object.get_external_calls(), 1)
 
@@ -628,6 +641,20 @@ class TestTraceFunction(DynamicInspectorTest):
         gobject = trace.pop().objects.popitem()[1]
 
         assert_generator_object({}, [None], gobject)
+
+    def test_handles_generator_methods(self):
+        trace = self._collect_callables(function_calling_generator_method,
+                                        generator_methods=['genmeth'])
+
+        assert_length(trace, 1)
+
+        live_object = trace.pop()
+        assert_instance(live_object, LiveObject)
+        assert_length(live_object.calls, 1)
+
+        gobject = live_object.calls[0]
+        assert_instance(gobject, GeneratorObject)
+        assert_generator_object({}, [0, 1, 0], gobject)
 
 class TestTraceExec(DynamicInspectorTest):
     "trace_exec"

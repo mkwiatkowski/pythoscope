@@ -58,6 +58,12 @@ def is_generator_definition(code):
         # inside generator.
         return False
 
+def create_definition(name, body, definition_type):
+    if is_generator_definition(body):
+        return Generator(name, body)
+    else:
+        return definition_type(name, body)
+
 class ModuleVisitor(ASTVisitor):
     def __init__(self):
         ASTVisitor.__init__(self)
@@ -71,15 +77,12 @@ class ModuleVisitor(ASTVisitor):
             methods = [TestMethod(n, c) for (n, c) in visitor.methods]
             klass = TestClass(name=name, test_cases=methods, code=body)
         else:
-            methods = [Method(n, c) for (n, c) in visitor.methods]
+            methods = [create_definition(n, b, Method) for (n, b) in visitor.methods]
             klass = Class(name=name, methods=methods, bases=bases)
         self.objects.append(klass)
 
     def visit_function(self, name, args, body):
-        if is_generator_definition(body):
-            self.objects.append(Generator(name, body))
-        else:
-            self.objects.append(Function(name, body))
+        self.objects.append(create_definition(name, body, Function))
 
     def visit_lambda_assign(self, name):
         self.objects.append(Function(name))
