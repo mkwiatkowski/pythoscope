@@ -67,7 +67,7 @@ class ProjectMock(Project):
 
     def iter_generator_objects(self):
         for generator in self._generators.values():
-            for gobject in generator.objects.values():
+            for gobject in generator.calls:
                 yield gobject
 
     def _get_container_for(self, type):
@@ -597,8 +597,8 @@ class TestTraceFunction(DynamicInspectorTest):
         generator = trace.pop()
 
         assert_instance(generator, Generator)
-        assert_length(generator.objects, 1)
-        gobject = generator.objects.popitem()[1]
+        assert_length(generator.calls, 1)
+        gobject = generator.calls.pop()
 
         assert_generator_object({'x': 2}, [2, 3, 4, 8], gobject)
 
@@ -609,36 +609,36 @@ class TestTraceFunction(DynamicInspectorTest):
         generator = trace.pop()
 
         assert_instance(generator, Generator)
-        assert_length(generator.objects, 1)
-        gobject = generator.objects.popitem()[1]
+        assert_length(generator.calls, 1)
+        gobject = generator.calls.pop()
 
         assert_generator_object({}, [1], gobject)
 
     def test_handles_yielded_nones(self):
         trace = self._collect_callables(function_calling_generator_that_yields_none)
 
-        gobject = trace.pop().objects.popitem()[1]
+        gobject = trace.pop().calls.pop()
 
         assert_generator_object({}, [None], gobject)
 
     def test_handles_empty_generators(self):
         trace = self._collect_callables(function_calling_empty_generator)
 
-        gobject = trace.pop().objects.popitem()[1]
+        gobject = trace.pop().calls.pop()
 
         assert_generator_object({'x': 123}, [], gobject)
 
     def test_handles_generator_objects_that_werent_destroyed(self):
         trace = self._collect_callables(function_calling_generator_that_doesnt_get_destroyed)
 
-        gobject = trace.pop().objects.popitem()[1]
+        gobject = trace.pop().calls.pop()
 
         assert_generator_object({}, [1], gobject)
 
     def test_handles_generator_objects_that_yield_none_and_dont_get_destroyed(self):
         trace = self._collect_callables(function_calling_generator_that_yields_none_and_doesnt_get_destroyed)
 
-        gobject = trace.pop().objects.popitem()[1]
+        gobject = trace.pop().calls.pop()
 
         assert_generator_object({}, [None], gobject)
 

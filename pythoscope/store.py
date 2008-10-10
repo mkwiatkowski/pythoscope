@@ -8,7 +8,7 @@ import types
 from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
      get_starting_whitespace, is_node_of_type, regenerate, \
      remove_trailing_whitespace
-from util import all_of_type, max_by_not_zero, set, \
+from util import all_of_type, max_by_not_zero, set, all, \
      write_string_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, is_generator_code, \
      extract_subpath, directories_under, findfirst, contains_active_generator
@@ -341,7 +341,7 @@ class Project(object):
     def iter_generator_objects(self):
         for module in self.iter_modules():
             for generator in module.generators:
-                for gobject in generator.objects:
+                for gobject in generator.calls:
                     yield gobject
 
     def find_object(self, type, name, modulepath):
@@ -352,6 +352,12 @@ class Project(object):
                     return obj
         except ModuleNotFound:
             pass
+
+# :: ObjectWrapper | [ObjectWrapper] -> bool
+def can_be_constructed(object):
+    if isinstance(object, list):
+        return all(map(can_be_constructed, object))
+    return object.can_be_constructed
 
 class ObjectWrapper(object):
     pass
@@ -441,8 +447,8 @@ class Call(object):
     They're the only attributes for now, but information on side effects
     will be added later.
 
-    __eq__ and __hash__ definitions provided for Function.get_unique_calls(),
-    Generator.get_unique_objects() and LiveObject.get_external_calls().
+    __eq__ and __hash__ definitions provided for Function.get_unique_calls()
+    and LiveObject.get_external_calls().
     """
     def __init__(self, callable, input, output=None, exception=None):
         if [value for value in input.values() if not isinstance(value, ObjectWrapper)]:
@@ -519,6 +525,17 @@ class Callable(object):
     def add_call(self, call):
         self.calls.append(call)
 
+    def get_unique_calls(self):
+        return set(self.calls)
+
+    def get_generator_object(self, unique_id):
+        def is_matching_gobject(call):
+            return isinstance(call, GeneratorObject) and call.unique_id == unique_id
+        return findfirst(is_matching_gobject, self.calls)
+
+    def remove_calls_from(self, point_of_entry):
+        self.calls = [call for call in self.calls if call.point_of_entry is not point_of_entry]
+
 class Function(Definition, Callable):
     def __init__(self, name, code=None, calls=None):
         Definition.__init__(self, name, code)
@@ -527,40 +544,24 @@ class Function(Definition, Callable):
     def is_testable(self):
         return not self.name.startswith('_')
 
-    def get_unique_calls(self):
-        return set(self.calls)
-
-    def remove_calls_from(self, point_of_entry):
-        self.calls = [call for call in self.calls if call.point_of_entry is not point_of_entry]
-
     def __repr__(self):
         return "Function(name=%r, calls=%r)" % (self.name, self.calls)
 
-class Generator(Definition):
+# TODO: this class is not needed. Change this to a flag in method&function.
+class Generator(Definition, Callable):
     """A definition that contains yield statements, either a function or a
     method. Objects of this class stand for both Functions and Methods when
     their definitions contain yields.
     """
-    def __init__(self, name, code=None, objects=None):
-        if objects is None:
-            objects = {}
+    def __init__(self, name, code=None, calls=None):
         Definition.__init__(self, name, code)
-        self.objects = objects
+        Callable.__init__(self, calls)
 
     def is_testable(self):
         return not self.name.startswith('_')
 
-    def get_unique_objects(self):
-        return set(self.objects)
-
-    def add_generator_object(self, gobject):
-        self.objects[gobject.unique_id] = gobject
-
-    def remove_objects_from(self, point_of_entry):
-        self.objects = [o for o in self.objects if o.point_of_entry is not point_of_entry]
-
     def __repr__(self):
-        return "Generator(name=%r, objects=%r)" % (self.name, self.objects)
+        return "Generator(name=%r, objects=%r)" % (self.name, self.calls)
 
 # Methods are not Callable, because they cannot be called by itself - they
 # need a bound object. We represent this object by LiveObject class, which
@@ -587,6 +588,12 @@ class GeneratorObject(Call):
 
     def set_output(self, output):
         self.output.append(wrap_object(output))
+
+    def __hash__(self):
+        return hash((self.callable.name,
+                     tuple(self.input.iteritems()),
+                     tuple(self.output),
+                     self.exception))
 
     def __repr__(self):
         return "GeneratorObject(id=%d, generator=%r, yields=%r)" % \
@@ -1005,6 +1012,7 @@ class PointOfEntry(Localizable):
             klass.remove_live_objects_from(self)
         for function in self.project.iter_functions():
             function.remove_calls_from(self)
+        # TODO: remove references to GeneratorObjects
         self.call_graph = None
 
     def create_method_call(self, name, classname, modulepath, object, input, code, frame):
@@ -1055,11 +1063,11 @@ class PointOfEntry(Localizable):
         return live_object, method
 
     def _retrieve_generator_object(self, generator, input, code, frame):
-        try:
-            gobject = generator.objects[(self.name, id(code))]
-        except KeyError:
+        gobject = generator.get_generator_object((self.name, id(code)))
+
+        if not gobject:
             gobject = GeneratorObject(id(code), generator, self, wrap_call_arguments(input))
-            generator.add_generator_object(gobject)
+            generator.add_call(gobject)
             self._gobjects.append(gobject)
             self._preserve(code)
 

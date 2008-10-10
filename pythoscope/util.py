@@ -18,6 +18,15 @@ except NameError:
         return alist
 
 try:
+    all = all
+except NameError:
+    def all(iterable):
+        for element in iterable:
+            if not element:
+                return False
+        return True
+
+try:
     from itertools import groupby
 except ImportError:
     # Code taken from http://docs.python.org/lib/itertools-functions.html .

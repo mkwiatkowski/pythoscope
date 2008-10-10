@@ -9,7 +9,7 @@ from pythoscope.generator import add_tests_to_project
 from pythoscope.store import Project, Class, Method, Function, \
      ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod, \
      MethodCall, FunctionCall, LiveObject, wrap_call_arguments, \
-     wrap_object, PointOfEntry
+     wrap_object, PointOfEntry, Generator, GeneratorObject
 from pythoscope.util import read_file_contents, get_last_modification_time
 
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
@@ -22,8 +22,7 @@ add_tests_to_project.__test__ = False
 TestClass.__test__ = False
 TestMethod.__test__ = False
 
-
-def ClassWithMethods(classname, methods, exit_point='output'):
+def create_methods_with_calls(methods, exit_point):
     method_objects = []
     method_calls = []
 
@@ -36,8 +35,34 @@ def ClassWithMethods(classname, methods, exit_point='output'):
             elif exit_point == 'exception':
                 method_calls.append(MethodCall(method, wrap_call_arguments(input), exception=wrap_object(output())))
 
+    return method_objects, method_calls
+
+def create_generator_methods(methods, poe):
+    method_objects = []
+    method_calls = []
+
+    for name, calls in methods:
+        generator = Generator(name)
+        method_objects.append(generator)
+        for input, yields in calls:
+            method_calls.append(GeneratorObject(12345, generator, poe,
+                                                wrap_call_arguments(input),
+                                                map(wrap_object, yields)))
+
+    return method_objects, method_calls
+
+def ClassWithMethods(classname, methods, call_type='output'):
+    """call_type has to be one of 'output', 'exception' or 'generator'.
+    """
+    poe = PointOfEntry(Project('.'), 'poe')
+
+    if call_type == 'generator':
+        method_objects, method_calls = create_generator_methods(methods, poe)
+    else:
+        method_objects, method_calls = create_methods_with_calls(methods, call_type)
+
     klass = Class(classname, methods=method_objects)
-    live_object = LiveObject(12345, klass, PointOfEntry(Project('.'), 'poe'))
+    live_object = LiveObject(12345, klass, poe)
     live_object.calls = method_calls
     klass.add_live_object(live_object)
 
@@ -60,6 +85,13 @@ def FunctionWithExceptions(funcname, calls):
 
 def FunctionWithSingleException(funcname, input, exception):
     return FunctionWithExceptions(funcname, [(input, exception)])
+
+def GeneratorWithYields(genname, input, yields):
+    poe = PointOfEntryMock()
+    generator = Generator(genname)
+    gobject = GeneratorObject(12345, generator, poe, wrap_call_arguments(input), map(wrap_object, yields))
+    generator.calls = [gobject]
+    return generator
 
 class TestGenerator:
     def test_generates_unittest_boilerplate(self):
@@ -397,6 +429,23 @@ class TestGenerator:
         result = generate_single_test_module(objects=[klass])
 
         assert_contains(result, "def test_look_at_2_times_and_modify(self):")
+
+    def test_generates_assert_equal_for_generator_functions(self):
+        objects = [GeneratorWithYields('random', {'seed': 1}, [1, 8, 7, 2])]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_random_yields_1_then_8_then_7_then_2_for_1(self):")
+        assert_contains(result, "self.assertEqual([1, 8, 7, 2], list(random(seed=1)))")
+
+    def test_generates_assert_equal_for_generator_methods(self):
+        klass = ClassWithMethods('SuperGenerator', [('degenerate', [({'what': 'strings'}, ['one', 'two'])])], call_type='generator')
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_degenerate_yields_one_then_two_for_strings(self):")
+        assert_contains(result, "super_generator = SuperGenerator()")
+        assert_contains(result, "self.assertEqual(['one', 'two'], list(super_generator.degenerate(what='strings')))")
 
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):

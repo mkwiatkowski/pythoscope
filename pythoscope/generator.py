@@ -3,7 +3,8 @@ import types
 
 from astvisitor import EmptyCode, descend, parse_fragment, ASTVisitor
 from store import Class, Function, TestClass, TestMethod, ModuleNotFound, \
-     LiveObject, MethodCall, Method, Value, Type, Repr, Project, PointOfEntry
+     LiveObject, MethodCall, Method, Value, Type, Repr, Project, PointOfEntry, \
+     Generator, GeneratorObject, can_be_constructed
 from util import RePatternType, camelize, underscore, sorted, \
      regexp_flags_as_string, groupby
 
@@ -90,15 +91,18 @@ def standard_constructor_as_string(object):
         # This may not always be right, but it's worth a try.
         return CallString(repr(object))
 
-# :: ObjectWrapper | LiveObject -> CallString
+# :: ObjectWrapper | LiveObject | list -> CallString
 def constructor_as_string(object):
-    """For a given object (either ObjectWrapper or a LiveObject instance) return
-    a string representing a code that will construct it.
+    """For a given object (either ObjectWrapper, a LiveObject instance or list
+    of any combination of those) return a string representing a code that will
+    construct it.
 
     >>> constructor_as_string(Value(123))
     '123'
     >>> constructor_as_string(Value('string'))
     "'string'"
+    >>> constructor_as_string([Value(1), Value('two')])
+    "[1, 'two']"
     >>> obj = LiveObject(None, Class('SomeClass'), PointOfEntry(Project('.'), 'poe'))
     >>> constructor_as_string(obj)
     'SomeClass()'
@@ -119,6 +123,8 @@ def constructor_as_string(object):
         return CallString("<TODO: %s>" % object.type.__name__, uncomplete=True)
     elif isinstance(object, Repr):
         return CallString("<TODO: %s>" % object.repr, uncomplete=True)
+    elif isinstance(object, list):
+        return "[%s]" % ', '.join(map(constructor_as_string, object))
     else:
         raise TypeError("constructor_as_string expected ObjectWrapper or LiveObject object at input, not %s" % object)
 
@@ -173,6 +179,14 @@ def object2id(object):
     else:
         raise TypeError("object2id() should be called with a ObjectWrapper argument, not %s" % object)
 
+def objects_list_to_id(objects):
+    """Convert given list of objects into string that can be used as an
+    identifier.
+    """
+    if not objects:
+        return 'nothing'
+    return '_then_'.join(map(object2id, objects))
+
 def input_as_string(input):
     """Generate an underscored description of given input arguments.
 
@@ -186,28 +200,28 @@ def input_as_string(input):
     return "_and_".join(["%s_equal_%s" % (arg, object2id(value))
                          for arg, value in sorted(input.iteritems())])
 
-def call2testname(object_name, input, output):
+def objcall2testname(object_name, input, output):
     """Generate a test method name that describes given object call.
 
-    >>> call2testname('do_this', {}, Value(True))
+    >>> objcall2testname('do_this', {}, Value(True))
     'test_do_this_returns_true'
-    >>> call2testname('compute', {}, Value('whatever you say'))
+    >>> objcall2testname('compute', {}, Value('whatever you say'))
     'test_compute_returns_whatever_you_say'
-    >>> call2testname('square', {'x': Value(7)}, Value(49))
+    >>> objcall2testname('square', {'x': Value(7)}, Value(49))
     'test_square_returns_49_for_7'
-    >>> call2testname('capitalize', {'str': Value('a word.')}, Value('A word.'))
+    >>> objcall2testname('capitalize', {'str': Value('a word.')}, Value('A word.'))
     'test_capitalize_returns_A_word_for_a_word'
 
     Two or more arguments are mentioned by name.
-        >>> call2testname('ackermann', {'m': Value(3), 'n': Value(2)}, Value(29))
+        >>> objcall2testname('ackermann', {'m': Value(3), 'n': Value(2)}, Value(29))
         'test_ackermann_returns_29_for_m_equal_3_and_n_equal_2'
 
     Will sort arguments alphabetically.
-        >>> call2testname('concat', {'s1': Value('Hello '), 's2': Value('world!')}, Value('Hello world!'))
+        >>> objcall2testname('concat', {'s1': Value('Hello '), 's2': Value('world!')}, Value('Hello world!'))
         'test_concat_returns_Hello_world_for_s1_equal_Hello_and_s2_equal_world'
 
     Always starts and ends a word with a letter or number.
-        >>> call2testname('strip', {'n': Value(1), 's': Value('  A bit of whitespace  ')}, Value(' A bit of whitespace '))
+        >>> objcall2testname('strip', {'n': Value(1), 's': Value('  A bit of whitespace  ')}, Value(' A bit of whitespace '))
         'test_strip_returns_A_bit_of_whitespace_for_n_equal_1_and_s_equal_A_bit_of_whitespace'
     """
     if input:
@@ -231,6 +245,31 @@ def exccall2testname(object_name, input, exception):
         call_description = object2id(exception)
     return "test_%s_raises_%s" % (underscore(object_name), call_description)
 
+def gencall2testname(object_name, input, yields):
+    """Generate a test method name that describes given generator object call
+    yielding some values.
+
+    >>> gencall2testname('generate', {}, [])
+    'test_generate_yields_nothing'
+    >>> gencall2testname('generate', {}, [Value(1), Value(2), Value(3)])
+    'test_generate_yields_1_then_2_then_3'
+    >>> gencall2testname('backwards', {'x': Value(321)}, [Value('one'), Value('two'), Value('three')])
+    'test_backwards_yields_one_then_two_then_three_for_321'
+    """
+    if input:
+        call_description = "%s_for_%s" % (objects_list_to_id(yields), input_as_string(input))
+    else:
+        call_description = objects_list_to_id(yields)
+    return "test_%s_yields_%s" % (underscore(object_name), call_description)
+
+def call2testname(call, object_name):
+    if isinstance(call, GeneratorObject):
+        return gencall2testname(object_name, call.input, call.output)
+    elif call.raised_exception():
+        return exccall2testname(object_name, call.input, call.exception)
+    else:
+        return objcall2testname(object_name, call.input, call.output)
+
 def sorted_test_method_descriptions(descriptions):
     return sorted(descriptions, key=lambda md: md.name)
 
@@ -241,6 +280,9 @@ def name2testname(name):
 
 def in_lambda(string):
     return "lambda: %s" % string
+
+def in_list(string):
+    return "list(%s)" % string
 
 def type_of(string):
     return "type(%s)" % string
@@ -369,10 +411,12 @@ class TestGenerator(object):
                              associated_modules=[module])
 
     def _generate_test_method_descriptions(self, object, module):
-        if isinstance(object, Function):
+        if isinstance(object, (Function, Generator)):
             return self._generate_test_method_descriptions_for_function(object, module)
         elif isinstance(object, Class):
             return self._generate_test_method_descriptions_for_class(object, module)
+        else:
+            raise TypeError("Don't know how to generate test method descriptions for %s" % object)
 
     def _generate_test_method_descriptions_for_function(self, function, module):
         if function.calls:
@@ -409,12 +453,8 @@ class TestGenerator(object):
 
     def _method_descriptions_from_function(self, function):
         for call in function.get_unique_calls():
+            name = call2testname(call, function.name)
             assertions = [self._create_assertion(function.name, call)]
-
-            if call.raised_exception():
-                name = exccall2testname(function.name, call.input, call.exception)
-            else:
-                name = call2testname(function.name, call.input, call.output)
 
             yield TestMethodDescription(name, assertions)
 
@@ -433,10 +473,7 @@ class TestGenerator(object):
             else:
                 if len(external_calls) == 1:
                     call = external_calls[0]
-                    if call.raised_exception():
-                        test_name = exccall2testname(call.callable.name, call.input, call.exception)
-                    else:
-                        test_name = call2testname(call.callable.name, call.input, call.output)
+                    test_name = call2testname(call, call.callable.name)
                 # Methods with more than one external call use more brief
                 # descriptions that don't include inputs and outputs.
                 else:
@@ -502,7 +539,9 @@ class TestGenerator(object):
             else:
                 assertion_type = 'equal'
 
-            if call.output.can_be_constructed:
+            if can_be_constructed(call.output):
+                if isinstance(call, GeneratorObject):
+                    input = in_list(input)
                 return (assertion_type, constructor_as_string(call.output), input)
             else:
                 # If we can't test for real values, let's at least test for the right type.
