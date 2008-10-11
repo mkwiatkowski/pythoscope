@@ -1,4 +1,5 @@
 import os
+from pickle import PicklingError
 
 from fixture import TempIO
 from nose.tools import assert_equal, assert_raises
@@ -8,10 +9,11 @@ from pythoscope.generator import find_method_code
 from pythoscope.store import Project, Class, Function, TestClass, \
      TestMethod, ModuleNotFound
 from pythoscope.inspector import remove_deleted_modules
+from pythoscope.util import read_file_contents
 
 from helper import assert_length, assert_equal_sets, EmptyProject, \
-     ProjectWithModules, ProjectWithRealModules, \
-     assert_not_raises, get_test_cases, assert_equal_strings
+     ProjectWithModules, ProjectWithRealModules, ProjectInDirectory, \
+     assert_not_raises, get_test_cases, assert_equal_strings, UNPICKABLE_OBJECT
 
 # Let nose know that those aren't test classes.
 TestClass.__test__ = False
@@ -144,6 +146,22 @@ class TestProject:
         assert_not_raises(ModuleNotFound, lambda: project["module"])
         assert_raises(ModuleNotFound, lambda: project["other_module"])
         assert_not_raises(ModuleNotFound, lambda: project["test_module"])
+
+    def test_doesnt_save_uncomplete_pickle_files(self):
+        project = ProjectInDirectory()
+        project.save()
+        original_pickle = read_file_contents(project._get_pickle_path())
+
+        # Inject unpickable object into project.
+        project._injected_attr = UNPICKABLE_OBJECT
+        try:
+            project.save()
+        except PicklingError:
+            pass
+
+        # Make sure that the original file wasn't overwritten.
+        assert_equal_strings(original_pickle,
+                             read_file_contents(project._get_pickle_path()))
 
 class TestProjectWithTestModule:
     def setUp(self):

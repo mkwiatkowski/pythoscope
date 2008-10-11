@@ -136,14 +136,16 @@ class Project(object):
                 self.new_tests_directory = path
 
     def save(self):
+        # Try pickling the project first, because if this fails, we shouldn't
+        # save any changes at all.
+        pickled_project = pickle.dumps(self)
+
         # To avoid inconsistencies try to save all project's modules first. If
         # any of those saves fail, the pickle file won't get updated.
         for module in self.get_modules():
             module.save()
 
-        fd = open(self._get_pickle_path(), 'w')
-        pickle.dump(self, fd)
-        fd.close()
+        write_string_to_file(pickled_project, self._get_pickle_path())
 
     def find_module_by_full_path(self, path):
         subpath = self._extract_subpath(path)

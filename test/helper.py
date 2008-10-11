@@ -1,6 +1,7 @@
 import difflib
 import os
 import re
+import types
 
 from fixture import TempIO
 from nose.tools import assert_equal
@@ -9,6 +10,8 @@ from pythoscope.generator import add_tests_to_project
 from pythoscope.store import Function, ModuleNotFound, PointOfEntry, Project
 from pythoscope.util import read_file_contents, set
 
+
+UNPICKABLE_OBJECT = types.ClassType('class', (), {})
 
 DATA_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data'))
 
