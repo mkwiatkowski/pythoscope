@@ -2,6 +2,7 @@ import gc
 import os
 import re
 import types
+import warnings
 
 # Portability code.
 try:
@@ -212,6 +213,15 @@ def contains_active_generator(frame):
 
 def is_generator_code(code):
     return code.co_flags & 0x20 != 0
+
+def compile_without_warnings(stmt):
+    """Compile single interactive statement with Python interpreter warnings
+    disabled.
+    """
+    warnings.simplefilter('ignore')
+    code = compile(stmt, '', 'single')
+    warnings.resetwarnings()
+    return code
 
 # Regular expressions helpers.
 

@@ -4,7 +4,8 @@ import types
 from pythoscope.astvisitor import descend, parse, ParseError, ASTVisitor
 from pythoscope.store import Class, Function, Generator, Method, TestClass,\
     TestMethod
-from pythoscope.util import all_of_type, is_generator_code, read_file_contents
+from pythoscope.util import all_of_type, is_generator_code, \
+    read_file_contents, compile_without_warnings
 
 
 def is_test_class(name, bases):
@@ -47,7 +48,7 @@ def function_code_from_definition(definition):
 
     Can raise SyntaxError if the definition is not valid.
     """
-    consts = compile(unindent(str(definition)), '', 'single').co_consts
+    consts = compile_without_warnings(unindent(str(definition))).co_consts
     return all_of_type(consts, types.CodeType)[0]
 
 def is_generator_definition(definition):
