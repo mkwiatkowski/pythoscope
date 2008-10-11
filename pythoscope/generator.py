@@ -21,9 +21,13 @@ def unwrap_type(object):
     elif isinstance(object, Type):
         return object.type
     else:
-        raise ValueNeeded()
+        raise ValueNeeded("Can't unwrap the type of %s" % object)
 
-# :: ObjectWrapper -> string
+# :: [string] -> string
+def list_of(strings):
+    return "[%s]" % ', '.join(strings)
+
+# :: ObjectWrapper | [ObjectWrapper] -> string
 def type_as_string(object):
     """Return a most common representation of the wrapped object type.
 
@@ -33,7 +37,12 @@ def type_as_string(object):
     'dict'
     >>> type_as_string(Type(lambda: None))
     'types.FunctionType'
+    >>> type_as_string([Type(()), Type({})])
+    '[tuple, dict]'
     """
+    if isinstance(object, list):
+        return list_of(map(type_as_string, object))
+
     mapping = {
         list: 'list',
         dict: 'dict',
@@ -124,7 +133,7 @@ def constructor_as_string(object):
     elif isinstance(object, Repr):
         return CallString("<TODO: %s>" % object.repr, uncomplete=True)
     elif isinstance(object, list):
-        return "[%s]" % ', '.join(map(constructor_as_string, object))
+        return list_of(map(constructor_as_string, object))
     else:
         raise TypeError("constructor_as_string expected ObjectWrapper or LiveObject object at input, not %s" % object)
 
@@ -286,6 +295,9 @@ def in_list(string):
 
 def type_of(string):
     return "type(%s)" % string
+
+def map_types(string):
+    return "map(type, %s)" % string
 
 def should_ignore_method(method):
     return method.name.startswith('_') and method.name != "__init__"
@@ -546,8 +558,12 @@ class TestGenerator(object):
             else:
                 # If we can't test for real values, let's at least test for the right type.
                 output_type = type_as_string(call.output)
+                if isinstance(call, GeneratorObject):
+                    input_type = map_types(input)
+                else:
+                    input_type = type_of(input)
                 self.ensure_import('types')
-                return (assertion_type, output_type, type_of(input))
+                return (assertion_type, output_type, input_type)
 
 class UnittestTestGenerator(TestGenerator):
     main_snippet = parse_fragment("if __name__ == '__main__':\n    unittest.main()\n")

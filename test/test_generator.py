@@ -447,6 +447,22 @@ class TestGenerator:
         assert_contains(result, "super_generator = SuperGenerator()")
         assert_contains(result, "self.assertEqual(['one', 'two'], list(super_generator.degenerate(what='strings')))")
 
+    def test_generates_assert_equal_stub_for_generator_functions_with_unpickable_inputs(self):
+        objects = [GeneratorWithYields('call_twice', {'x': lambda: 1}, [1, 1])]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_call_twice_yields_1_then_1_for_function(self):")
+        assert_contains(result, "# self.assertEqual([1, 1], list(call_twice(x=<TODO: function>)))")
+
+    def test_generates_assert_equal_types_for_generator_functions_with_unpickable_outputs(self):
+        objects = [GeneratorWithYields('lambdify', {'x': 1}, [lambda: 1, lambda: 2])]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_lambdify_yields_function_then_function_for_1(self):")
+        assert_contains(result, "self.assertEqual([types.FunctionType, types.FunctionType], map(type, lambdify(x=1)))")
+
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
         self.project = TestableProject()
