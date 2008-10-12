@@ -996,7 +996,6 @@ class PointOfEntry(Localizable):
             klass.remove_live_objects_from(self)
         for function in self.project.iter_functions():
             function.remove_calls_from(self)
-        # TODO: remove references to GeneratorObjects
         self.call_graph = None
 
     def create_method_call(self, name, classname, modulepath, object, input, code, frame):
