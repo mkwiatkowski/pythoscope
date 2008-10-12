@@ -5,7 +5,7 @@ from nose.tools import assert_equal
 
 from pythoscope.inspector.dynamic import trace_function, trace_exec, \
      inspect_point_of_entry, setup_tracing, teardown_tracing
-from pythoscope.store import Class, Function, Generator, GeneratorObject, \
+from pythoscope.store import Class, Function, GeneratorObject, \
      Method, LiveObject, Project, wrap_call_arguments, wrap_object, Type
 from pythoscope.util import findfirst
 
@@ -17,33 +17,27 @@ class ClassMock(Class):
     """Class that has all the methods you try to find inside it via
     find_method_by_name().
     """
-    def __init__(self, name, generator_methods):
+    def __init__(self, name):
         Class.__init__(self, name)
-        self.generator_methods = generator_methods
         self._methods = {}
 
     def find_method_by_name(self, name):
         if not self._methods.has_key(name):
-            if name in self.generator_methods:
-                self._methods[name] = Generator(name)
-            else:
-                self._methods[name] = Method(name)
+            self._methods[name] = Method(name)
         return self._methods[name]
 
 class ProjectMock(Project):
     """Project that has all the classes, functions and generators you try to
     find inside it via find_object().
     """
-    def __init__(self, ignored_functions=[], generator_methods=[]):
+    def __init__(self, ignored_functions=[]):
         self.ignored_functions = ignored_functions
-        self.generator_methods = generator_methods
         self.path = "."
         self._classes = {}
         self._functions = {}
-        self._generators = {}
 
     def find_object(self, type, name, modulepath):
-        if type in [Function, Generator] and name in self.ignored_functions:
+        if type is Function and name in self.ignored_functions:
             return None
 
         object_id = (name, modulepath)
@@ -59,30 +53,21 @@ class ProjectMock(Project):
                 yield live_object
         for function in self._functions.values():
             yield function
-        for generator in self._generators.values():
-            yield generator
 
     def get_callables(self):
         return list(self.iter_callables())
-
-    def iter_generator_objects(self):
-        for generator in self._generators.values():
-            for gobject in generator.calls:
-                yield gobject
 
     def _get_container_for(self, type):
         if type is Class:
             return self._classes
         elif type is Function:
             return self._functions
-        elif type is Generator:
-            return self._generators
         else:
             raise TypeError("Cannot store %r inside a module." % type)
 
     def _create_object(self, type, name):
         if type is Class:
-            return ClassMock(name, self.generator_methods)
+            return ClassMock(name)
         else:
             return type(name)
 
@@ -103,7 +88,7 @@ def assert_generator_object(expected_input, expected_yields, object):
 
 def call_graph_as_string(call_or_calls, indentation=0):
     def lines(call):
-        yield "%s%s()\n" % (" "*indentation, call.callable.name)
+        yield "%s%s()\n" % (" "*indentation, call.definition.name)
         for subcall in call.subcalls:
             yield call_graph_as_string(subcall, indentation+4)
 
@@ -367,13 +352,13 @@ def function_calling_generator_method():
     [x for x in Class().genmeth()]
 
 class DynamicInspectorTest:
-    def _collect_callables(self, fun, ignored_functions=[], generator_methods=[]):
+    def _collect_callables(self, fun, ignored_functions=[]):
         if isinstance(fun, str):
             trace = trace_exec
         else:
             trace = trace_function
 
-        self.project = ProjectMock(ignored_functions, generator_methods)
+        self.project = ProjectMock(ignored_functions)
         self.poe = PointOfEntryMock(project=self.project)
 
         setup_tracing(self.poe)
@@ -511,13 +496,13 @@ class TestTraceFunction(DynamicInspectorTest):
         assert_length(trace, 2)
         assert all(isinstance(obj, LiveObject) for obj in trace)
         assert_equal_sets(['strange_method', 'another_strange_method'],
-                          [obj.calls[0].callable.name for obj in trace])
+                          [obj.calls[0].definition.name for obj in trace])
 
     def test_distinguishes_between_methods_with_the_same_name_from_different_classes(self):
         trace = self._collect_callables(function_calling_two_methods_with_the_same_name_from_different_classes)
 
         assert_equal_sets([('FirstClass', 1, 'method'), ('SecondClass', 1, 'method')],
-                          [(obj.klass.name, len(obj.calls), obj.calls[0].callable.name) for obj in trace])
+                          [(obj.klass.name, len(obj.calls), obj.calls[0].definition.name) for obj in trace])
 
     def test_distinguishes_between_classes_and_functions(self):
         trace = self._collect_callables(function_calling_other_which_uses_name_and_module_variables)
@@ -535,11 +520,11 @@ class TestTraceFunction(DynamicInspectorTest):
         assert_length(live_object.get_external_calls(), 1)
 
         external_call = live_object.get_external_calls()[0]
-        assert_equal('method', external_call.callable.name)
+        assert_equal('method', external_call.definition.name)
         assert_length(external_call.subcalls, 1)
 
         subcall = external_call.subcalls[0]
-        assert_equal('other_method', subcall.callable.name)
+        assert_equal('other_method', subcall.definition.name)
 
     def test_creates_a_call_graph_of_execution_for_nested_calls(self):
         self._collect_callables(function_with_nested_calls)
@@ -596,7 +581,7 @@ class TestTraceFunction(DynamicInspectorTest):
         assert_length(trace, 1)
         generator = trace.pop()
 
-        assert_instance(generator, Generator)
+        assert_instance(generator, Function)
         assert_length(generator.calls, 1)
         gobject = generator.calls.pop()
 
@@ -608,7 +593,7 @@ class TestTraceFunction(DynamicInspectorTest):
         assert_length(trace, 1)
         generator = trace.pop()
 
-        assert_instance(generator, Generator)
+        assert_instance(generator, Function)
         assert_length(generator.calls, 1)
         gobject = generator.calls.pop()
 
@@ -643,8 +628,7 @@ class TestTraceFunction(DynamicInspectorTest):
         assert_generator_object({}, [None], gobject)
 
     def test_handles_generator_methods(self):
-        trace = self._collect_callables(function_calling_generator_method,
-                                        generator_methods=['genmeth'])
+        trace = self._collect_callables(function_calling_generator_method)
 
         assert_length(trace, 1)
 

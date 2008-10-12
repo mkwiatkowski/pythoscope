@@ -52,10 +52,6 @@ def assert_single_function(info, name):
     assert_length(info.functions, 1)
     assert_equal(name, info.functions[0].name)
 
-def assert_single_generator(info, name):
-    assert_length(info.generators, 1)
-    assert_equal(name, info.generators[0].name)
-
 def assert_equal_sets(collection1, collection2):
     assert_equal(set(collection1), set(collection2))
 

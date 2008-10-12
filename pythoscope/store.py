@@ -453,15 +453,15 @@ class Call(object):
     __eq__ and __hash__ definitions provided for Function.get_unique_calls()
     and LiveObject.get_external_calls().
     """
-    def __init__(self, callable, input, output=None, exception=None):
+    def __init__(self, definition, input, output=None, exception=None):
         if [value for value in input.values() if not isinstance(value, ObjectWrapper)]:
             raise ValueError("All input values should be instances of ObjectWrapper class.")
         if output and exception:
             raise ValueError("Call should have a single point of return.")
-        if not isinstance(callable, Definition):
-            raise ValueError("Call callable object should be an instance of Definition.")
+        if not isinstance(definition, Definition):
+            raise ValueError("Call definition object should be an instance of Definition.")
 
-        self.callable = callable
+        self.definition = definition
         self.input = input
         self.output = output
         self.exception = exception
@@ -488,20 +488,20 @@ class Call(object):
         self.exception = None
 
     def __eq__(self, other):
-        return self.callable == other.callable and \
+        return self.definition == other.definition and \
                self.input == other.input and \
                self.output == other.output and \
                self.exception == other.exception
 
     def __hash__(self):
-        return hash((self.callable.name,
+        return hash((self.definition.name,
                      tuple(self.input.iteritems()),
                      self.output,
                      self.exception))
 
     def __repr__(self):
-        return "%s(callable=%s, input=%r, output=%r, exception=%r)" % \
-               (self.__class__.__name__, self.callable.name, self.input,
+        return "%s(definition=%s, input=%r, output=%r, exception=%r)" % \
+               (self.__class__.__name__, self.definition.name, self.input,
                 self.output, self.exception)
 
 class FunctionCall(Call):
@@ -513,11 +513,12 @@ class MethodCall(Call):
     pass
 
 class Definition(object):
-    def __init__(self, name, code=None):
+    def __init__(self, name, code=None, is_generator=False):
         if code is None:
             code = EmptyCode()
         self.name = name
         self.code = code
+        self.is_generator = is_generator
 
 class Callable(object):
     def __init__(self, calls=None):
@@ -540,8 +541,8 @@ class Callable(object):
         self.calls = [call for call in self.calls if call.point_of_entry is not point_of_entry]
 
 class Function(Definition, Callable):
-    def __init__(self, name, code=None, calls=None):
-        Definition.__init__(self, name, code)
+    def __init__(self, name, code=None, calls=None, is_generator=False):
+        Definition.__init__(self, name, code, is_generator)
         Callable.__init__(self, calls)
 
     def is_testable(self):
@@ -549,22 +550,6 @@ class Function(Definition, Callable):
 
     def __repr__(self):
         return "Function(name=%r, calls=%r)" % (self.name, self.calls)
-
-# TODO: this class is not needed. Change this to a flag in method&function.
-class Generator(Definition, Callable):
-    """A definition that contains yield statements, either a function or a
-    method. Objects of this class stand for both Functions and Methods when
-    their definitions contain yields.
-    """
-    def __init__(self, name, code=None, calls=None):
-        Definition.__init__(self, name, code)
-        Callable.__init__(self, calls)
-
-    def is_testable(self):
-        return not self.name.startswith('_')
-
-    def __repr__(self):
-        return "Generator(name=%r, objects=%r)" % (self.name, self.calls)
 
 # Methods are not Callable, because they cannot be called by itself - they
 # need a bound object. We represent this object by LiveObject class, which
@@ -593,14 +578,14 @@ class GeneratorObject(Call):
         self.output.append(wrap_object(output))
 
     def __hash__(self):
-        return hash((self.callable.name,
+        return hash((self.definition.name,
                      tuple(self.input.iteritems()),
                      tuple(self.output),
                      self.exception))
 
     def __repr__(self):
         return "GeneratorObject(id=%d, generator=%r, yields=%r)" % \
-               (self.id, self.callable.name, self.output)
+               (self.id, self.definition.name, self.output)
 
 class LiveObject(Callable):
     """Representation of an object which creation and usage was traced
@@ -629,7 +614,7 @@ class LiveObject(Callable):
     def get_init_call(self):
         """Return a call to __init__ or None if it wasn't called.
         """
-        return findfirst(lambda call: call.callable.name == '__init__', self.calls)
+        return findfirst(lambda call: call.definition.name == '__init__', self.calls)
 
     def get_external_calls(self):
         """Return all calls to this object made from the outside.
@@ -637,7 +622,7 @@ class LiveObject(Callable):
         Note: __init__ is considered an internal call.
         """
         def is_not_init_call(call):
-            return call.callable.name != '__init__'
+            return call.definition.name != '__init__'
         def is_external_call(call):
             return (not call.caller) or (call.caller not in self.calls)
         return filter(is_not_init_call, filter(is_external_call, self.calls))
@@ -672,7 +657,7 @@ class Class(object):
         traced_method_names = set()
         for live_object in self.live_objects.values():
             for call in live_object.calls:
-                traced_method_names.add(call.callable.name)
+                traced_method_names.add(call.definition.name)
         return traced_method_names
 
     def get_untraced_methods(self):
@@ -899,10 +884,6 @@ class Module(Localizable, TestSuite):
         return all_of_type(self.objects, Class)
     classes = property(_get_classes)
 
-    def _get_generators(self):
-        return all_of_type(self.objects, Generator)
-    generators = property(_get_generators)
-
     def _get_functions(self):
         return all_of_type(self.objects, Function)
     functions = property(_get_functions)
@@ -1022,7 +1003,7 @@ class PointOfEntry(Localizable):
         try:
             live_object, method = self._retrieve_live_object_for_method(object, name, classname, modulepath)
             if is_generator_code(code):
-                call = self._retrieve_generator_object(method, input, code, frame)
+                call = self._retrieve_generator_object(live_object, method, input, code, frame)
             else:
                 call = MethodCall(method, wrap_call_arguments(input))
             live_object.add_call(call)
@@ -1031,13 +1012,11 @@ class PointOfEntry(Localizable):
             pass
 
     def create_function_call(self, name, modulepath, input, code, frame):
-        if is_generator_code(code):
-            generator = self.project.find_object(Generator, name, modulepath)
-            if generator:
-                return self._retrieve_generator_object(generator, input, code, frame)
-        else:
-            function = self.project.find_object(Function, name, modulepath)
-            if function:
+        function = self.project.find_object(Function, name, modulepath)
+        if function:
+            if is_generator_code(code):
+                return self._retrieve_generator_object(function, function, input, code, frame)
+            else:
                 call = FunctionCall(self, function, wrap_call_arguments(input))
                 function.add_call(call)
                 return call
@@ -1065,12 +1044,12 @@ class PointOfEntry(Localizable):
 
         return live_object, method
 
-    def _retrieve_generator_object(self, generator, input, code, frame):
-        gobject = generator.get_generator_object((self.name, id(code)))
+    def _retrieve_generator_object(self, callable, generator, input, code, frame):
+        gobject = callable.get_generator_object((self.name, id(code)))
 
         if not gobject:
             gobject = GeneratorObject(id(code), generator, self, wrap_call_arguments(input))
-            generator.add_call(gobject)
+            callable.add_call(gobject)
             self._gobjects.append(gobject)
             self._preserve(code)
 

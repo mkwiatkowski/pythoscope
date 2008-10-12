@@ -2,8 +2,7 @@ import re
 import types
 
 from pythoscope.astvisitor import descend, parse, ParseError, ASTVisitor
-from pythoscope.store import Class, Function, Generator, Method, TestClass,\
-    TestMethod
+from pythoscope.store import Class, Function, Method, TestClass,TestMethod
 from pythoscope.util import all_of_type, is_generator_code, \
     read_file_contents, compile_without_warnings
 
@@ -69,10 +68,7 @@ def is_generator_definition(definition):
         return False
 
 def create_definition(name, body, definition_type):
-    if is_generator_definition(body):
-        return Generator(name, body)
-    else:
-        return definition_type(name, body)
+    return definition_type(name, body, is_generator=is_generator_definition(body))
 
 class ModuleVisitor(ASTVisitor):
     def __init__(self):

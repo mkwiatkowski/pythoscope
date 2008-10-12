@@ -4,7 +4,7 @@ import types
 from astvisitor import EmptyCode, descend, parse_fragment, ASTVisitor
 from store import Class, Function, TestClass, TestMethod, ModuleNotFound, \
      LiveObject, MethodCall, Method, Value, Type, Repr, Project, PointOfEntry, \
-     Generator, GeneratorObject, can_be_constructed
+     GeneratorObject, can_be_constructed
 from util import RePatternType, camelize, underscore, sorted, \
      regexp_flags_as_string, groupby
 
@@ -424,7 +424,7 @@ class TestGenerator(object):
                              associated_modules=[module])
 
     def _generate_test_method_descriptions(self, object, module):
-        if isinstance(object, (Function, Generator)):
+        if isinstance(object, Function):
             return self._generate_test_method_descriptions_for_function(object, module)
         elif isinstance(object, Class):
             return self._generate_test_method_descriptions_for_class(object, module)
@@ -486,12 +486,12 @@ class TestGenerator(object):
             else:
                 if len(external_calls) == 1:
                     call = external_calls[0]
-                    test_name = call2testname(call, call.callable.name)
+                    test_name = call2testname(call, call.definition.name)
                 # Methods with more than one external call use more brief
                 # descriptions that don't include inputs and outputs.
                 else:
                     methods = []
-                    for method, icalls in groupby(sorted([call.callable.name for call in external_calls])):
+                    for method, icalls in groupby(sorted([call.definition.name for call in external_calls])):
                         calls = list(icalls)
                         if len(calls) == 1:
                             methods.append(method)
@@ -511,7 +511,7 @@ class TestGenerator(object):
                     yield(('comment', "# Make sure it doesn't raise any exceptions."))
 
             for call in external_calls:
-                name = "%s.%s" % (local_name, call.callable.name)
+                name = "%s.%s" % (local_name, call.definition.name)
                 yield(self._create_assertion(name, call, stub_all))
 
         def setup():

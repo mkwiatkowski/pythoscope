@@ -9,7 +9,7 @@ from pythoscope.generator import add_tests_to_project
 from pythoscope.store import Project, Class, Method, Function, \
      ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod, \
      MethodCall, FunctionCall, LiveObject, wrap_call_arguments, \
-     wrap_object, PointOfEntry, Generator, GeneratorObject
+     wrap_object, PointOfEntry, GeneratorObject
 from pythoscope.util import read_file_contents, get_last_modification_time
 
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
@@ -22,44 +22,27 @@ add_tests_to_project.__test__ = False
 TestClass.__test__ = False
 TestMethod.__test__ = False
 
-def create_methods_with_calls(methods, exit_point):
+def create_method_call(method, input, output, call_type, poe):
+    if call_type == 'output':
+        return MethodCall(method, wrap_call_arguments(input), output=wrap_object(output))
+    elif call_type == 'exception':
+        return MethodCall(method, wrap_call_arguments(input), exception=wrap_object(output()))
+    elif call_type == 'generator':
+        return GeneratorObject(12345, method, poe, wrap_call_arguments(input),
+                               map(wrap_object, output))
+
+def ClassWithMethods(classname, methods, call_type='output'):
+    """call_type has to be one of 'output', 'exception' or 'generator'.
+    """
     method_objects = []
     method_calls = []
+    poe = PointOfEntry(Project('.'), 'poe')
 
     for name, calls in methods:
         method = Method(name)
         method_objects.append(method)
         for input, output in calls:
-            if exit_point == 'output':
-                method_calls.append(MethodCall(method, wrap_call_arguments(input), output=wrap_object(output)))
-            elif exit_point == 'exception':
-                method_calls.append(MethodCall(method, wrap_call_arguments(input), exception=wrap_object(output())))
-
-    return method_objects, method_calls
-
-def create_generator_methods(methods, poe):
-    method_objects = []
-    method_calls = []
-
-    for name, calls in methods:
-        generator = Generator(name)
-        method_objects.append(generator)
-        for input, yields in calls:
-            method_calls.append(GeneratorObject(12345, generator, poe,
-                                                wrap_call_arguments(input),
-                                                map(wrap_object, yields)))
-
-    return method_objects, method_calls
-
-def ClassWithMethods(classname, methods, call_type='output'):
-    """call_type has to be one of 'output', 'exception' or 'generator'.
-    """
-    poe = PointOfEntry(Project('.'), 'poe')
-
-    if call_type == 'generator':
-        method_objects, method_calls = create_generator_methods(methods, poe)
-    else:
-        method_objects, method_calls = create_methods_with_calls(methods, call_type)
+            method_calls.append(create_method_call(method, input, output, call_type, poe))
 
     klass = Class(classname, methods=method_objects)
     live_object = LiveObject(12345, klass, poe)
@@ -88,7 +71,7 @@ def FunctionWithSingleException(funcname, input, exception):
 
 def GeneratorWithYields(genname, input, yields):
     poe = PointOfEntryMock()
-    generator = Generator(genname)
+    generator = Function(genname, is_generator=True)
     gobject = GeneratorObject(12345, generator, poe, wrap_call_arguments(input), map(wrap_object, yields))
     generator.calls = [gobject]
     return generator

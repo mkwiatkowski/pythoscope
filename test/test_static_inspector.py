@@ -3,11 +3,10 @@ import sys
 from nose.tools import assert_equal
 from nose.exc import SkipTest
 from helper import assert_length, assert_single_class, assert_single_function, \
-     assert_single_generator, assert_equal_sets, EmptyProject, assert_instance
+     assert_equal_sets, EmptyProject, assert_instance
 
 from pythoscope.inspector.static import inspect_code
 from pythoscope.astvisitor import regenerate
-from pythoscope.store import Generator
 from pythoscope.util import get_names
 
 
@@ -330,19 +329,21 @@ class TestStaticInspector:
     def test_recognizes_generator_definitions(self):
         info = self._inspect_code(standard_generator_definition)
 
-        assert_single_generator(info, "gen")
+        assert_single_function(info, "gen")
+        assert info.functions[0].is_generator
 
     def test_treats_functions_returning_generator_objects_as_functions(self):
         info = self._inspect_code(function_returning_generator_object)
 
         assert_single_function(info, "fun")
+        assert not info.functions[0].is_generator
 
     def test_recognizes_generator_methods(self):
         info = self._inspect_code(class_with_method_generator_definition)
 
         method = info.classes[0].methods[0]
+        assert method.is_generator
         assert_equal("method_generator", method.name)
-        assert_instance(method, Generator)
 
     def test_handles_functions_with_default_argument_values(self):
         info = self._inspect_code(function_with_default_argument_value)
