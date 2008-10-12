@@ -387,6 +387,27 @@ class TestGenerator:
         assert_contains(result, "def test_higher_returns_true_for_function(self):")
         assert_contains(result, "# self.assertEqual(True, higher(f=<TODO: function>))")
 
+    def test_generates_assert_equal_type_for_functions_returning_generator_objects(self):
+        def generator():
+            yield 1
+        objects = [FunctionWithSingleCall('gengen', {}, generator())]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "import types")
+        assert_contains(result, "def test_gengen_returns_generator(self):")
+        assert_contains(result, "self.assertEqual(types.GeneratorType, type(gengen()))")
+
+    def test_generates_assert_equal_test_stub_for_functions_which_take_generator_objects_as_arguments(self):
+        def generator():
+            yield 1
+        objects = [FunctionWithSingleCall('ungen', {'g': generator()}, True)]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_ungen_returns_true_for_generator(self):")
+        assert_contains(result, "# self.assertEqual(True, ungen(g=<TODO: generator>))")
+
     def test_generates_assert_equal_type_test_stub_for_functions_which_take_and_return_functions(self):
         objects = [FunctionWithSingleCall('highest', {'f': lambda: 42}, lambda: 43)]
 

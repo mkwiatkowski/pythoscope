@@ -14,8 +14,9 @@ from util import all_of_type, max_by_not_zero, set, all, \
      extract_subpath, directories_under, findfirst, contains_active_generator
 
 
-# So we can pickle the function type.
+# So we can pickle the function and generator types.
 __builtin__.function = types.FunctionType
+__builtin__.generator = types.GeneratorType
 
 class ModuleNeedsAnalysis(Exception):
     def __init__(self, path, out_of_sync=False):
@@ -420,7 +421,7 @@ class Repr(ObjectWrapper):
         return "Repr(%s)" % self.repr
 
 def is_pickable(object):
-    if isinstance(object, types.FunctionType):
+    if isinstance(object, (types.FunctionType, types.GeneratorType)):
         return False
     # TODO: handle more cases
     return True

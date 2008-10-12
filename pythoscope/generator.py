@@ -47,7 +47,8 @@ def type_as_string(object):
         list: 'list',
         dict: 'dict',
         tuple: 'tuple',
-        types.FunctionType: 'types.FunctionType'
+        types.FunctionType: 'types.FunctionType',
+        types.GeneratorType: 'types.GeneratorType'
     }
     try:
         return mapping[unwrap_type(object)]
