@@ -378,6 +378,9 @@ class Value(ObjectWrapper):
         return isinstance(other, Value) and self.value == other.value
 
     def __hash__(self):
+        # Dictionary itself is not hashable, but set of its keys must be.
+        if isinstance(self.value, dict):
+            return hash(tuple(self.value.keys()))
         return hash(self.value)
 
     def __repr__(self):
@@ -565,10 +568,10 @@ class GeneratorObject(Call):
     a series of suspensions and resumes, we make it conform to the Call interface
     for simplicity.
     """
-    def __init__(self, id, generator, point_of_entry, input, yields=None):
+    def __init__(self, id, generator, point_of_entry, input, yields=None, exception=None):
         if yields is None:
             yields = []
-        Call.__init__(self, generator, input, yields)
+        Call.__init__(self, generator, input, yields, exception)
 
         self.id = id
         self.point_of_entry = point_of_entry

@@ -76,6 +76,13 @@ def GeneratorWithYields(genname, input, yields):
     generator.calls = [gobject]
     return generator
 
+def GeneratorWithSingleException(genname, input, exception):
+    poe = PointOfEntryMock()
+    generator = Function(genname, is_generator=True)
+    gobject = GeneratorObject(12345, generator, poe, wrap_call_arguments(input), exception=wrap_object(exception()))
+    generator.calls = [gobject]
+    return generator
+
 class TestGenerator:
     def test_generates_unittest_boilerplate(self):
         result = generate_single_test_module(objects=[Function('function')])
@@ -466,6 +473,14 @@ class TestGenerator:
 
         assert_contains(result, "def test_lambdify_yields_function_then_function_for_1(self):")
         assert_contains(result, "self.assertEqual([types.FunctionType, types.FunctionType], map(type, lambdify(x=1)))")
+
+    def test_generates_assert_raises_for_generator_functions_with_exceptions(self):
+        objects = [GeneratorWithSingleException('throw', {'string': {}}, TypeError)]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_throw_raises_type_error_for_dict(self):")
+        assert_contains(result, "self.assertRaises(TypeError, lambda: list(throw(string={})))")
 
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):

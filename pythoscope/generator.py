@@ -177,6 +177,8 @@ def object2id(object):
             return 'true'
         elif object.value is False:
             return 'false'
+        elif isinstance(object.value, (list, dict, tuple)):
+            return underscore(type(object.value).__name__)
         elif isinstance(object.value, Exception):
             return underscore(exception_as_string(object))
         elif isinstance(object.value, RePatternType):
@@ -273,10 +275,12 @@ def gencall2testname(object_name, input, yields):
     return "test_%s_yields_%s" % (underscore(object_name), call_description)
 
 def call2testname(call, object_name):
-    if isinstance(call, GeneratorObject):
-        return gencall2testname(object_name, call.input, call.output)
-    elif call.raised_exception():
+    # Note: order is significant. We may have a GeneratorObject that raised
+    # an exception, and we care about exceptions more.
+    if call.raised_exception():
         return exccall2testname(object_name, call.input, call.exception)
+    elif isinstance(call, GeneratorObject):
+        return gencall2testname(object_name, call.input, call.output)
     else:
         return objcall2testname(object_name, call.input, call.output)
 
@@ -299,6 +303,12 @@ def type_of(string):
 
 def map_types(string):
     return "map(type, %s)" % string
+
+# :: (Call, CallString) -> string
+def decorate_call(call, string):
+    if isinstance(call, GeneratorObject):
+        return in_list(string)
+    return string
 
 def should_ignore_method(method):
     return method.name.startswith('_') and method.name != "__init__"
@@ -533,38 +543,37 @@ class TestGenerator(object):
         Generated assertion will be a stub if input of a call cannot be
         constructed or if stub argument is True.
         """
-        input = call_as_string(name, call.input)
+        callstring = call_as_string(name, call.input)
 
-        for import_ in input.imports:
+        for import_ in callstring.imports:
             self.ensure_import(import_)
 
         if call.raised_exception():
-            if input.uncomplete or stub:
+            if callstring.uncomplete or stub:
                 assertion_type = 'raises_stub'
             else:
                 assertion_type = 'raises'
             return (assertion_type,
                     exception_as_string(call.exception),
-                    in_lambda(input))
+                    in_lambda(decorate_call(call, callstring)))
         else:
-            if input.uncomplete or stub:
+            if callstring.uncomplete or stub:
                 assertion_type = 'equal_stub'
             else:
                 assertion_type = 'equal'
 
             if can_be_constructed(call.output):
-                if isinstance(call, GeneratorObject):
-                    input = in_list(input)
-                return (assertion_type, constructor_as_string(call.output), input)
+                return (assertion_type, constructor_as_string(call.output),
+                        decorate_call(call, callstring))
             else:
                 # If we can't test for real values, let's at least test for the right type.
                 output_type = type_as_string(call.output)
                 if isinstance(call, GeneratorObject):
-                    input_type = map_types(input)
+                    callstring_type = map_types(callstring)
                 else:
-                    input_type = type_of(input)
+                    callstring_type = type_of(callstring)
                 self.ensure_import('types')
-                return (assertion_type, output_type, input_type)
+                return (assertion_type, output_type, callstring_type)
 
 class UnittestTestGenerator(TestGenerator):
     main_snippet = parse_fragment("if __name__ == '__main__':\n    unittest.main()\n")
