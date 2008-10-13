@@ -325,6 +325,9 @@ def decorate_call(call, string):
 def should_ignore_method(method):
     return method.name.startswith('_') and method.name != "__init__"
 
+def testable_calls(calls):
+    return [c for c in calls if c.is_testable()]
+
 class UnknownTemplate(Exception):
     def __init__(self, template):
         Exception.__init__(self, "Couldn't find template %r." % template)
@@ -487,7 +490,7 @@ class TestGenerator(object):
         return TestMethodDescription(name2testname(name))
 
     def _method_descriptions_from_function(self, function):
-        for call in function.get_unique_calls():
+        for call in testable_calls(function.get_unique_calls()):
             name = call2testname(call, function.name)
             assertions = [self._create_assertion(function.name, call)]
 
@@ -495,7 +498,7 @@ class TestGenerator(object):
 
     def _method_description_from_live_object(self, live_object):
         init_call = live_object.get_init_call()
-        external_calls = live_object.get_external_calls()
+        external_calls = testable_calls(live_object.get_external_calls())
         local_name = underscore(live_object.klass.name)
         constructor = constructor_as_string(live_object)
         stub_all = constructor.uncomplete

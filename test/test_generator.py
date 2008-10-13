@@ -491,6 +491,14 @@ class TestGenerator:
         assert_contains(result, "def test_nats_yields_1_then_2_then_3_for_1(self):")
         assert_contains(result, "self.assertEqual([1, 2, 3], list(islice(nats(start=1), 3)))")
 
+    def test_doesnt_test_unused_generators(self):
+        objects = [GeneratorWithYields('useless', {'anything': 123}, [])]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_doesnt_contain(result, "from module import useless")
+        assert_doesnt_contain(result, "assert")
+
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
         self.project = TestableProject()

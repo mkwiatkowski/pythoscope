@@ -490,6 +490,9 @@ class Call(object):
     def clear_exception(self):
         self.exception = None
 
+    def is_testable(self):
+        return True
+
     def __eq__(self, other):
         return self.definition == other.definition and \
                self.input == other.input and \
@@ -532,9 +535,6 @@ class Callable(object):
     def add_call(self, call):
         self.calls.append(call)
 
-    def get_unique_calls(self):
-        return set(self.calls)
-
     def get_generator_object(self, unique_id):
         def is_matching_gobject(call):
             return isinstance(call, GeneratorObject) and call.unique_id == unique_id
@@ -550,6 +550,9 @@ class Function(Definition, Callable):
 
     def is_testable(self):
         return not self.name.startswith('_')
+
+    def get_unique_calls(self):
+        return set(self.calls)
 
     def __repr__(self):
         return "Function(name=%r, calls=%r)" % (self.name, self.calls)
@@ -579,6 +582,9 @@ class GeneratorObject(Call):
 
     def set_output(self, output):
         self.output.append(wrap_object(output))
+
+    def is_testable(self):
+        return self.raised_exception() or self.output
 
     def __hash__(self):
         return hash((self.definition.name,
