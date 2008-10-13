@@ -75,11 +75,17 @@ class CallString(str):
 
     `imports` is a list of imports that this call requires.
     """
-    def __new__(cls, string, uncomplete=False, imports=[]):
+    def __new__(cls, string, uncomplete=False, imports=None):
+        if imports is None:
+            imports = set()
         call_string = str.__new__(cls, string)
         call_string.uncomplete = uncomplete
         call_string.imports = imports
         return call_string
+
+    def extend(self, value, uncomplete=False, imports=set()):
+        return CallString(value, self.uncomplete or uncomplete,
+                          self.imports.union(imports))
 
 # :: object -> CallString
 def standard_constructor_as_string(object):
@@ -304,10 +310,16 @@ def type_of(string):
 def map_types(string):
     return "map(type, %s)" % string
 
-# :: (Call, CallString) -> string
+# :: (Call, CallString) -> CallString
 def decorate_call(call, string):
     if isinstance(call, GeneratorObject):
-        return in_list(string)
+        invocations = len(call.output)
+        if call.raised_exception():
+            invocations += 1
+        # TODO: generators were added to Python 2.2, while itertools appeared in
+        # release  2.3, so we may generate incompatible tests here.
+        return string.extend("list(islice(%s, %d))" % (string, invocations),
+                             imports=[("itertools", "islice")])
     return string
 
 def should_ignore_method(method):
@@ -543,7 +555,7 @@ class TestGenerator(object):
         Generated assertion will be a stub if input of a call cannot be
         constructed or if stub argument is True.
         """
-        callstring = call_as_string(name, call.input)
+        callstring = decorate_call(call, call_as_string(name, call.input))
 
         for import_ in callstring.imports:
             self.ensure_import(import_)
@@ -555,7 +567,7 @@ class TestGenerator(object):
                 assertion_type = 'raises'
             return (assertion_type,
                     exception_as_string(call.exception),
-                    in_lambda(decorate_call(call, callstring)))
+                    in_lambda(callstring))
         else:
             if callstring.uncomplete or stub:
                 assertion_type = 'equal_stub'
@@ -564,7 +576,7 @@ class TestGenerator(object):
 
             if can_be_constructed(call.output):
                 return (assertion_type, constructor_as_string(call.output),
-                        decorate_call(call, callstring))
+                        callstring)
             else:
                 # If we can't test for real values, let's at least test for the right type.
                 output_type = type_as_string(call.output)

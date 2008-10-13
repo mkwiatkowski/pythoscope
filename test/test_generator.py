@@ -447,7 +447,7 @@ class TestGenerator:
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "def test_random_yields_1_then_8_then_7_then_2_for_1(self):")
-        assert_contains(result, "self.assertEqual([1, 8, 7, 2], list(random(seed=1)))")
+        assert_contains(result, "self.assertEqual([1, 8, 7, 2], list(islice(random(seed=1), 4)))")
 
     def test_generates_assert_equal_for_generator_methods(self):
         klass = ClassWithMethods('SuperGenerator', [('degenerate', [({'what': 'strings'}, ['one', 'two'])])], call_type='generator')
@@ -456,7 +456,7 @@ class TestGenerator:
 
         assert_contains(result, "def test_degenerate_yields_one_then_two_for_strings(self):")
         assert_contains(result, "super_generator = SuperGenerator()")
-        assert_contains(result, "self.assertEqual(['one', 'two'], list(super_generator.degenerate(what='strings')))")
+        assert_contains(result, "self.assertEqual(['one', 'two'], list(islice(super_generator.degenerate(what='strings'), 2)))")
 
     def test_generates_assert_equal_stub_for_generator_functions_with_unpickable_inputs(self):
         objects = [GeneratorWithYields('call_twice', {'x': lambda: 1}, [1, 1])]
@@ -464,7 +464,7 @@ class TestGenerator:
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "def test_call_twice_yields_1_then_1_for_function(self):")
-        assert_contains(result, "# self.assertEqual([1, 1], list(call_twice(x=<TODO: function>)))")
+        assert_contains(result, "# self.assertEqual([1, 1], list(islice(call_twice(x=<TODO: function>), 2)))")
 
     def test_generates_assert_equal_types_for_generator_functions_with_unpickable_outputs(self):
         objects = [GeneratorWithYields('lambdify', {'x': 1}, [lambda: 1, lambda: 2])]
@@ -472,7 +472,7 @@ class TestGenerator:
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "def test_lambdify_yields_function_then_function_for_1(self):")
-        assert_contains(result, "self.assertEqual([types.FunctionType, types.FunctionType], map(type, lambdify(x=1)))")
+        assert_contains(result, "self.assertEqual([types.FunctionType, types.FunctionType], map(type, list(islice(lambdify(x=1), 2))))")
 
     def test_generates_assert_raises_for_generator_functions_with_exceptions(self):
         objects = [GeneratorWithSingleException('throw', {'string': {}}, TypeError)]
@@ -480,7 +480,16 @@ class TestGenerator:
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "def test_throw_raises_type_error_for_dict(self):")
-        assert_contains(result, "self.assertRaises(TypeError, lambda: list(throw(string={})))")
+        assert_contains(result, "self.assertRaises(TypeError, lambda: list(islice(throw(string={}), 1)))")
+
+    def test_takes_slice_of_generated_values_list_to_work_around_infinite_generators(self):
+        objects = [GeneratorWithYields('nats', {'start': 1}, [1, 2, 3])]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "from itertools import islice")
+        assert_contains(result, "def test_nats_yields_1_then_2_then_3_for_1(self):")
+        assert_contains(result, "self.assertEqual([1, 2, 3], list(islice(nats(start=1), 3)))")
 
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
