@@ -22,6 +22,10 @@ def data(name):
 def read_data(name):
     return read_file_contents(data(name))
 
+def P(path):
+    "Convert given path with slashes to proper format for OS we're running on."
+    return os.path.join(*path.split("/"))
+
 def quoted_block(text):
     return ''.join(["> %s" % line for line in text.splitlines(True)])
 
@@ -127,7 +131,7 @@ def get_test_module_contents(project):
     """Get contents of the first test module of a project.
     """
     try:
-        return project["tests/test_module.py"].get_content()
+        return project[P("tests/test_module.py")].get_content()
     except ModuleNotFound:
         return "" # No test module was generated.
 get_test_module_contents.__test__ = False

@@ -48,13 +48,6 @@ def module_path_to_name(module_path):
 
 def module_path_to_test_path(module):
     """Convert a module locator to a proper test filename.
-
-    >>> module_path_to_test_path("module.py")
-    'test_module.py'
-    >>> module_path_to_test_path("pythoscope/store.py")
-    'test_pythoscope_store.py'
-    >>> module_path_to_test_path("pythoscope/__init__.py")
-    'test_pythoscope.py'
     """
     return "test_%s.py" % module_path_to_name(module)
 
@@ -836,7 +829,7 @@ class Localizable(object):
         self.created = created
 
     def _get_locator(self):
-        return re.sub(r'(%s__init__)?\.py$' % os.path.sep, '', self.subpath).\
+        return re.sub(r'(%s__init__)?\.py$' % re.escape(os.path.sep), '', self.subpath).\
             replace(os.path.sep, ".")
     locator = property(_get_locator)
 

@@ -13,7 +13,8 @@ from pythoscope.util import read_file_contents
 
 from helper import assert_length, assert_equal_sets, EmptyProject, \
      ProjectWithModules, ProjectWithRealModules, ProjectInDirectory, \
-     assert_not_raises, get_test_cases, assert_equal_strings, UNPICKABLE_OBJECT
+     assert_not_raises, get_test_cases, assert_equal_strings, \
+     UNPICKABLE_OBJECT, P
 
 # Let nose know that those aren't test classes.
 TestClass.__test__ = False
@@ -45,7 +46,7 @@ class TestProject:
         assert_equal(["Syntax error"], project['bad_module'].errors)
 
     def test_can_be_queried_for_modules_by_their_path(self):
-        paths = ["module.py", "sub/dir/module.py", "package/__init__.py"]
+        paths = ["module.py", P("sub/dir/module.py"), P("package/__init__.py")]
         project = ProjectWithModules(paths)
 
         for path in paths:
@@ -56,7 +57,7 @@ class TestProject:
         assert_raises(ModuleNotFound, lambda: project["whatever"])
 
     def test_can_be_queried_for_modules_by_their_locator(self):
-        paths = ["module.py", "sub/dir/module.py", "package/__init__.py"]
+        paths = ["module.py", P("sub/dir/module.py"), P("package/__init__.py")]
         locators = ["module", "sub.dir.module", "package"]
         project = ProjectWithModules(paths)
 
@@ -64,21 +65,21 @@ class TestProject:
             assert_equal(path, project[locator].subpath)
 
     def test_replaces_old_module_objects_with_new_ones_during_create_module(self):
-        paths = ["module.py", "sub/dir/module.py", "other/module.py"]
+        paths = ["module.py", P("sub/dir/module.py"), P("other/module.py")]
         project = ProjectWithModules(paths)
 
-        new_module = project.create_module("other/module.py")
+        new_module = project.create_module(P("other/module.py"))
 
         assert_length(project.get_modules(), 3)
-        assert project["other/module.py"] is new_module
+        assert project[P("other/module.py")] is new_module
 
     def test_replaces_module_instance_in_test_cases_associated_modules_during_module_replacement(self):
-        paths = ["module.py", "sub/dir/module.py", "other/module.py"]
+        paths = ["module.py", P("sub/dir/module.py"), P("other/module.py")]
         project = ProjectWithModules(paths)
-        test_class = TestClass(name='TestAnything', associated_modules=[project["other/module.py"]])
+        test_class = TestClass(name='TestAnything', associated_modules=[project[P("other/module.py")]])
         project.add_test_case(test_class)
 
-        new_module = project.create_module("other/module.py")
+        new_module = project.create_module(P("other/module.py"))
 
         assert_length(test_class.associated_modules, 1)
         assert test_class.associated_modules[0] is new_module

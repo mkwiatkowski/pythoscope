@@ -6,9 +6,9 @@ from pythoscope.store import Class, LiveObject, Module, PointOfEntry, \
 
 from helper import CustomSeparator, assert_length
 
-# Let nose know that this isn't a test class.
+# Let nose know that those aren't test cases.
 TestClass.__test__ = False
-
+module_path_to_test_path.__test__ = False
 
 class TestModule:
     def test_can_add_test_cases_to_empty_modules(self):

@@ -175,7 +175,9 @@ def ensure_directory(directory):
 
 def get_last_modification_time(path):
     try:
-        return os.path.getmtime(path)
+        # Casting to int, because we don't need better resolution anyway and it
+        # eases testing on different OSes.
+        return int(os.path.getmtime(path))
     except OSError:
         # File may not exist, in which case it was never modified.
         return 0
