@@ -168,7 +168,8 @@ def tracer(frame, event, arg):
     elif event == 'return':
         _call_stack.returned(arg)
     elif event == 'exception':
-        _call_stack.raised(arg[1], arg[2])
+        if arg[0] is not GeneratorExit:
+            _call_stack.raised(arg[1], arg[2])
 
 def start_tracing():
     sys.settrace(tracer)

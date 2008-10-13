@@ -598,6 +598,7 @@ class TestTraceFunction(DynamicInspectorTest):
         gobject = generator.calls.pop()
 
         assert_generator_object({}, [1], gobject)
+        assert not gobject.raised_exception()
 
     def test_handles_yielded_nones(self):
         trace = self._collect_callables(function_calling_generator_that_yields_none)
