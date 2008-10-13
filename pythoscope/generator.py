@@ -457,7 +457,7 @@ class TestGenerator(object):
             raise TypeError("Don't know how to generate test method descriptions for %s" % object)
 
     def _generate_test_method_descriptions_for_function(self, function, module):
-        if function.calls:
+        if testable_calls(function.calls):
             # We're calling the function, so we have to make sure it will
             # be imported in the test
             self.ensure_import((module.locator, function.name))

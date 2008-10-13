@@ -496,8 +496,9 @@ class TestGenerator:
 
         result = generate_single_test_module(objects=objects)
 
-        assert_doesnt_contain(result, "from module import useless")
-        assert_doesnt_contain(result, "assert")
+        assert_contains(result, "assert False")
+        assert_doesnt_contain(result, "assertEqual")
+        assert_doesnt_contain(result, "assertRaises")
 
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
