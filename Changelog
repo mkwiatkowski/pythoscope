@@ -1,6 +1,15 @@
 Changelog
 =========
 
+0.3.1
+-----
+
+* Added implementation of samefile function for Windows (`#271882 <https://bugs.launchpad.net/pythoscope/+bug/271882>`_).
+* Fixed wrong indentation bug (`#271892 <https://bugs.launchpad.net/pythoscope/+bug/271892>`_).
+* Made lib2to3.pgen2.parse.ParseError pickable (`#271904 <https://bugs.launchpad.net/pythoscope/+bug/271904>`_).
+* Added `support for Python generators <https://blueprints.launchpad.net/pythoscope/+spec/handle-python-generators>`_.
+* Fixed static inspection of functions having attributes with default values (`#275459 <https://bugs.launchpad.net/pythoscope/+bug/275459>`_).
+
 0.3
 ---
 

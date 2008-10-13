@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='pythoscope',
-    version="0.3",
+    version="0.3.1",
 
     author = 'Michal Kwiatkowski',
     author_email = 'constant.beta@gmail.com',
@@ -16,7 +16,7 @@ setup(
                     'lib2to3': ['*.txt']},
     install_requires = [],
 
-    entry_points = {        
+    entry_points = {
         'console_scripts': ['pythoscope = pythoscope:main']
     },
 
