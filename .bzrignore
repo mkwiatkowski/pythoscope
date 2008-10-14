@@ -1,3 +1,3 @@
 pythoscope.egg-info
-lib2to3/Grammar2.5.2.final.0.pickle
-lib2to3/PatternGrammar2.5.2.final.0.pickle
+lib2to3/Grammar*.pickle
+lib2to3/PatternGrammar*.pickle
