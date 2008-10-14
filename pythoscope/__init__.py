@@ -1,13 +1,17 @@
-import getopt
 import os
 import sys
+import getopt
 
 from inspector import inspect_project
 from generator import add_tests_to_project, UnknownTemplate
 from store import Project, ModuleNotFound, ModuleNeedsAnalysis, \
      ModuleSaveError, get_pythoscope_path, get_points_of_entry_path
 from util import samefile
+import logger
+from logger import log
 
+
+__version__ = '0.3.2'
 
 USAGE = """Pythoscope usage:
 
@@ -26,6 +30,8 @@ notation. For example, both of the following are acceptable:
 All test files will be written to a single directory.
 
 Options:
+  -V, --version  Pythoscope will print out the version if --verison is
+                 specified.
   -f, --force    Go ahead and overwrite any existing test files. Default
                  is to skip generation of tests for files that would
                  otherwise get overwriten.
@@ -45,6 +51,7 @@ Options:
   -t TEMPLATE_NAME, --template=TEMPLATE_NAME
                  Name of a template to use (see below for a list of
                  available templates). Default is "unittest".
+  -v, --verbose=quite|debug
 
 Available templates:
   * unittest     All tests are placed into classes which derive from
@@ -83,10 +90,11 @@ def init_project(path):
     pythoscope_path = get_pythoscope_path(path)
 
     try:
+        log.debug('Making init directory: %s' % (os.path.abspath(pythoscope_path)))
         os.makedirs(pythoscope_path)
         os.makedirs(get_points_of_entry_path(path))
     except OSError, err:
-        print "Error: Couldn't initialize Pythoscope directory: %s." % err.strerror
+        log.error("Couldn't initialize Pythoscope directory: %s." % err.strerror)
 
 def generate_tests(modules, force, template):
     try:
@@ -95,31 +103,31 @@ def generate_tests(modules, force, template):
         add_tests_to_project(project, modules, template, force)
         project.save()
     except PythoscopeDirectoryMissing:
-        print "Error: Can't find .pythoscope/ directory for this project. " \
-              "Initialize the project with the '--init' option first."
+        log.error("Can't find .pythoscope/ directory for this project. " \
+              "Initialize the project with the '--init' option first.")
     except ModuleNeedsAnalysis, err:
         if err.out_of_sync:
-            print "Error: Tried to generate tests for test module located at %r, " \
-                  "but it has been modified during this run. Please try running pythoscope again." % err.path
+            log.error("Tried to generate tests for test module located at %r, " \
+                  "but it has been modified during this run. Please try running pythoscope again." % err.path)
         else:
-            print "Error: Tried to generate tests for test module located at %r, " \
-                  "but it was created during this run. Please try running pythoscope again." % err.path
+            log.error("Tried to generate tests for test module located at %r, " \
+                  "but it was created during this run. Please try running pythoscope again." % err.path)
     except ModuleNotFound, err:
         if os.path.exists(err.module):
-            print "Error: Couldn't find information on module %r. This shouldn't happen, please file a bug report." % err.module
+            log.error("Couldn't find information on module %r. This shouldn't happen, please file a bug report." % err.module)
         else:
-            print "Error: File doesn't exist: %s." % err.module
+            log.error("File doesn't exist: %s." % err.module)
     except ModuleSaveError, err:
-        print "Error: Couldn't save module %r: %s." % (err.module, err.reason)
+        log.error("Couldn't save module %r: %s." % (err.module, err.reason))
     except UnknownTemplate, err:
-        print "Error: Couldn't find template named %r. Available templates are 'nose' and 'unittest'." % err.template
+        log.error("Couldn't find template named %r. Available templates are 'nose' and 'unittest'." % err.template)
 
 def main():
     appname = os.path.basename(sys.argv[0])
 
     try:
-        options, args = getopt.getopt(sys.argv[1:], "fhit:",
-                                      ["force", "help", "init", "template="])
+        options, args = getopt.getopt(sys.argv[1:], "fhit:v:V",
+                        ["force", "help", "init", "template=", "verbose=", "version"])
     except getopt.GetoptError, err:
         print "Error:", err, "\n"
         print USAGE % appname
@@ -128,6 +136,7 @@ def main():
     force = False
     init = False
     template = "unittest"
+    logging_level = logger.INFO
 
     for opt, value in options:
         if opt in ("-f", "--force"):
@@ -139,6 +148,16 @@ def main():
             init = True
         elif opt in ("-t", "--template"):
             template = value
+        elif opt in ("-v", "--verbose"):
+            if value.lower() in ['=quiet', 'quiet']:
+                logging_level = logger.ERROR
+            elif value.lower() in ['=debug', 'debug']:
+                logging_level = logger.DEBUG
+        elif opt in ("-V", "--version", "--Version"):
+            print '%s %s ' % (appname, __version__)
+
+    log.level = logging_level
+    log.debug('Command line args: %s, %s' % (options, args))
 
     try:
         if init:
@@ -149,11 +168,10 @@ def main():
             init_project(project_path)
         else:
             if not args:
-                print "Error: You didn't specify any module to generate tests for.\n"
+                log.error("You didn't specify any modules for test generation.\n")
                 print USAGE % appname
             else:
                 generate_tests(args, force, template)
     except:
-        print "Ups, it seems internal Pythoscope error occured. Please file a bug report at https://bugs.launchpad.net/pythoscope"
-        print
+        log.error("Oops, it seems internal Pythoscope error occured. Please file a bug report at https://bugs.launchpad.net/pythoscope\n")
         raise
