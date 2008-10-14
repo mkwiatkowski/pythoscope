@@ -1,8 +1,10 @@
 from setuptools import setup
 
+from pythoscope import __version__
+
 setup(
     name='pythoscope',
-    version="0.3.1",
+    version=__version__,
 
     author = 'Michal Kwiatkowski',
     author_email = 'constant.beta@gmail.com',

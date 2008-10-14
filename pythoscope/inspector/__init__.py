@@ -1,7 +1,7 @@
 from pythoscope.inspector import static, dynamic
+from pythoscope.logger import log
 from pythoscope.store import ModuleNotFound
 from pythoscope.util import python_modules_below
-from pythoscope.logger import log
 
 
 def inspect_project(project):
@@ -13,7 +13,6 @@ def inspect_project(project):
     # If nothing new was discovered statically and there are no new points of
     # entry, don't run dynamic inspection.
     if updates:
-        log.debug("Inspecting %s" % project)
         inspect_project_dynamically(project)
     else:
         log.info("No changes discovered in the source code, skipping dynamic inspection.")
@@ -29,8 +28,7 @@ def add_and_update_modules(project):
         try:
             module = project.find_module_by_full_path(modpath)
             if module.is_up_to_date():
-                log.info("%s hasn't changed since last inspection, skipping." 
-                         % module.subpath)
+                log.info("%s hasn't changed since last inspection, skipping." % module.subpath)
                 continue
         except ModuleNotFound:
             pass

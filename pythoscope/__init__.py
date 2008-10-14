@@ -1,6 +1,6 @@
+import getopt
 import os
 import sys
-import getopt
 
 from inspector import inspect_project
 from generator import add_tests_to_project, UnknownTemplate
@@ -11,7 +11,7 @@ import logger
 from logger import log
 
 
-__version__ = '0.3.2'
+__version__ = '0.3.2dev'
 
 USAGE = """Pythoscope usage:
 
@@ -30,8 +30,6 @@ notation. For example, both of the following are acceptable:
 All test files will be written to a single directory.
 
 Options:
-  -V, --version  Pythoscope will print out the version if --verison is
-                 specified.
   -f, --force    Go ahead and overwrite any existing test files. Default
                  is to skip generation of tests for files that would
                  otherwise get overwriten.
@@ -51,7 +49,9 @@ Options:
   -t TEMPLATE_NAME, --template=TEMPLATE_NAME
                  Name of a template to use (see below for a list of
                  available templates). Default is "unittest".
-  -v, --verbose=quite|debug
+  -q, --quiet    Don't print anything unless it's an error.
+  -v, --verbose  Be very verbose (basically enable debug output).
+  -V, --version  Print Pythoscope version and exit.
 
 Available templates:
   * unittest     All tests are placed into classes which derive from
@@ -90,7 +90,7 @@ def init_project(path):
     pythoscope_path = get_pythoscope_path(path)
 
     try:
-        log.debug('Making init directory: %s' % (os.path.abspath(pythoscope_path)))
+        log.debug("Initializing .pythoscope directory: %s" % (os.path.abspath(pythoscope_path)))
         os.makedirs(pythoscope_path)
         os.makedirs(get_points_of_entry_path(path))
     except OSError, err:
@@ -126,8 +126,8 @@ def main():
     appname = os.path.basename(sys.argv[0])
 
     try:
-        options, args = getopt.getopt(sys.argv[1:], "fhit:v:V",
-                        ["force", "help", "init", "template=", "verbose=", "version"])
+        options, args = getopt.getopt(sys.argv[1:], "fhit:qvV",
+                        ["force", "help", "init", "template=", "quiet", "verbose", "version"])
     except getopt.GetoptError, err:
         print "Error:", err, "\n"
         print USAGE % appname
@@ -136,7 +136,6 @@ def main():
     force = False
     init = False
     template = "unittest"
-    logging_level = logger.INFO
 
     for opt, value in options:
         if opt in ("-f", "--force"):
@@ -148,16 +147,12 @@ def main():
             init = True
         elif opt in ("-t", "--template"):
             template = value
+        elif opt in ("-q", "--quiet"):
+            log.level = logger.ERROR
         elif opt in ("-v", "--verbose"):
-            if value.lower() in ['=quiet', 'quiet']:
-                logging_level = logger.ERROR
-            elif value.lower() in ['=debug', 'debug']:
-                logging_level = logger.DEBUG
-        elif opt in ("-V", "--version", "--Version"):
+            log.level = logger.DEBUG
+        elif opt in ("-V", "--version"):
             print '%s %s ' % (appname, __version__)
-
-    log.level = logging_level
-    log.debug('Command line args: %s, %s' % (options, args))
 
     try:
         if init:

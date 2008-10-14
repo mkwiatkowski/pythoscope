@@ -152,26 +152,6 @@ def get_test_cases(project):
     return list(project.iter_test_cases())
 get_test_cases.__test__ = False
 
-
-def exec_and_get_output(code, global_vars=None):
-    """ Grab both stdout and stderr and return them as a string
-    """
-    if global_vars == None:
-        # we do this because defaulting to {} retains state between calls
-        global_vars = {} 
-    old_stdout = sys.stdout
-    sys.stdout = StringIO()
-    old_stderr = sys.stderr
-    sys.stderr = sys.stdout
-    try:
-        exec code in global_vars, {}
-        return sys.stdout.getvalue()
-    finally:
-        sys.stdout = old_stdout
-        sys.stderr = old_stderr
-
-
 def random_string(length=8):
     """ This generates a random string for unit testing """
     return ''.join(random.sample('ABCDEFjkl;qwer ', length))
-
