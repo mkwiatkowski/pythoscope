@@ -154,6 +154,7 @@ def main():
             log.level = logger.DEBUG
         elif opt in ("-V", "--version"):
             print "%s %s" % (appname, __version__)
+            sys.exit()
 
     try:
         if init:
