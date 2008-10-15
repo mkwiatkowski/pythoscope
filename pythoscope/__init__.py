@@ -2,13 +2,14 @@ import getopt
 import os
 import sys
 
+import logger
+
 from inspector import inspect_project
 from generator import add_tests_to_project, UnknownTemplate
+from logger import log
 from store import Project, ModuleNotFound, ModuleNeedsAnalysis, \
      ModuleSaveError, get_pythoscope_path, get_points_of_entry_path
 from util import samefile
-import logger
-from logger import log
 
 
 __version__ = '0.3.2dev'
@@ -129,7 +130,7 @@ def main():
         options, args = getopt.getopt(sys.argv[1:], "fhit:qvV",
                         ["force", "help", "init", "template=", "quiet", "verbose", "version"])
     except getopt.GetoptError, err:
-        print "Error:", err, "\n"
+        log.error("Error: %s\n" % err)
         print USAGE % appname
         sys.exit(1)
 
@@ -152,7 +153,7 @@ def main():
         elif opt in ("-v", "--verbose"):
             log.level = logger.DEBUG
         elif opt in ("-V", "--version"):
-            print '%s %s ' % (appname, __version__)
+            print "%s %s" % (appname, __version__)
 
     try:
         if init:

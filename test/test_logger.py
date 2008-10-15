@@ -1,23 +1,28 @@
-import types
-import unittest
-from cStringIO import StringIO
+from StringIO import StringIO
 
-from nose.tools import assert_equal
-from pythoscope.logger import log
-from helper import random_string
+from helper import assert_equal_strings, assert_matches
+
+from pythoscope.logger import log, get_output, set_output, DEBUG, INFO
 
 
-class TestLogger(unittest.TestCase):
-    def test_info_message(self):
-        log_str = random_string()
-        captured_io = StringIO()
-        old_stream = log.handlers[0].stream 
-        log.handlers[0].stream = captured_io
-        log.info(log_str)
-        log.handlers[0].stream = old_stream
-        assert_equal(captured_io.getvalue(),  'INFO: %s\n'%log_str)
+class TestLogger:
+    def setUp(self):
+        self._old_output = get_output()
+        self.captured = StringIO()
+        set_output(self.captured)
 
+    def tearDown(self):
+        set_output(self._old_output)
 
-if __name__ == '__main__':
-    unittest.main()
+    def test_info_message_in_normal_mode(self):
+        log.info("Log this")
+        assert_equal_strings("INFO: Log this\n", self.captured.getvalue())
 
+    def test_info_message_in_debug_mode(self):
+        log.level = DEBUG
+        try:
+            log.info("Log that")
+            assert_matches(r"\d+\.\d+ test_logger:\d+ INFO: Log that\n",
+                           self.captured.getvalue())
+        finally:
+            log.level = INFO

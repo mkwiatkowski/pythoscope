@@ -2,9 +2,6 @@ import difflib
 import os
 import re
 import types
-import sys
-import random
-from cStringIO import StringIO
 
 from fixture import TempIO
 from nose.tools import assert_equal
@@ -75,6 +72,10 @@ def assert_instance(object, type):
     assert isinstance(object, type), \
            "Expected object %r to be of type %r, it was of type %r instead." % \
            (object, type, type(object))
+
+def assert_matches(regexp, string):
+    assert re.match(regexp, string), \
+        "Expected\n%s\nto match r'%s', but it didn't." % (quoted_block(string), regexp)
 
 class PointOfEntryMock(PointOfEntry):
     def __init__(self, project=None, name="poe", content=""):
@@ -151,7 +152,3 @@ generate_single_test_module.__test__ = False
 def get_test_cases(project):
     return list(project.iter_test_cases())
 get_test_cases.__test__ = False
-
-def random_string(length=8):
-    """ This generates a random string for unit testing """
-    return ''.join(random.sample('ABCDEFjkl;qwer ', length))
