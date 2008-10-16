@@ -3,10 +3,13 @@ import os
 import re
 import types
 
+from StringIO import StringIO
+
 from fixture import TempIO
 from nose.tools import assert_equal
 
 from pythoscope.generator import add_tests_to_project
+from pythoscope.logger import get_output, set_output
 from pythoscope.store import Function, ModuleNotFound, PointOfEntry, Project
 from pythoscope.util import read_file_contents, set
 
@@ -90,16 +93,6 @@ class PointOfEntryMock(PointOfEntry):
     def get_content(self):
         return self.content
 
-# Make your test case a subclass of CustomSeparator to test your code with
-# alternative os.path.sep.
-class CustomSeparator:
-    def setUp(self):
-        self.old_sep = os.path.sep
-        os.path.sep = '#'
-
-    def tearDown(self):
-        os.path.sep = self.old_sep
-
 def EmptyProject():
     project = Project(path=os.path.realpath("."))
     # Preserve the default value.
@@ -124,6 +117,13 @@ def ProjectWithRealModules(paths):
     project = ProjectWithModules(paths, ProjectInDirectory)
     for path in paths:
         project.path.putfile(path, "")
+    return project
+
+def ProjectWithPointsOfEntryFiles(paths):
+    project = ProjectInDirectory()
+    project.path.mkdir(P(".pythoscope/points-of-entry"))
+    for path in paths:
+        project.path.putfile(os.path.join(P(".pythoscope/points-of-entry"), path), "")
     return project
 
 def TestableProject(more_modules=[], project_type=ProjectInDirectory):
@@ -152,3 +152,32 @@ generate_single_test_module.__test__ = False
 def get_test_cases(project):
     return list(project.iter_test_cases())
 get_test_cases.__test__ = False
+
+###############################################################################
+# Test superclasses
+#   Subclass one of those to get a desired test fixture.
+
+class CustomSeparator:
+    """Subclass CustomSeparator to test your code with alternative os.path.sep.
+    """
+    def setUp(self):
+        self.old_sep = os.path.sep
+        os.path.sep = '#'
+
+    def tearDown(self):
+        os.path.sep = self.old_sep
+
+class CapturedLogger:
+    """Capture all log output and make it available to test via
+    _get_log_output() method.
+    """
+    def setUp(self):
+        self._old_output = get_output()
+        self.captured = StringIO()
+        set_output(self.captured)
+
+    def tearDown(self):
+        set_output(self._old_output)
+
+    def _get_log_output(self):
+        return self.captured.getvalue()

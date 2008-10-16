@@ -32,6 +32,7 @@ def add_and_update_modules(project):
                 continue
         except ModuleNotFound:
             pass
+        log.info("Inspecting module %s." % project._extract_subpath(modpath))
         static.inspect_module(project, modpath)
         count += 1
     return count
@@ -52,6 +53,7 @@ def add_and_update_points_of_entry(project):
 def inspect_project_dynamically(project):
     for poe in project.points_of_entry.values():
         try:
+            log.info("Inspecting point of entry %s." % poe.name)
             dynamic.inspect_point_of_entry(poe)
         except SyntaxError, err:
             log.warning("Point of entry contains a syntax error: %s" % err)

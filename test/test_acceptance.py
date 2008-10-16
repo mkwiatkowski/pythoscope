@@ -6,11 +6,11 @@ from pythoscope.inspector import inspect_project
 from pythoscope.generator import add_tests_to_project
 from pythoscope.util import read_file_contents
 
-from helper import ProjectInDirectory, get_test_module_contents
+from helper import get_test_module_contents, CapturedLogger, ProjectInDirectory
 
 add_tests_to_project.__test__ = False
 
-class TestStaticAnalysis:
+class TestStaticAnalysis(CapturedLogger):
     def test_generates_test_stubs(self):
         expected_result = read_data("static_analysis_output.py")
         project = ProjectInDirectory()
@@ -22,7 +22,7 @@ class TestStaticAnalysis:
 
         assert_equal(expected_result, result)
 
-class TestAppendingTestClasses:
+class TestAppendingTestClasses(CapturedLogger):
     def test_appends_test_classes_to_existing_test_modules(self):
         self._test_appending("appending_test_cases_module_modified.py",
                              "appending_test_cases_output_expected.py")
