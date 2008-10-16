@@ -283,6 +283,21 @@ class TestGenerator:
         assert_contains(result, "something = Something(arg1=1, arg2=2)")
         assert_contains(result, "self.assertEqual(3, something.sum())")
 
+    def test_generates_nice_name_for_tests_with_init_that_takes_no_arguments(self):
+        klass = ClassWithMethods('Something', [('__init__', [({}, None)]),
+                                               ('fire', [({}, 'kaboom')])])
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_fire_returns_kaboom(self):")
+
+    def test_generates_nice_name_for_tests_with_init_only_that_takes_no_arguments(self):
+        klass = ClassWithMethods('Something', [('__init__', [({}, None)])])
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_creation(self):")
+
     def test_ignores_internal_object_calls(self):
         klass = ClassWithMethods('Something', [('method', [({'argument': 1}, 'result')])])
         live_object = klass.live_objects[('poe', 12345)]

@@ -507,7 +507,9 @@ class TestGenerator(object):
 
         def test_name():
             if len(external_calls) == 0 and init_call:
-                test_name = "test_creation_with_%s" % input_as_string(init_call.input)
+                test_name = "test_creation"
+                if init_call.input:
+                    test_name += "_with_%s" % input_as_string(init_call.input)
                 if init_call.raised_exception():
                     test_name += "_raises_%s" % object2id(init_call.exception)
             else:
@@ -525,7 +527,7 @@ class TestGenerator(object):
                         else:
                             methods.append("%s_%d_times" % (method, len(calls)))
                     test_name = "test_%s" % '_and_'.join(methods)
-                if init_call:
+                if init_call and init_call.input:
                     test_name += "_after_creation_with_%s" % input_as_string(init_call.input)
             return test_name
 
