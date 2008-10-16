@@ -14,6 +14,7 @@ from util import samefile
 
 __version__ = '0.3.2dev'
 
+BUGTRACKER_URL = "https://bugs.launchpad.net/pythoscope"
 USAGE = """Pythoscope usage:
 
     %s [options] [module names...]
@@ -104,24 +105,28 @@ def generate_tests(modules, force, template):
         add_tests_to_project(project, modules, template, force)
         project.save()
     except PythoscopeDirectoryMissing:
-        log.error("Can't find .pythoscope/ directory for this project. " \
-              "Initialize the project with the '--init' option first.")
+        log.error("Can't find .pythoscope/ directory for this project. "
+                  "Initialize the project with the '--init' option first.")
     except ModuleNeedsAnalysis, err:
         if err.out_of_sync:
-            log.error("Tried to generate tests for test module located at %r, " \
-                  "but it has been modified during this run. Please try running pythoscope again." % err.path)
+            log.error("Tried to generate tests for test module located at %r, "
+                      "but it has been modified during this run. Please try "
+                      "running pythoscope again." % err.path)
         else:
-            log.error("Tried to generate tests for test module located at %r, " \
-                  "but it was created during this run. Please try running pythoscope again." % err.path)
+            log.error("Tried to generate tests for test module located at %r, "
+                      "but it was created during this run. Please try running "
+                      "pythoscope again." % err.path)
     except ModuleNotFound, err:
         if os.path.exists(err.module):
-            log.error("Couldn't find information on module %r. This shouldn't happen, please file a bug report." % err.module)
+            log.error("Couldn't find information on module %r. This shouldn't "
+                      "happen, please file a bug report at %s." % (err.module, BUGTRACKER_URL))
         else:
             log.error("File doesn't exist: %s." % err.module)
     except ModuleSaveError, err:
         log.error("Couldn't save module %r: %s." % (err.module, err.reason))
     except UnknownTemplate, err:
-        log.error("Couldn't find template named %r. Available templates are 'nose' and 'unittest'." % err.template)
+        log.error("Couldn't find template named %r. Available templates are "
+                  "'nose' and 'unittest'." % err.template)
 
 def main():
     appname = os.path.basename(sys.argv[0])
@@ -170,5 +175,5 @@ def main():
             else:
                 generate_tests(args, force, template)
     except:
-        log.error("Oops, it seems internal Pythoscope error occured. Please file a bug report at https://bugs.launchpad.net/pythoscope\n")
+        log.error("Oops, it seems internal Pythoscope error occured. Please file a bug report at %s\n" % BUGTRACKER_URL)
         raise

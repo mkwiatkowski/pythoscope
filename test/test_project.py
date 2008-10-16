@@ -14,7 +14,7 @@ from pythoscope.util import read_file_contents
 from helper import assert_length, assert_equal_sets, EmptyProject, \
      ProjectWithModules, ProjectWithRealModules, ProjectInDirectory, \
      assert_not_raises, get_test_cases, assert_equal_strings, \
-     UNPICKABLE_OBJECT, P
+     UNPICKABLE_OBJECT, P, assert_contains_once, CapturedLogger
 
 # Let nose know that those aren't test classes.
 TestClass.__test__ = False
@@ -164,8 +164,9 @@ class TestProject:
         assert_equal_strings(original_pickle,
                              read_file_contents(project._get_pickle_path()))
 
-class TestProjectWithTestModule:
+class TestProjectWithTestModule(CapturedLogger):
     def setUp(self):
+        CapturedLogger.setUp(self)
         self.project = EmptyProject()
         self.existing_test_class = TestClass("TestSomething")
         self.test_module = self.project.create_module("test_module.py")
@@ -205,6 +206,9 @@ class TestProjectWithTestModule:
         assert_length(get_test_cases(self.project), 1)
         assert get_test_cases(self.project)[0] is test_method.parent
         assert test_method.parent is not test_class
+        # The right message was issued.
+        assert_contains_once(self._get_log_output(),
+                             "Adding generated test_new_method to TestSomething in test_module.py.")
 
     def test_after_adding_new_test_case_to_class_its_module_is_marked_as_changed(self):
         self.existing_test_class.add_test_case(TestMethod("test_something_new"))
@@ -232,6 +236,9 @@ class TestProjectWithTestModule:
 
         assert_equal([test_method],
                      get_test_cases(self.project)[0].test_cases)
+        # The right message was issued.
+        assert_contains_once(self._get_log_output(),
+                             "Test case TestSomething.test_method already exists in test_module.py, skipping.")
 
     def test_overwrites_existing_test_methods_with_force_option(self):
         test_method = TestMethod("test_method")
@@ -253,6 +260,9 @@ class TestProjectWithTestModule:
         # But the method got replaced.
         assert_equal([new_test_method],
                      get_test_cases(self.project)[0].test_cases)
+        # The right message was issued.
+        assert_contains_once(self._get_log_output(),
+                             "Replacing TestSomething.test_method from test_module.py with generated version.")
 
     def test_appends_new_test_methods_to_test_classes_with_proper_indentation(self):
         self._associate_module_with_existing_test_class()

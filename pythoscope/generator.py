@@ -1,11 +1,12 @@
 import re
 import types
 
-from astvisitor import EmptyCode, descend, parse_fragment, ASTVisitor
-from store import Class, Function, TestClass, TestMethod, ModuleNotFound, \
+from pythoscope.astvisitor import EmptyCode, descend, parse_fragment, ASTVisitor
+from pythoscope.logger import log
+from pythoscope.store import Class, Function, TestClass, TestMethod, ModuleNotFound, \
      LiveObject, MethodCall, Method, Value, Type, Repr, Project, PointOfEntry, \
      GeneratorObject, can_be_constructed
-from util import RePatternType, camelize, underscore, sorted, \
+from pythoscope.util import RePatternType, camelize, underscore, sorted, \
      regexp_flags_as_string, groupby
 
 
@@ -421,6 +422,7 @@ class TestGenerator(object):
         return "# %s" % self.raises_assertion(exception, code)
 
     def _add_tests_for_module(self, module, project, force):
+        log.info("Generating tests for module %s." % module.subpath)
         for test_case in self._generate_test_cases(module):
             project.add_test_case(test_case, force)
 

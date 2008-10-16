@@ -5,10 +5,11 @@ import re
 import time
 import types
 
-from astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
+from pythoscope.astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
      get_starting_whitespace, is_node_of_type, regenerate, \
      remove_trailing_whitespace
-from util import all_of_type, max_by_not_zero, set, all, \
+from pythoscope.logger import log
+from pythoscope.util import all_of_type, max_by_not_zero, set, all, \
      write_string_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, is_generator_code, \
      extract_subpath, directories_under, findfirst, contains_active_generator
@@ -221,6 +222,7 @@ class Project(object):
         existing_test_case = self._find_test_case_by_name(test_case.name)
         if not existing_test_case:
             place = self._find_place_for_test_case(test_case)
+            log.info("Adding generated %s to %s." % (test_case.name, place.subpath))
             place.add_test_case(test_case)
         elif isinstance(test_case, TestClass) and isinstance(existing_test_case, TestClass):
             self._merge_test_classes(existing_test_case, test_case, force)
@@ -238,9 +240,16 @@ class Project(object):
         for method in other_test_class.test_cases:
             existing_test_method = test_class.find_method_by_name(method.name)
             if not existing_test_method:
+                log.info("Adding generated %s to %s in %s." % \
+                             (method.name, test_class.name, test_class.parent.subpath))
                 test_class.add_test_case(method)
             elif force:
+                log.info("Replacing %s.%s from %s with generated version." % \
+                             (test_class.name, existing_test_method.name, test_class.parent.subpath))
                 test_class.replace_test_case(existing_test_method, method)
+            else:
+                log.info("Test case %s.%s already exists in %s, skipping." % \
+                             (test_class.name, existing_test_method.name, test_class.parent.subpath))
         test_class.ensure_imports(other_test_class.imports)
 
     def _find_test_case_by_name(self, name):

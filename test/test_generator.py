@@ -13,9 +13,9 @@ from pythoscope.store import Project, Class, Method, Function, \
 from pythoscope.util import read_file_contents, get_last_modification_time
 
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
-     generate_single_test_module, ProjectInDirectory, \
+     generate_single_test_module, P, ProjectInDirectory, \
      ProjectWithModules, TestableProject, assert_contains_once, \
-     PointOfEntryMock, get_test_cases, assert_equal_sets
+     PointOfEntryMock, get_test_cases, assert_equal_sets, CapturedLogger
 
 # Let nose know that those aren't test functions/classes.
 add_tests_to_project.__test__ = False
@@ -557,3 +557,23 @@ class TestGeneratorWithSingleModule:
 
         assert_length(self.project["test_module"].test_cases, 1)
         assert_length(self.project["test_other"].test_cases, 0)
+
+class TestGeneratorMessages(CapturedLogger):
+    def test_reports_each_module_it_generates_tests_for(self):
+        paths = ["first.py", "another.py", P("one/more.py")]
+        project = ProjectWithModules(paths)
+
+        add_tests_to_project(project, paths, 'unittest')
+
+        for path in paths:
+            assert_contains_once(self._get_log_output(),
+                                 "Generating tests for module %s." % path)
+
+    def test_reports_each_added_test_class(self):
+        objects = [Class('SomeClass', [Method('some_method')]), Function('some_function')]
+        generate_single_test_module(objects=objects)
+
+        assert_contains_once(self._get_log_output(),
+                             "Adding generated TestSomeClass to tests/test_module.py.")
+        assert_contains_once(self._get_log_output(),
+                             "Adding generated TestSomeFunction to tests/test_module.py.")
