@@ -523,6 +523,15 @@ class TestGenerator:
         assert_contains(result, "def test_characterize_returns_oacute_for_unicode_string(self):")
         assert_contains(result, "self.assertEqual('o-acute', characterize(x=u'\\xf3'))")
 
+    def test_handles_pickable_function_objects(self):
+        objects = [FunctionWithSingleCall('store', {'fun': read_file_contents}, None)]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "from pythoscope.util import read_file_contents")
+        assert_contains(result, "def test_store_returns_None_for_read_file_contents_function(self):")
+        assert_contains(result, "self.assertEqual(None, store(fun=read_file_contents))")
+
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
         self.project = TestableProject()

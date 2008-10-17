@@ -105,6 +105,10 @@ def standard_constructor_as_string(object):
             return CallString('re.compile(%r, %s)' % (object.pattern, flags), imports=['re'])
         else:
             return CallString('re.compile(%r)' % object.pattern, imports=['re'])
+    elif isinstance(object, types.FunctionType):
+        function = object.func_name
+        module = object.__module__
+        return CallString(function, imports=[(module, function)])
     else:
         # This may not always be right, but it's worth a try.
         return CallString(repr(object))
@@ -154,6 +158,13 @@ def call_as_string(object_name, input):
     'fun(a=1, b=2)'
     >>> call_as_string('capitalize', {'str': Value('string')})
     "capitalize(str='string')"
+
+    >>> result = call_as_string('call', {'f': Value(call_as_string)})
+    >>> result
+    'call(f=call_as_string)'
+    >>> result.uncomplete
+    False
+
     >>> result = call_as_string('map', {'f': Type(lambda x: 42), 'L': Value([1,2,3])})
     >>> result
     'map(L=[1, 2, 3], f=<TODO: function>)'
@@ -193,6 +204,8 @@ def object2id(object):
             return "%s_pattern" % string2id(object.value.pattern)
         elif isinstance(object.value, unicode):
             return "unicode_string"
+        elif isinstance(object.value, types.FunctionType):
+            return "%s_function" % object.value.func_name
         return string2id(str(object.value))
     elif isinstance(object, Type):
         return underscore(object.type.__name__)
