@@ -1,6 +1,6 @@
 import __builtin__
 import os
-import pickle
+import cPickle
 import re
 import time
 import types
@@ -64,7 +64,7 @@ class Project(object):
         project_path = os.path.realpath(project_path)
         try:
             fd = open(get_pickle_path(project_path))
-            project = pickle.load(fd)
+            project = cPickle.load(fd)
             fd.close()
             # Update project's path, as the directory could've been moved.
             project.path = project_path
@@ -95,7 +95,7 @@ class Project(object):
     def save(self):
         # Try pickling the project first, because if this fails, we shouldn't
         # save any changes at all.
-        pickled_project = pickle.dumps(self)
+        pickled_project = cPickle.dumps(self, cPickle.HIGHEST_PROTOCOL)
 
         # To avoid inconsistencies try to save all project's modules first. If
         # any of those saves fail, the pickle file won't get updated.
@@ -302,10 +302,11 @@ class Repr(ObjectWrapper):
         return "Repr(%s)" % self.repr
 
 def is_pickable(object):
-    if isinstance(object, (types.FunctionType, types.GeneratorType)):
+    try:
+        cPickle.dumps(object)
+        return True
+    except (cPickle.PicklingError, TypeError):
         return False
-    # TODO: handle more cases
-    return True
 
 def wrap_object(object):
     if is_pickable(object):

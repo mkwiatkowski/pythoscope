@@ -1,5 +1,5 @@
 import os
-from pickle import PicklingError
+from cPickle import PicklingError
 
 from fixture import TempIO
 from nose.tools import assert_equal, assert_raises
