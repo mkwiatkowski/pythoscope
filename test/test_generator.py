@@ -515,6 +515,14 @@ class TestGenerator:
         assert_doesnt_contain(result, "assertEqual")
         assert_doesnt_contain(result, "assertRaises")
 
+    def test_handles_unicode_objects(self):
+        objects = [FunctionWithSingleCall('characterize', {'x': u'\xf3'}, "o-acute")]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_characterize_returns_oacute_for_unicode_string(self):")
+        assert_contains(result, "self.assertEqual('o-acute', characterize(x=u'\\xf3'))")
+
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
         self.project = TestableProject()

@@ -191,6 +191,8 @@ def object2id(object):
             return underscore(exception_as_string(object))
         elif isinstance(object.value, RePatternType):
             return "%s_pattern" % string2id(object.value.pattern)
+        elif isinstance(object.value, unicode):
+            return "unicode_string"
         return string2id(str(object.value))
     elif isinstance(object, Type):
         return underscore(object.type.__name__)
