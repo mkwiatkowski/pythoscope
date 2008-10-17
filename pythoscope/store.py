@@ -8,8 +8,7 @@ import types
 from pythoscope.astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
      get_starting_whitespace, is_node_of_type, regenerate, \
      remove_trailing_whitespace
-from pythoscope.logger import log
-from pythoscope.util import all_of_type, max_by_not_zero, set, all, \
+from pythoscope.util import all_of_type, set, all, \
      write_string_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, is_generator_code, \
      extract_subpath, directories_under, findfirst, contains_active_generator
@@ -35,43 +34,6 @@ class ModuleSaveError(Exception):
         Exception.__init__(self, "Couldn't save module %r: %s." % (module, reason))
         self.module = module
         self.reason = reason
-
-def test_module_name_for_test_case(test_case):
-    "Come up with a name for a test module which will contain given test case."
-    if test_case.associated_modules:
-        return module_path_to_test_path(test_case.associated_modules[0].subpath)
-    return "test_foo.py" # TODO
-
-def module_path_to_name(module_path):
-    return re.sub(r'.py$', '',
-                  re.sub(r'%s__init__.py$' % os.path.sep, '.py',
-                         module_path)).replace(os.path.sep, "_")
-
-def module_path_to_test_path(module):
-    """Convert a module locator to a proper test filename.
-    """
-    return "test_%s.py" % module_path_to_name(module)
-
-def possible_test_module_paths(module, new_tests_directory):
-    """Return possible locations of a test module corresponding to given
-    application module.
-    """
-    test_directories = ["", "test", "tests"]
-    if new_tests_directory not in test_directories:
-        test_directories.append(new_tests_directory)
-    def generate():
-        for name in possible_test_module_names(module):
-            for test_directory in test_directories:
-                yield os.path.join(test_directory, name)
-    return list(generate())
-
-def possible_test_module_names(module):
-    module_name = module_path_to_name(module.subpath)
-
-    for name in ["test_%s", "%s_test", "%sTest", "tests_%s", "%s_tests", "%sTests"]:
-        yield (name % module_name) + ".py"
-    for name in ["test%s", "Test%s", "%sTest", "tests%s", "Tests%s", "%sTests"]:
-        yield (name % module_name.capitalize()) + ".py"
 
 def get_pythoscope_path(project_path):
     return os.path.join(project_path, ".pythoscope")
@@ -174,6 +136,17 @@ class Project(object):
 
         return module
 
+    def create_test_module_from_name(self, test_name):
+        """Create a module with given name in project tests directory.
+
+        If the test module already exists, ModuleNeedsAnalysis exception will
+        be raised.
+        """
+        test_path = self._path_for_test(test_name)
+        if os.path.exists(test_path):
+            raise ModuleNeedsAnalysis(test_path)
+        return self.create_module(test_path)
+
     def remove_module(self, subpath):
         """Remove a module from this Project along with all references to it
         from other modules.
@@ -214,112 +187,15 @@ class Project(object):
         """
         return extract_subpath(path, self.path)
 
-    def add_test_cases(self, test_cases, force=False):
-        for test_case in test_cases:
-            self.add_test_case(test_case, force)
-
-    def add_test_case(self, test_case, force=False):
-        existing_test_case = self._find_test_case_by_name(test_case.name)
-        if not existing_test_case:
-            place = self._find_place_for_test_case(test_case)
-            log.info("Adding generated %s to %s." % (test_case.name, place.subpath))
-            place.add_test_case(test_case)
-        elif isinstance(test_case, TestClass) and isinstance(existing_test_case, TestClass):
-            self._merge_test_classes(existing_test_case, test_case, force)
-        elif force:
-            existing_test_case.replace_itself_with(test_case)
-
     def iter_test_cases(self):
         for module in self.iter_modules():
             for test_case in module.test_cases:
                 yield test_case
 
-    def _merge_test_classes(self, test_class, other_test_class, force):
-        """Merge other_test_case into test_case.
-        """
-        for method in other_test_class.test_cases:
-            existing_test_method = test_class.find_method_by_name(method.name)
-            if not existing_test_method:
-                log.info("Adding generated %s to %s in %s." % \
-                             (method.name, test_class.name, test_class.parent.subpath))
-                test_class.add_test_case(method)
-            elif force:
-                log.info("Replacing %s.%s from %s with generated version." % \
-                             (test_class.name, existing_test_method.name, test_class.parent.subpath))
-                test_class.replace_test_case(existing_test_method, method)
-            else:
-                log.info("Test case %s.%s already exists in %s, skipping." % \
-                             (test_class.name, existing_test_method.name, test_class.parent.subpath))
-        test_class.ensure_imports(other_test_class.imports)
-
-    def _find_test_case_by_name(self, name):
-        for tcase in self.iter_test_cases():
-            if tcase.name == name:
-                return tcase
-
-    def _find_place_for_test_case(self, test_case):
-        """Find the best place for the new test case to be added. If there is
-        no such place in existing test modules, a new one will be created.
-        """
-        if isinstance(test_case, TestClass):
-            return self._find_test_module(test_case) or \
-                   self._create_test_module_for(test_case)
-        elif isinstance(test_case, TestMethod):
-            return self._find_test_class(test_case) or \
-                   self._create_test_class_for(test_case)
-
-    def _create_test_module_for(self, test_case):
-        """Create a new test module for a given test case. If the test module
-        already existed, will raise a ModuleNeedsAnalysis exception.
-        """
-        test_name = test_module_name_for_test_case(test_case)
-        test_path = self._path_for_test(test_name)
-        if os.path.exists(test_path):
-            raise ModuleNeedsAnalysis(test_path)
-        return self.create_module(test_path)
-
     def _path_for_test(self, test_module_name):
         """Return a full path to test module with given name.
         """
         return os.path.join(self.path, self.new_tests_directory, test_module_name)
-
-    def _find_test_module(self, test_case):
-        """Find test module that will be good for the given test case.
-        """
-        for module in test_case.associated_modules:
-            test_module = self._find_associate_test_module_by_name(module) or \
-                          self._find_associate_test_module_by_test_cases(module)
-            if test_module:
-                return test_module
-
-    def _find_associate_test_module_by_name(self, module):
-        """Try to find a test module with name corresponding to the name of
-        the application module.
-        """
-        possible_paths = possible_test_module_paths(module, self.new_tests_directory)
-        for module in self.get_modules():
-            if module.subpath in possible_paths:
-                return module
-
-    def _find_associate_test_module_by_test_cases(self, module):
-        """Try to find a test module with most test cases for the given
-        application module.
-        """
-        def test_cases_number(mod):
-            return len(mod.get_test_cases_for_module(module))
-        test_module = max_by_not_zero(test_cases_number, self.get_modules())
-        if test_module:
-            return test_module
-
-    def _find_test_class(self, test_method):
-        """Find a test class that will be good for the given test method.
-        """
-        pass # TODO
-
-    def _create_test_class_for(self, test_method):
-        """Create a new test class for given test method.
-        """
-        pass # TODO
 
     def __getitem__(self, module):
         for mod in self.iter_modules():
@@ -1102,4 +978,3 @@ class PointOfEntry(Localizable):
             del gobject._frame
 
         self._gobjects = []
-

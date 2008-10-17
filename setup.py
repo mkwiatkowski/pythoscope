@@ -13,7 +13,7 @@ setup(
     license = 'MIT',
     url = 'http://pythoscope.org',
 
-    packages = ['pythoscope', 'pythoscope/inspector', 'lib2to3', 'lib2to3.pgen2'],
+    packages = ['pythoscope', 'pythoscope.inspector', 'pythoscope.generator', 'lib2to3', 'lib2to3.pgen2'],
     package_data = {'pythoscope': [],
                     'lib2to3': ['*.txt']},
     install_requires = [],

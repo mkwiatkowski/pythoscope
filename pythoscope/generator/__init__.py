@@ -3,6 +3,7 @@ import types
 
 from pythoscope.astvisitor import EmptyCode, descend, parse_fragment, ASTVisitor
 from pythoscope.logger import log
+from pythoscope.generator.adder import add_test_case_to_project
 from pythoscope.store import Class, Function, TestClass, TestMethod, ModuleNotFound, \
      LiveObject, MethodCall, Method, Value, Type, Repr, Project, PointOfEntry, \
      GeneratorObject, can_be_constructed
@@ -424,7 +425,7 @@ class TestGenerator(object):
     def _add_tests_for_module(self, module, project, force):
         log.info("Generating tests for module %s." % module.subpath)
         for test_case in self._generate_test_cases(module):
-            project.add_test_case(test_case, force)
+            add_test_case_to_project(project, test_case, force)
 
     def _generate_test_cases(self, module):
         for object in module.testable_objects:
