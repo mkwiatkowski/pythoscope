@@ -1,3 +1,6 @@
+from pythoscope.logger import log
+from pythoscope.util import quoted_block
+
 from lib2to3 import pygram
 from lib2to3 import pytree
 from lib2to3.patcomp import compile_pattern
@@ -85,8 +88,12 @@ def parse(code):
         code += "\n"
         added_newline = True
 
-    drv = driver.Driver(pygram.python_grammar, pytree.convert)
-    result = drv.parse_string(code, True)
+    try:
+        drv = driver.Driver(pygram.python_grammar, pytree.convert)
+        result = drv.parse_string(code, True)
+    except ParseError:
+        log.debug("Had problems parsing:\n%s\n" % quoted_block(code))
+        raise
 
     # Always return a Node, not a Leaf.
     if isinstance(result, Leaf):
@@ -120,7 +127,7 @@ def regenerate(tree):
 
 class ASTError(Exception):
     pass
-        
+
 def is_leaf_of_type(leaf, *types):
     return isinstance(leaf, Leaf) and leaf.type in types
 
@@ -219,7 +226,7 @@ class ASTVisitor(object):
         self.patterns.append((method, compile_pattern(pattern)))
 
     def visit(self, tree):
-        """Main entry point of the ASTVisitor class. 
+        """Main entry point of the ASTVisitor class.
         """
         if isinstance(tree, Leaf):
             self.visit_leaf(tree)

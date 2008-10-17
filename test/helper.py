@@ -11,7 +11,7 @@ from nose.tools import assert_equal
 from pythoscope.generator import add_tests_to_project
 from pythoscope.logger import get_output, set_output
 from pythoscope.store import Function, ModuleNotFound, PointOfEntry, Project
-from pythoscope.util import read_file_contents, set
+from pythoscope.util import quoted_block, read_file_contents, set
 
 
 UNPICKABLE_OBJECT = types.ClassType('class', (), {})
@@ -28,9 +28,6 @@ def read_data(name):
 def P(path):
     "Convert given path with slashes to proper format for OS we're running on."
     return os.path.join(*path.split("/"))
-
-def quoted_block(text):
-    return ''.join(["> %s" % line for line in text.splitlines(True)])
 
 def assert_length(collection, expected_length):
     actual_length = len(collection)

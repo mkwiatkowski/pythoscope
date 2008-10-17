@@ -225,6 +225,9 @@ def compile_without_warnings(stmt):
     warnings.resetwarnings()
     return code
 
+def quoted_block(text):
+    return ''.join(["> %s" % line for line in text.splitlines(True)])
+
 # Regular expressions helpers.
 
 RePatternType = type(re.compile(''))
