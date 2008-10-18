@@ -9,7 +9,7 @@ from pythoscope.generator import add_tests_to_project
 from pythoscope.store import Project, Class, Method, Function, \
      ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod, \
      MethodCall, FunctionCall, LiveObject, wrap_call_arguments, \
-     wrap_object, PointOfEntry, GeneratorObject, Value
+     wrap_object, PointOfEntry, GeneratorObject, Value, Type
 from pythoscope.util import read_file_contents, get_last_modification_time
 
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
@@ -374,6 +374,17 @@ class TestGenerator:
         assert_contains(result, "def test_method_raises_key_error(self):")
         assert_contains(result, "something = Something()")
         assert_contains(result, "self.assertRaises(KeyError, lambda: something.method())")
+
+    def test_generates_imports_for_user_defined_exceptions(self):
+        # Cheating a bit, as UserDefinedException class is not the same as one
+        # presumably defined in module.py.
+        class UserDefinedException(Exception): pass
+        function = Function('throw')
+        function.calls = [FunctionCall(None, function, {}, exception=Type(UserDefinedException()))]
+
+        result = generate_single_test_module(objects=[function])
+
+        assert_contains(result, "from test.test_generator import UserDefinedException")
 
     def test_generates_assert_equal_type_for_functions_returning_functions(self):
         objects = [FunctionWithSingleCall('higher', {}, lambda: 42)]

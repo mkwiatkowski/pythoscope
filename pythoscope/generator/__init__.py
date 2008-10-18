@@ -1,3 +1,4 @@
+import exceptions
 import re
 import types
 
@@ -14,17 +15,6 @@ from pythoscope.util import RePatternType, camelize, underscore, sorted, \
 
 class ValueNeeded(Exception):
     pass
-
-# :: ObjectWrapper -> type
-def unwrap_type(object):
-    """Get a type from given wrapped object.
-    """
-    if isinstance(object, Value):
-        return object.value.__class__
-    elif isinstance(object, Type):
-        return object.type
-    else:
-        raise ValueNeeded("Can't unwrap the type of %s" % object)
 
 # :: [string] -> string
 def list_of(strings):
@@ -54,7 +44,7 @@ def type_as_string(object):
         types.GeneratorType: 'types.GeneratorType'
     }
     try:
-        return mapping[unwrap_type(object)]
+        return mapping[object.get_type()]
     except KeyError:
         raise ValueNeeded()
 
@@ -67,7 +57,7 @@ def exception_as_string(exception):
     >>> exception_as_string(Type(TypeError()))
     'TypeError'
     """
-    return unwrap_type(exception).__name__
+    return exception.get_name()
 
 class CallString(str):
     """A string that holds information on the function/method call it
@@ -361,6 +351,9 @@ def should_ignore_method(method):
 def testable_calls(calls):
     return [c for c in calls if c.is_testable()]
 
+def is_builtin_exception(exception):
+    return exception in dir(exceptions)
+
 class UnknownTemplate(Exception):
     def __init__(self, template):
         Exception.__init__(self, "Couldn't find template %r." % template)
@@ -604,6 +597,8 @@ class TestGenerator(object):
                 assertion_type = 'raises_stub'
             else:
                 assertion_type = 'raises'
+            if not is_builtin_exception(call.exception):
+                self.ensure_import((call.exception.get_module_name(), call.exception.get_name()))
             return (assertion_type,
                     exception_as_string(call.exception),
                     in_lambda(callstring))

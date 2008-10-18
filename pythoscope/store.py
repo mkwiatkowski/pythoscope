@@ -241,7 +241,14 @@ def can_be_constructed(object):
     return object.can_be_constructed
 
 class ObjectWrapper(object):
-    pass
+    def get_type(self):
+        raise NotImplementedError("Can't get the type of %s" % self)
+
+    def get_name(self):
+        return self.get_type().__name__
+
+    def get_module_name(self):
+        return self.get_type().__module__
 
 class Value(ObjectWrapper):
     """Wrapper of an object, which can be pickled, so we can save its real
@@ -251,6 +258,9 @@ class Value(ObjectWrapper):
 
     def __init__(self, object):
         self.value = object
+
+    def get_type(self):
+        return self.value.__class__
 
     def __eq__(self, other):
         return isinstance(other, Value) and self.value == other.value
@@ -272,6 +282,9 @@ class Type(ObjectWrapper):
 
     def __init__(self, object):
         self.type = type(object)
+
+    def get_type(self):
+        return self.type
 
     def __eq__(self, other):
         return isinstance(other, Type) and self.type == other.type

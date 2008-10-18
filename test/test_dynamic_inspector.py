@@ -277,6 +277,14 @@ def function_raising_an_exception():
         raise ValueError()
     function(42)
 
+class UserDefinedException(Exception):
+    pass
+
+def function_raising_a_user_defined_exception():
+    def function(x):
+        raise UserDefinedException()
+    function(42)
+
 def function_handling_other_function_exception():
     def other_function(x):
         if not isinstance(x, int):
@@ -552,6 +560,12 @@ class TestTraceFunction(DynamicInspectorTest):
         assert_call_with_exception({'x': "123"}, TypeError, other_function.calls[0])
         assert_call({'x': 123}, 124, other_function.calls[1])
         assert_call({'number': "123"}, 124, function.calls[0])
+
+    def test_handles_functions_which_raise_user_defined_exceptions(self):
+        trace = self._collect_callables(function_raising_a_user_defined_exception)
+        function = trace.pop()
+
+        assert_call_with_exception({'x': 42}, UserDefinedException, function.calls[0])
 
     def test_saves_function_objects_as_types(self):
         trace = self._collect_callables(function_returning_function)
