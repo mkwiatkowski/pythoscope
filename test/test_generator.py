@@ -9,7 +9,7 @@ from pythoscope.generator import add_tests_to_project
 from pythoscope.store import Project, Class, Method, Function, \
      ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod, \
      MethodCall, FunctionCall, LiveObject, wrap_call_arguments, \
-     wrap_object, PointOfEntry, GeneratorObject
+     wrap_object, PointOfEntry, GeneratorObject, Value
 from pythoscope.util import read_file_contents, get_last_modification_time
 
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
@@ -589,6 +589,24 @@ class TestGeneratorWithSingleModule:
 
         assert_length(self.project["test_module"].test_cases, 1)
         assert_length(self.project["test_other"].test_cases, 0)
+
+    def test_comments_assertions_with_user_objects_that_cannot_be_constructed(self):
+        # Cheating a bit, as Something class is not the same as one defined in
+        # module.py.
+        class Something(object): pass
+        klass = Class("Something")
+        instance = Something()
+
+        poe = PointOfEntryMock()
+        function = Function("nofun")
+        function.calls = [FunctionCall(poe, function, {'x': Value(instance)}, Value("something else"))]
+        self.project["module"].objects = [klass, function]
+
+        add_tests_to_project(self.project, ["module.py"], 'unittest', False)
+        result = self.project["test_module"].get_content()
+
+        assert_contains(result, "def test_nofun_returns_something_else_for_something_instance(self):")
+        assert_contains(result, "# self.assertEqual('something else', nofun(x=%r))" % instance)
 
 class TestGeneratorMessages(CapturedLogger):
     def test_reports_each_module_it_generates_tests_for(self):

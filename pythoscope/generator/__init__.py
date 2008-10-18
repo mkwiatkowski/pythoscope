@@ -1,7 +1,8 @@
 import re
 import types
 
-from pythoscope.astvisitor import EmptyCode, descend, parse_fragment, ASTVisitor
+from pythoscope.astvisitor import descend, parse_fragment, ASTVisitor, \
+    EmptyCode, ParseError
 from pythoscope.logger import log
 from pythoscope.generator.adder import add_test_case_to_project
 from pythoscope.store import Class, Function, TestClass, TestMethod, ModuleNotFound, \
@@ -89,6 +90,14 @@ class CallString(str):
         return CallString(value, self.uncomplete or uncomplete,
                           self.imports.union(imports))
 
+# :: string -> bool
+def is_parsable(string):
+    try:
+        parse_fragment(string)
+        return True
+    except ParseError:
+        return False
+
 # :: object -> CallString
 def standard_constructor_as_string(object):
     """For a given Python object return a string representing a code that will
@@ -110,8 +119,9 @@ def standard_constructor_as_string(object):
         module = object.__module__
         return CallString(function, imports=[(module, function)])
     else:
-        # This may not always be right, but it's worth a try.
-        return CallString(repr(object))
+        # This may not always be the best answer, but it's worth a try.
+        call = repr(object)
+        return CallString(call, uncomplete=not is_parsable(call))
 
 # :: ObjectWrapper | LiveObject | list -> CallString
 def constructor_as_string(object):
@@ -206,7 +216,13 @@ def object2id(object):
             return "unicode_string"
         elif isinstance(object.value, types.FunctionType):
             return "%s_function" % object.value.func_name
-        return string2id(str(object.value))
+        else:
+            string = str(object.value)
+            # Looks like an instance without a custom __str__ defined.
+            if string.startswith("<"):
+                return "%s_instance" % underscore(object.value.__class__.__name__)
+            else:
+                return string2id(string)
     elif isinstance(object, Type):
         return underscore(object.type.__name__)
     elif isinstance(object, Repr):
