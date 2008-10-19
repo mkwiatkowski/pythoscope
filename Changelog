@@ -1,6 +1,14 @@
 Changelog
 =========
 
+0.3.2
+-----
+
+* Made Pythoscope `more verbose <https://blueprints.launchpad.net/pythoscope/+spec/more-verbose-output>`_.
+* Added `support for user-defined exceptions <https://blueprints.launchpad.net/pythoscope/+spec/user-defined-exceptions>`_.
+* Fixed unicode handling bug (`#284585 <https://bugs.launchpad.net/bugs/284585>`_).
+* Improved performance of the internal information storage.
+
 0.3.1
 -----
 
