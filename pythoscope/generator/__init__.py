@@ -10,7 +10,7 @@ from pythoscope.store import Class, Function, TestClass, TestMethod, ModuleNotFo
      LiveObject, MethodCall, Method, Value, Type, Repr, Project, PointOfEntry, \
      GeneratorObject, can_be_constructed
 from pythoscope.util import RePatternType, camelize, underscore, sorted, \
-     regexp_flags_as_string, groupby
+     regexp_flags_as_string, groupby, set
 
 
 class ValueNeeded(Exception):

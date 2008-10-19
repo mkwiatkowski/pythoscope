@@ -13,9 +13,11 @@ except NameError:
 try:
     sorted = sorted
 except NameError:
-    def sorted(alist):
-        alist = alist[:]
-        alist.sort()
+    def sorted(iterable, cmp=cmp, key=None):
+        if key:
+            cmp = lambda x,y: cmp(key(x), key(y))
+        alist = list(iterable)
+        alist.sort(cmp)
         return alist
 
 try:
