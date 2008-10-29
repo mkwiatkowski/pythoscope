@@ -11,6 +11,11 @@ except NameError:
     from sets import Set as set
 
 try:
+    frozenset = frozenset
+except NameError:
+    from sets import ImmutableSet as frozenset
+
+try:
     sorted = sorted
 except NameError:
     def sorted(iterable, cmp=cmp, key=None):

@@ -1,63 +1,31 @@
 import exceptions
-import re
-import types
 
 from pythoscope.astvisitor import descend, parse_fragment, ASTVisitor, \
-    EmptyCode, ParseError
+    EmptyCode
 from pythoscope.logger import log
 from pythoscope.generator.adder import add_test_case_to_project
+from pythoscope.serializer import SerializedObject, can_be_constructed, \
+    serialize, serialize_call_arguments
 from pythoscope.store import Class, Function, TestClass, TestMethod, ModuleNotFound, \
-     LiveObject, MethodCall, Method, Value, Type, Repr, Project, PointOfEntry, \
-     GeneratorObject, can_be_constructed
-from pythoscope.util import RePatternType, camelize, underscore, sorted, \
-     regexp_flags_as_string, groupby, set
+    LiveObject, MethodCall, Method, Project, PointOfEntry, GeneratorObject
+from pythoscope.util import camelize, underscore, sorted, groupby, set
 
-
-class ValueNeeded(Exception):
-    pass
 
 # :: [string] -> string
 def list_of(strings):
     return "[%s]" % ', '.join(strings)
 
-# :: ObjectWrapper | [ObjectWrapper] -> string
+# :: SerializedObject | [SerializedObject] -> string
 def type_as_string(object):
     """Return a most common representation of the wrapped object type.
 
-    >>> type_as_string(Type([]))
-    'list'
-    >>> type_as_string(Type({}))
-    'dict'
-    >>> type_as_string(Type(lambda: None))
-    'types.FunctionType'
-    >>> type_as_string([Type(()), Type({})])
+    >>> type_as_string([serialize(()), serialize({})])
     '[tuple, dict]'
     """
     if isinstance(object, list):
         return list_of(map(type_as_string, object))
 
-    mapping = {
-        list: 'list',
-        dict: 'dict',
-        tuple: 'tuple',
-        types.FunctionType: 'types.FunctionType',
-        types.GeneratorType: 'types.GeneratorType'
-    }
-    try:
-        return mapping[object.get_type()]
-    except KeyError:
-        raise ValueNeeded()
-
-# :: ObjectWrapper -> string
-def exception_as_string(exception):
-    """Return a name of this wrapped exception class.
-
-    >>> exception_as_string(Value(TypeError()))
-    'TypeError'
-    >>> exception_as_string(Type(TypeError()))
-    'TypeError'
-    """
-    return exception.get_name()
+    return object.type_name
 
 class CallString(str):
     """A string that holds information on the function/method call it
@@ -80,55 +48,22 @@ class CallString(str):
         return CallString(value, self.uncomplete or uncomplete,
                           self.imports.union(imports))
 
-# :: string -> bool
-def is_parsable(string):
-    try:
-        parse_fragment(string)
-        return True
-    except ParseError:
-        return False
-
-# :: object -> CallString
-def standard_constructor_as_string(object):
-    """For a given Python object return a string representing a code that will
-    construct it.
-
-    >>> standard_constructor_as_string(re.compile('abcd'))
-    "re.compile('abcd')"
-    >>> standard_constructor_as_string(re.compile('abcd', re.I | re.M))
-    "re.compile('abcd', re.IGNORECASE | re.MULTILINE)"
-    """
-    if isinstance(object, RePatternType):
-        flags = regexp_flags_as_string(object.flags)
-        if flags:
-            return CallString('re.compile(%r, %s)' % (object.pattern, flags), imports=['re'])
-        else:
-            return CallString('re.compile(%r)' % object.pattern, imports=['re'])
-    elif isinstance(object, types.FunctionType):
-        function = object.func_name
-        module = object.__module__
-        return CallString(function, imports=[(module, function)])
-    else:
-        # This may not always be the best answer, but it's worth a try.
-        call = repr(object)
-        return CallString(call, uncomplete=not is_parsable(call))
-
-# :: ObjectWrapper | LiveObject | list -> CallString
+# :: SerializedObject | LiveObject | list -> CallString
 def constructor_as_string(object):
-    """For a given object (either ObjectWrapper, a LiveObject instance or list
+    """For a given object (either SerializedObject, a LiveObject instance or list
     of any combination of those) return a string representing a code that will
     construct it.
 
-    >>> constructor_as_string(Value(123))
+    >>> constructor_as_string(serialize(123))
     '123'
-    >>> constructor_as_string(Value('string'))
+    >>> constructor_as_string(serialize('string'))
     "'string'"
-    >>> constructor_as_string([Value(1), Value('two')])
+    >>> constructor_as_string([serialize(1), serialize('two')])
     "[1, 'two']"
     >>> obj = LiveObject(None, Class('SomeClass'), PointOfEntry(Project('.'), 'poe'))
     >>> constructor_as_string(obj)
     'SomeClass()'
-    >>> obj.add_call(MethodCall(Method('__init__'), {'arg': Value('whatever')}, None))
+    >>> obj.add_call(MethodCall(Method('__init__'), serialize_call_arguments({'arg': 'whatever'}), None))
     >>> constructor_as_string(obj)
     "SomeClass(arg='whatever')"
     """
@@ -139,33 +74,33 @@ def constructor_as_string(object):
         if init_call:
             args = init_call.input
         return call_as_string(object.klass.name, args)
-    elif isinstance(object, Value):
-        return standard_constructor_as_string(object.value)
-    elif isinstance(object, Type):
-        return CallString("<TODO: %s>" % object.type.__name__, uncomplete=True)
-    elif isinstance(object, Repr):
-        return CallString("<TODO: %s>" % object.repr, uncomplete=True)
     elif isinstance(object, list):
         return list_of(map(constructor_as_string, object))
+    elif isinstance(object, SerializedObject):
+        try:
+            reconstructor, imports = object.reconstructor_with_imports
+            return CallString(reconstructor, imports=imports)
+        except TypeError:
+            return CallString("<TODO: %s>" % object.partial_reconstructor, uncomplete=True)
     else:
-        raise TypeError("constructor_as_string expected ObjectWrapper or LiveObject object at input, not %s" % object)
+        raise TypeError("constructor_as_string expected SerializedObject or LiveObject object at input, not %s" % object)
 
 # :: (string, dict) -> CallString
 def call_as_string(object_name, input):
     """Generate code for calling an object with given input.
 
-    >>> call_as_string('fun', {'a': Value(1), 'b': Value(2)})
+    >>> call_as_string('fun', serialize_call_arguments({'a': 1, 'b': 2}))
     'fun(a=1, b=2)'
-    >>> call_as_string('capitalize', {'str': Value('string')})
+    >>> call_as_string('capitalize', serialize_call_arguments({'str': 'string'}))
     "capitalize(str='string')"
 
-    >>> result = call_as_string('call', {'f': Value(call_as_string)})
+    >>> result = call_as_string('call', serialize_call_arguments({'f': call_as_string}))
     >>> result
     'call(f=call_as_string)'
     >>> result.uncomplete
     False
 
-    >>> result = call_as_string('map', {'f': Type(lambda x: 42), 'L': Value([1,2,3])})
+    >>> result = call_as_string('map', serialize_call_arguments({'f': lambda x: 42, 'L': [1,2,3]}))
     >>> result
     'map(L=[1, 2, 3], f=<TODO: function>)'
     >>> result.uncomplete
@@ -182,43 +117,13 @@ def call_as_string(object_name, input):
     return CallString("%s(%s)" % (object_name, ', '.join(arguments)),
                       uncomplete=uncomplete, imports=imports)
 
-# :: string -> string
-def string2id(string):
-    """Remove from string all characters that cannot be used in an identifier.
-    """
-    return re.sub(r'[^a-zA-Z0-9_]', '', re.sub(r'\s+', '_', string.strip()))
-
+# :: SerializedObject -> string
 def object2id(object):
     """Convert object to string that can be used as an identifier.
     """
-    if isinstance(object, Value):
-        if object.value is True:
-            return 'true'
-        elif object.value is False:
-            return 'false'
-        elif isinstance(object.value, (list, dict, tuple)):
-            return underscore(type(object.value).__name__)
-        elif isinstance(object.value, Exception):
-            return underscore(exception_as_string(object))
-        elif isinstance(object.value, RePatternType):
-            return "%s_pattern" % string2id(object.value.pattern)
-        elif isinstance(object.value, unicode):
-            return "unicode_string"
-        elif isinstance(object.value, types.FunctionType):
-            return "%s_function" % object.value.func_name
-        else:
-            string = str(object.value)
-            # Looks like an instance without a custom __str__ defined.
-            if string.startswith("<"):
-                return "%s_instance" % underscore(object.value.__class__.__name__)
-            else:
-                return string2id(string)
-    elif isinstance(object, Type):
-        return underscore(object.type.__name__)
-    elif isinstance(object, Repr):
-        return string2id(object.repr)
-    else:
-        raise TypeError("object2id() should be called with a ObjectWrapper argument, not %s" % object)
+    if not isinstance(object, SerializedObject):
+        raise TypeError("object2id() should be called with a SerializedObject argument, not %s" % object)
+    return object.human_readable_id
 
 def objects_list_to_id(objects):
     """Convert given list of objects into string that can be used as an
@@ -233,7 +138,7 @@ def input_as_string(input):
 
     >>> input_as_string({})
     ''
-    >>> input_as_string({'x': Value(7), 'y': Value(13)})
+    >>> input_as_string(serialize_call_arguments({'x': 7, 'y': 13}))
     'x_equal_7_and_y_equal_13'
     """
     if len(input) == 1:
@@ -244,25 +149,25 @@ def input_as_string(input):
 def objcall2testname(object_name, input, output):
     """Generate a test method name that describes given object call.
 
-    >>> objcall2testname('do_this', {}, Value(True))
+    >>> objcall2testname('do_this', {}, serialize(True))
     'test_do_this_returns_true'
-    >>> objcall2testname('compute', {}, Value('whatever you say'))
+    >>> objcall2testname('compute', {}, serialize('whatever you say'))
     'test_compute_returns_whatever_you_say'
-    >>> objcall2testname('square', {'x': Value(7)}, Value(49))
+    >>> objcall2testname('square', serialize_call_arguments({'x': 7}), serialize(49))
     'test_square_returns_49_for_7'
-    >>> objcall2testname('capitalize', {'str': Value('a word.')}, Value('A word.'))
+    >>> objcall2testname('capitalize', serialize_call_arguments({'str': 'a word.'}), serialize('A word.'))
     'test_capitalize_returns_A_word_for_a_word'
 
     Two or more arguments are mentioned by name.
-        >>> objcall2testname('ackermann', {'m': Value(3), 'n': Value(2)}, Value(29))
+        >>> objcall2testname('ackermann', serialize_call_arguments({'m': 3, 'n': 2}), serialize(29))
         'test_ackermann_returns_29_for_m_equal_3_and_n_equal_2'
 
     Will sort arguments alphabetically.
-        >>> objcall2testname('concat', {'s1': Value('Hello '), 's2': Value('world!')}, Value('Hello world!'))
+        >>> objcall2testname('concat', serialize_call_arguments({'s1': 'Hello ', 's2': 'world!'}), serialize('Hello world!'))
         'test_concat_returns_Hello_world_for_s1_equal_Hello_and_s2_equal_world'
 
     Always starts and ends a word with a letter or number.
-        >>> objcall2testname('strip', {'n': Value(1), 's': Value('  A bit of whitespace  ')}, Value(' A bit of whitespace '))
+        >>> objcall2testname('strip', serialize_call_arguments({'n': 1, 's': '  A bit of whitespace  '}), serialize(' A bit of whitespace '))
         'test_strip_returns_A_bit_of_whitespace_for_n_equal_1_and_s_equal_A_bit_of_whitespace'
     """
     if input:
@@ -275,9 +180,9 @@ def exccall2testname(object_name, input, exception):
     """Generate a test method name that describes given object call raising
     an exception.
 
-    >>> exccall2testname('do_this', {}, Type(Exception()))
+    >>> exccall2testname('do_this', {}, serialize(Exception()))
     'test_do_this_raises_exception'
-    >>> exccall2testname('square', {'x': Value('a string')}, Type(TypeError()))
+    >>> exccall2testname('square', serialize_call_arguments({'x': 'a string'}), serialize(TypeError()))
     'test_square_raises_type_error_for_a_string'
     """
     if input:
@@ -292,9 +197,9 @@ def gencall2testname(object_name, input, yields):
 
     >>> gencall2testname('generate', {}, [])
     'test_generate_yields_nothing'
-    >>> gencall2testname('generate', {}, [Value(1), Value(2), Value(3)])
+    >>> gencall2testname('generate', {}, [serialize(1), serialize(2), serialize(3)])
     'test_generate_yields_1_then_2_then_3'
-    >>> gencall2testname('backwards', {'x': Value(321)}, [Value('one'), Value('two'), Value('three')])
+    >>> gencall2testname('backwards', serialize_call_arguments({'x': 321}), [serialize('one'), serialize('two'), serialize('three')])
     'test_backwards_yields_one_then_two_then_three_for_321'
     """
     if input:
@@ -413,6 +318,10 @@ class TestGenerator(object):
         if import_ not in self.imports:
             self.imports.append(import_)
 
+    def ensure_imports(self, imports):
+        for import_ in imports:
+            self.ensure_import(import_)
+
     def add_tests_to_project(self, project, modnames, force=False):
         for modname in modnames:
             module = project.find_module_by_full_path(modname)
@@ -485,6 +394,9 @@ class TestGenerator(object):
 
     def _generate_test_method_descriptions_for_function(self, function, module):
         if testable_calls(function.calls):
+            log.debug("Detected %d testable calls in function %s." % \
+                          (len(testable_calls(function.calls)), function.name))
+
             # We're calling the function, so we have to make sure it will
             # be imported in the test
             self.ensure_import((module.locator, function.name))
@@ -493,6 +405,7 @@ class TestGenerator(object):
             return self._method_descriptions_from_function(function)
         else:
             # No calls were traced, so we're go for a single test stub.
+            log.debug("Detected _no_ testable calls in function %s." % function.name)
             return [TestMethodDescription(name2testname(underscore(function.name)))]
 
     def _generate_test_method_descriptions_for_class(self, klass, module):
@@ -529,6 +442,8 @@ class TestGenerator(object):
         local_name = underscore(live_object.klass.name)
         constructor = constructor_as_string(live_object)
         stub_all = constructor.uncomplete
+
+        self.ensure_imports(constructor.imports)
 
         def test_name():
             if len(external_calls) == 0 and init_call:
@@ -589,8 +504,7 @@ class TestGenerator(object):
         """
         callstring = decorate_call(call, call_as_string(name, call.input))
 
-        for import_ in callstring.imports:
-            self.ensure_import(import_)
+        self.ensure_imports(callstring.imports)
 
         if call.raised_exception():
             if callstring.uncomplete or stub:
@@ -598,9 +512,9 @@ class TestGenerator(object):
             else:
                 assertion_type = 'raises'
             if not is_builtin_exception(call.exception):
-                self.ensure_import((call.exception.get_module_name(), call.exception.get_name()))
+                self.ensure_import(call.exception.type_import)
             return (assertion_type,
-                    exception_as_string(call.exception),
+                    call.exception.type_name,
                     in_lambda(callstring))
         else:
             if callstring.uncomplete or stub:

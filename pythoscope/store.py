@@ -1,22 +1,17 @@
-import __builtin__
 import os
 import cPickle
 import re
 import time
-import types
 
 from pythoscope.astvisitor import EmptyCode, Newline, create_import, find_last_leaf, \
      get_starting_whitespace, is_node_of_type, regenerate, \
      remove_trailing_whitespace
-from pythoscope.util import all_of_type, set, all, \
+from pythoscope.serializer import serialize, serialize_call_arguments, SerializedObject
+from pythoscope.util import all_of_type, set, \
      write_string_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, is_generator_code, \
      extract_subpath, directories_under, findfirst, contains_active_generator
 
-
-# So we can pickle the function and generator types.
-__builtin__.function = types.FunctionType
-__builtin__.generator = types.GeneratorType
 
 class ModuleNeedsAnalysis(Exception):
     def __init__(self, path, out_of_sync=False):
@@ -234,107 +229,6 @@ class Project(object):
         except ModuleNotFound:
             pass
 
-# :: ObjectWrapper | [ObjectWrapper] -> bool
-def can_be_constructed(object):
-    if isinstance(object, list):
-        return all(map(can_be_constructed, object))
-    return object.can_be_constructed
-
-class ObjectWrapper(object):
-    def get_type(self):
-        raise NotImplementedError("Can't get the type of %s" % self)
-
-    def get_name(self):
-        return self.get_type().__name__
-
-    def get_module_name(self):
-        return self.get_type().__module__
-
-class Value(ObjectWrapper):
-    """Wrapper of an object, which can be pickled, so we can save its real
-    value.
-    """
-    can_be_constructed = True
-
-    def __init__(self, object):
-        self.value = object
-
-    def get_type(self):
-        return self.value.__class__
-
-    def __eq__(self, other):
-        return isinstance(other, Value) and self.value == other.value
-
-    def __hash__(self):
-        # Dictionary itself is not hashable, but set of its keys must be.
-        if isinstance(self.value, dict):
-            return hash(tuple(self.value.keys()))
-        return hash(self.value)
-
-    def __repr__(self):
-        return "Value(%r)" % self.value
-
-class Type(ObjectWrapper):
-    """Placeholder for an object that cannot be pickled, thus have to be
-    remembered as type only.
-    """
-    can_be_constructed = False
-
-    def __init__(self, object):
-        self.type = type(object)
-
-    def get_type(self):
-        return self.type
-
-    def __eq__(self, other):
-        return isinstance(other, Type) and self.type == other.type
-
-    def __hash__(self):
-        return hash(self.type)
-
-    def __repr__(self):
-        return "Type(%r)" % self.type
-
-class Repr(ObjectWrapper):
-    """Placeholder for an object which cannot be pickled and which type
-    cannot be pickled as well, so it is remembered as its string representation
-    only.
-    """
-    can_be_constructed = False
-
-    def __init__(self, object):
-        self.repr = repr(object)
-
-    def __eq__(self, other):
-        return isinstance(other, Repr) and self.repr == other.repr
-
-    def __hash__(self):
-        return hash(self.repr)
-
-    def __repr__(self):
-        return "Repr(%s)" % self.repr
-
-def is_pickable(object):
-    try:
-        cPickle.dumps(object)
-        return True
-    except (cPickle.PicklingError, TypeError):
-        return False
-
-def wrap_object(object):
-    if is_pickable(object):
-        return Value(object)
-    elif is_pickable(type(object)):
-        return Type(object)
-    else:
-        return Repr(object)
-
-def wrap_call_arguments(input):
-    new_input = {}
-    for key, value in input.iteritems():
-        new_input[key] = wrap_object(value)
-    return new_input
-
 class Call(object):
     """Stores information about a single function or method call.
 
@@ -349,8 +243,8 @@ class Call(object):
     and LiveObject.get_external_calls().
     """
     def __init__(self, definition, input, output=None, exception=None):
-        if [value for value in input.values() if not isinstance(value, ObjectWrapper)]:
-            raise ValueError("All input values should be instances of ObjectWrapper class.")
+        if [value for value in input.values() if not isinstance(value, SerializedObject)]:
+            raise ValueError("All input values should be instances of SerializedObject class.")
         if output and exception:
             raise ValueError("Call should have a single point of return.")
         if not isinstance(definition, Definition):
@@ -374,10 +268,10 @@ class Call(object):
         return self.exception is not None
 
     def set_output(self, output):
-        self.output = wrap_object(output)
+        self.output = serialize(output)
 
     def set_exception(self, exception):
-        self.exception = wrap_object(exception)
+        self.exception = serialize(exception)
 
     def clear_exception(self):
         self.exception = None
@@ -473,7 +367,7 @@ class GeneratorObject(Call):
         self.unique_id = (point_of_entry.name, id)
 
     def set_output(self, output):
-        self.output.append(wrap_object(output))
+        self.output.append(serialize(output))
 
     def is_testable(self):
         return self.raised_exception() or self.output
@@ -905,7 +799,7 @@ class PointOfEntry(Localizable):
             if is_generator_code(code):
                 call = self._retrieve_generator_object(live_object, method, input, code, frame)
             else:
-                call = MethodCall(method, wrap_call_arguments(input))
+                call = MethodCall(method, serialize_call_arguments(input))
             live_object.add_call(call)
             return call
         except LookupError:
@@ -917,7 +811,7 @@ class PointOfEntry(Localizable):
             if is_generator_code(code):
                 return self._retrieve_generator_object(function, function, input, code, frame)
             else:
-                call = FunctionCall(self, function, wrap_call_arguments(input))
+                call = FunctionCall(self, function, serialize_call_arguments(input))
                 function.add_call(call)
                 return call
 
@@ -948,7 +842,7 @@ class PointOfEntry(Localizable):
         gobject = callable.get_generator_object((self.name, id(code)))
 
         if not gobject:
-            gobject = GeneratorObject(id(code), generator, self, wrap_call_arguments(input))
+            gobject = GeneratorObject(id(code), generator, self, serialize_call_arguments(input))
             callable.add_call(gobject)
             self._gobjects.append(gobject)
             self._preserve(code)
@@ -985,7 +879,7 @@ class PointOfEntry(Localizable):
         for gobject in self._gobjects:
             if not contains_active_generator(gobject._frame) \
                    and gobject.output \
-                   and gobject.output[-1] == Value(None):
+                   and gobject.output[-1] == serialize(None):
                 gobject.output.pop()
             # Once we know if the generator is active or not, we can discard
             # the frame.

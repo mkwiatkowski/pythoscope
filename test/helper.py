@@ -9,7 +9,7 @@ from fixture import TempIO
 from nose.tools import assert_equal
 
 from pythoscope.generator import add_tests_to_project
-from pythoscope.logger import get_output, set_output
+from pythoscope.logger import INFO, get_output, log, set_output
 from pythoscope.store import Function, ModuleNotFound, PointOfEntry, Project
 from pythoscope.util import quoted_block, read_file_contents, set
 
@@ -170,11 +170,14 @@ class CapturedLogger:
     """
     def setUp(self):
         self._old_output = get_output()
+        self._old_level = log.level
         self.captured = StringIO()
         set_output(self.captured)
+        log.level = INFO
 
     def tearDown(self):
         set_output(self._old_output)
+        log.level = self._old_level
 
     def _get_log_output(self):
         return self.captured.getvalue()

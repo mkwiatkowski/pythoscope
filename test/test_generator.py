@@ -1,15 +1,16 @@
 import os
 import re
 import time
+import types
 
 from nose.tools import assert_equal, assert_not_equal, assert_raises
 
 from pythoscope.astvisitor import parse
 from pythoscope.generator import add_tests_to_project
+from pythoscope.serializer import serialize, serialize_call_arguments
 from pythoscope.store import Project, Class, Method, Function, \
      ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod, \
-     MethodCall, FunctionCall, LiveObject, wrap_call_arguments, \
-     wrap_object, PointOfEntry, GeneratorObject, Value, Type
+     MethodCall, FunctionCall, LiveObject, PointOfEntry, GeneratorObject
 from pythoscope.util import read_file_contents, get_last_modification_time
 
 from helper import assert_contains, assert_doesnt_contain, assert_length,\
@@ -24,12 +25,12 @@ TestMethod.__test__ = False
 
 def create_method_call(method, input, output, call_type, poe):
     if call_type == 'output':
-        return MethodCall(method, wrap_call_arguments(input), output=wrap_object(output))
+        return MethodCall(method, serialize_call_arguments(input), output=serialize(output))
     elif call_type == 'exception':
-        return MethodCall(method, wrap_call_arguments(input), exception=wrap_object(output()))
+        return MethodCall(method, serialize_call_arguments(input), exception=serialize(output()))
     elif call_type == 'generator':
-        return GeneratorObject(12345, method, poe, wrap_call_arguments(input),
-                               map(wrap_object, output))
+        return GeneratorObject(12345, method, poe, serialize_call_arguments(input),
+                               map(serialize, output))
 
 def ClassWithMethods(classname, methods, call_type='output'):
     """call_type has to be one of 'output', 'exception' or 'generator'.
@@ -54,7 +55,7 @@ def ClassWithMethods(classname, methods, call_type='output'):
 def FunctionWithCalls(funcname, calls):
     poe = PointOfEntryMock()
     function = Function(funcname)
-    function.calls = [FunctionCall(poe, function, wrap_call_arguments(i), wrap_object(o)) for (i,o) in calls]
+    function.calls = [FunctionCall(poe, function, serialize_call_arguments(i), serialize(o)) for (i,o) in calls]
     return function
 
 def FunctionWithSingleCall(funcname, input, output):
@@ -63,7 +64,7 @@ def FunctionWithSingleCall(funcname, input, output):
 def FunctionWithExceptions(funcname, calls):
     poe = PointOfEntryMock()
     function = Function(funcname)
-    function.calls = [FunctionCall(poe, function, wrap_call_arguments(i), exception=wrap_object(e())) for (i,e) in calls]
+    function.calls = [FunctionCall(poe, function, serialize_call_arguments(i), exception=serialize(e())) for (i,e) in calls]
     return function
 
 def FunctionWithSingleException(funcname, input, exception):
@@ -72,14 +73,14 @@ def FunctionWithSingleException(funcname, input, exception):
 def GeneratorWithYields(genname, input, yields):
     poe = PointOfEntryMock()
     generator = Function(genname, is_generator=True)
-    gobject = GeneratorObject(12345, generator, poe, wrap_call_arguments(input), map(wrap_object, yields))
+    gobject = GeneratorObject(12345, generator, poe, serialize_call_arguments(input), map(serialize, yields))
     generator.calls = [gobject]
     return generator
 
 def GeneratorWithSingleException(genname, input, exception):
     poe = PointOfEntryMock()
     generator = Function(genname, is_generator=True)
-    gobject = GeneratorObject(12345, generator, poe, wrap_call_arguments(input), exception=wrap_object(exception()))
+    gobject = GeneratorObject(12345, generator, poe, serialize_call_arguments(input), exception=serialize(exception()))
     generator.calls = [gobject]
     return generator
 
@@ -259,6 +260,13 @@ class TestGenerator:
 
         assert_contains(result, "from module import Something")
 
+    def test_generates_imports_needed_for_arguments_of_init_methods(self):
+        klass = ClassWithMethods('Something', [('__init__', [({'fun': read_file_contents}, None)])])
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "from pythoscope.util import read_file_contents")
+
     def test_ignores_repeated_calls(self):
         objects = [FunctionWithCalls('square', 2*[({'x': 4}, 16)])]
 
@@ -303,7 +311,7 @@ class TestGenerator:
         live_object = klass.live_objects[('poe', 12345)]
         method_call = live_object.calls[0]
 
-        subcall = MethodCall(Method('private'), {'argument': wrap_object(2)}, wrap_object(False))
+        subcall = MethodCall(Method('private'), {'argument': serialize(2)}, serialize(False))
         method_call.add_subcall(subcall)
         live_object.add_call(subcall)
 
@@ -380,7 +388,7 @@ class TestGenerator:
         # presumably defined in module.py.
         class UserDefinedException(Exception): pass
         function = Function('throw')
-        function.calls = [FunctionCall(None, function, {}, exception=Type(UserDefinedException()))]
+        function.calls = [FunctionCall(None, function, {}, exception=serialize(UserDefinedException()))]
 
         result = generate_single_test_module(objects=[function])
 
@@ -534,7 +542,7 @@ class TestGenerator:
         assert_contains(result, "def test_characterize_returns_oacute_for_unicode_string(self):")
         assert_contains(result, "self.assertEqual('o-acute', characterize(x=u'\\xf3'))")
 
-    def test_handles_pickable_function_objects(self):
+    def test_handles_localizable_function_objects(self):
         objects = [FunctionWithSingleCall('store', {'fun': read_file_contents}, None)]
 
         result = generate_single_test_module(objects=objects)
@@ -602,22 +610,33 @@ class TestGeneratorWithSingleModule:
         assert_length(self.project["test_other"].test_cases, 0)
 
     def test_comments_assertions_with_user_objects_that_cannot_be_constructed(self):
-        # Cheating a bit, as Something class is not the same as one defined in
-        # module.py.
-        class Something(object): pass
-        klass = Class("Something")
-        instance = Something()
+        klass, instance = self._class_with_instance_without_reconstruction("Something")
 
-        poe = PointOfEntryMock()
-        function = Function("nofun")
-        function.calls = [FunctionCall(poe, function, {'x': Value(instance)}, Value("something else"))]
+        function = FunctionWithSingleCall("nofun", {'x': instance}, "something else")
         self.project["module"].objects = [klass, function]
 
-        add_tests_to_project(self.project, ["module.py"], 'unittest', False)
+        add_tests_to_project(self.project, [self.module_path], 'unittest')
         result = self.project["test_module"].get_content()
 
         assert_contains(result, "def test_nofun_returns_something_else_for_something_instance(self):")
-        assert_contains(result, "# self.assertEqual('something else', nofun(x=%r))" % instance)
+        assert_contains(result, "# self.assertEqual('something else', nofun(x=<TODO: test.test_generator.Something>))")
+
+    def test_generates_type_assertions_for_calls_with_composite_objects_which_elements_cannot_be_constructed(self):
+        klass, instance = self._class_with_instance_without_reconstruction("Unspeakable")
+
+        function = FunctionWithSingleCall("morefun", {}, [instance])
+        self.project["module"].objects = [klass, function]
+
+        add_tests_to_project(self.project, [self.module_path], 'unittest')
+        result = self.project["test_module"].get_content()
+
+        assert_contains(result, "def test_morefun_returns_list(self):")
+        assert_contains(result, "self.assertEqual(list, type(morefun()))")
+
+    def _class_with_instance_without_reconstruction(self, name):
+        # Cheating a bit, as this class won't be the same as one defined in
+        # module.py.
+        return Class(name), types.ClassType(name, (object,), {})()
 
 class TestGeneratorMessages(CapturedLogger):
     def test_reports_each_module_it_generates_tests_for(self):

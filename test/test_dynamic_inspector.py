@@ -1,12 +1,12 @@
 import sys
-import types
 
 from nose.tools import assert_equal
 
 from pythoscope.inspector.dynamic import trace_function, trace_exec, \
      inspect_point_of_entry, setup_tracing, teardown_tracing
+from pythoscope.serializer import serialize, serialize_call_arguments
 from pythoscope.store import Class, Function, GeneratorObject, \
-     Method, LiveObject, Project, wrap_call_arguments, wrap_object, Type
+     Method, LiveObject, Project
 from pythoscope.util import findfirst
 
 from helper import TestableProject, assert_length, PointOfEntryMock, \
@@ -72,19 +72,19 @@ class ProjectMock(Project):
             return type(name)
 
 def assert_call(expected_input, expected_output, call):
-    assert_equal(wrap_call_arguments(expected_input), call.input)
+    assert_equal(serialize_call_arguments(expected_input), call.input)
     assert not call.raised_exception()
-    assert_equal(wrap_object(expected_output), call.output)
+    assert_equal(serialize(expected_output), call.output)
 
-def assert_call_with_exception(expected_input, expected_exception_type, call):
-    assert_equal(wrap_call_arguments(expected_input), call.input)
+def assert_call_with_exception(expected_input, expected_exception_name, call):
+    assert_equal(serialize_call_arguments(expected_input), call.input)
     assert call.raised_exception()
-    assert_equal(expected_exception_type, type(call.exception.value))
+    assert_equal(expected_exception_name, call.exception.type_name)
 
 def assert_generator_object(expected_input, expected_yields, object):
     assert_instance(object, GeneratorObject)
-    assert_equal(wrap_call_arguments(expected_input), object.input)
-    assert_equal(map(wrap_object, expected_yields), object.output)
+    assert_equal(serialize_call_arguments(expected_input), object.input)
+    assert_equal(map(serialize, expected_yields), object.output)
 
 def call_graph_as_string(call_or_calls, indentation=0):
     def lines(call):
@@ -550,14 +550,14 @@ class TestTraceFunction(DynamicInspectorTest):
         trace = self._collect_callables(function_raising_an_exception)
         function = trace.pop()
 
-        assert_call_with_exception({'x': 42}, ValueError, function.calls[0])
+        assert_call_with_exception({'x': 42}, 'ValueError', function.calls[0])
 
     def test_handles_functions_which_handle_other_function_exceptions(self):
         trace = self._collect_callables(function_handling_other_function_exception)
         function = findfirst(lambda f: f.name == "function", trace)
         other_function = findfirst(lambda f: f.name == "other_function", trace)
 
-        assert_call_with_exception({'x': "123"}, TypeError, other_function.calls[0])
+        assert_call_with_exception({'x': "123"}, 'TypeError', other_function.calls[0])
         assert_call({'x': 123}, 124, other_function.calls[1])
         assert_call({'number': "123"}, 124, function.calls[0])
 
@@ -565,15 +565,14 @@ class TestTraceFunction(DynamicInspectorTest):
         trace = self._collect_callables(function_raising_a_user_defined_exception)
         function = trace.pop()
 
-        assert_call_with_exception({'x': 42}, UserDefinedException, function.calls[0])
+        assert_call_with_exception({'x': 42}, 'UserDefinedException', function.calls[0])
 
     def test_saves_function_objects_as_types(self):
         trace = self._collect_callables(function_returning_function)
         function = trace.pop()
         call = function.calls[0]
 
-        assert_equal(Type, type(call.output))
-        assert_equal(types.FunctionType, call.output.type)
+        assert_equal('types.FunctionType', call.output.type_name)
 
     def test_correctly_recognizes_interleaved_ignored_and_traced_calls(self):
         trace = self._collect_callables(function_with_ignored_function, ['ignored'])
