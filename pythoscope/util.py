@@ -235,6 +235,10 @@ def compile_without_warnings(stmt):
 def quoted_block(text):
     return ''.join(["> %s" % line for line in text.splitlines(True)])
 
+def cname(obj):
+    """Return name of this object's class."""
+    return obj.__class__.__name__
+
 # Regular expressions helpers.
 
 RePatternType = type(re.compile(''))

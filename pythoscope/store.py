@@ -7,7 +7,7 @@ from pythoscope.astvisitor import EmptyCode, Newline, create_import, find_last_l
      get_starting_whitespace, is_node_of_type, regenerate, \
      remove_trailing_whitespace
 from pythoscope.serializer import serialize, serialize_call_arguments, SerializedObject
-from pythoscope.util import all_of_type, set, \
+from pythoscope.util import all_of_type, cname, set, \
      write_string_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, is_generator_code, \
      extract_subpath, directories_under, findfirst, contains_active_generator
@@ -259,8 +259,12 @@ class Call(object):
         self.subcalls = []
 
     def add_subcall(self, call):
+        # Don't add the same GeneratorObject more than once.
+        if isinstance(call, GeneratorObject) and call.caller is self:
+            return
         if call.caller is not None:
-            raise TypeError("This Call already has a caller.")
+            raise TypeError("This %s of %s already has a caller." % \
+                                (cname(call), call.definition.name))
         call.caller = self
         self.subcalls.append(call)
 
@@ -293,8 +297,8 @@ class Call(object):
 
     def __repr__(self):
         return "%s(definition=%s, input=%r, output=%r, exception=%r)" % \
-               (self.__class__.__name__, self.definition.name, self.input,
-                self.output, self.exception)
+            (cname(self), self.definition.name, self.input, self.output,
+             self.exception)
 
 class FunctionCall(Call):
     def __init__(self, point_of_entry, function, input, output=None, exception=None):
@@ -319,6 +323,9 @@ class Callable(object):
         self.calls = calls
 
     def add_call(self, call):
+        # Don't add the same GeneratorObject more than once.
+        if isinstance(call, GeneratorObject) and call in self.calls:
+            return
         self.calls.append(call)
 
     def get_generator_object(self, unique_id):
@@ -399,12 +406,6 @@ class LiveObject(Callable):
         self.point_of_entry = point_of_entry
 
         self.unique_id = (point_of_entry.name, id)
-
-    def add_call(self, call):
-        # Don't add the same GeneratorObject more than once.
-        if isinstance(call, GeneratorObject) and call in self.calls:
-            return
-        Callable.add_call(self, call)
 
     def get_init_call(self):
         """Return a call to __init__ or None if it wasn't called.

@@ -5,7 +5,7 @@ from nose.tools import assert_equal
 from pythoscope.inspector.dynamic import trace_function, trace_exec, \
      inspect_point_of_entry, setup_tracing, teardown_tracing
 from pythoscope.serializer import serialize, serialize_call_arguments
-from pythoscope.store import Class, Function, GeneratorObject, \
+from pythoscope.store import Class, Function, FunctionCall, GeneratorObject, \
      Method, LiveObject, Project
 from pythoscope.util import findfirst
 
@@ -359,6 +359,16 @@ def function_calling_generator_method():
             yield 0
     [x for x in Class().genmeth()]
 
+def function_calling_function_that_uses_generator():
+    def generator(x):
+        yield x
+        yield x + 1
+        yield x * 2
+        yield x ** 3
+    def function(y):
+        return [x for x in generator(y)]
+    function(2)
+
 class DynamicInspectorTest:
     def _collect_callables(self, fun, ignored_functions=[]):
         if isinstance(fun, str):
@@ -372,8 +382,9 @@ class DynamicInspectorTest:
         setup_tracing(self.poe)
         try:
             trace(fun)
-        except:
-            pass # Don't allow any POEs exceptions to propagate to testing code.
+        except Exception, e:
+            # Don't allow any POEs exceptions to propagate to testing code.
+            print "Caught exception inside point of entry:", e
         finally:
             teardown_tracing(self.poe)
 
@@ -653,6 +664,21 @@ class TestTraceFunction(DynamicInspectorTest):
         gobject = live_object.calls[0]
         assert_instance(gobject, GeneratorObject)
         assert_generator_object({}, [0, 1, 0], gobject)
+
+    def test_handles_generators_called_not_from_top_level(self):
+        trace = self._collect_callables(function_calling_function_that_uses_generator)
+
+        assert_length(trace, 2)
+
+        function = findfirst(lambda f: f.name == "function", trace)
+        assert_length(function.calls, 1)
+
+        fcall = function.calls[0]
+        assert_length(fcall.subcalls, 1)
+
+        gobject = fcall.subcalls[0]
+        assert_instance(gobject, GeneratorObject)
+        assert_generator_object({'x': 2}, [2, 3, 4, 8], gobject)
 
 class TestTraceExec(DynamicInspectorTest):
     "trace_exec"
