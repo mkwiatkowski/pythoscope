@@ -7,7 +7,7 @@ from pythoscope.astvisitor import EmptyCode, Newline, create_import, find_last_l
      get_starting_whitespace, is_node_of_type, regenerate, \
      remove_trailing_whitespace
 from pythoscope.serializer import serialize, serialize_call_arguments, SerializedObject
-from pythoscope.util import all_of_type, cname, set, \
+from pythoscope.util import all_of_type, cname, set, module_path_to_name, \
      write_string_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, is_generator_code, \
      extract_subpath, directories_under, findfirst, contains_active_generator
@@ -623,8 +623,7 @@ class Localizable(object):
         self.created = created
 
     def _get_locator(self):
-        return re.sub(r'(%s__init__)?\.py$' % re.escape(os.path.sep), '', self.subpath).\
-            replace(os.path.sep, ".")
+        return module_path_to_name(self.subpath, newsep=".")
     locator = property(_get_locator)
 
     def is_out_of_sync(self):

@@ -4,10 +4,9 @@ Client of this module should use it through add_test_case_to_project() function.
 """
 
 import os.path
-import re
 
 from pythoscope.logger import log
-from pythoscope.util import max_by_not_zero
+from pythoscope.util import max_by_not_zero, module_path_to_name
 
 
 def add_test_case_to_project(project, test_class, force=False):
@@ -89,11 +88,6 @@ def create_test_module(project, test_case):
     """
     test_name = test_module_name_for_test_case(test_case)
     return project.create_test_module_from_name(test_name)
-
-def module_path_to_name(module_path):
-    return re.sub(r'.py$', '',
-                  re.sub(r'%s__init__.py$' % os.path.sep, '.py',
-                         module_path)).replace(os.path.sep, "_")
 
 def module_path_to_test_path(module):
     """Convert a module locator to a proper test filename.

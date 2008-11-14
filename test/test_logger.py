@@ -1,6 +1,7 @@
-from helper import assert_equal_strings, assert_matches, CapturedLogger
+from helper import assert_equal_strings, assert_matches, CapturedLogger, \
+    CapturedDebugLogger
 
-from pythoscope.logger import log, DEBUG, INFO
+from pythoscope.logger import log
 
 
 class TestLogger(CapturedLogger):
@@ -8,11 +9,8 @@ class TestLogger(CapturedLogger):
         log.info("Log this")
         assert_equal_strings("INFO: Log this\n", self.captured.getvalue())
 
+class TestDebugLogger(CapturedDebugLogger):
     def test_info_message_in_debug_mode(self):
-        log.level = DEBUG
-        try:
-            log.info("Log that")
-            assert_matches(r"\d+\.\d+ test_logger:\d+ INFO: Log that\n",
-                           self._get_log_output())
-        finally:
-            log.level = INFO
+        log.info("Log that")
+        assert_matches(r"\d+\.\d+ .*test_logger:\d+ INFO: Log that\n",
+                       self._get_log_output())

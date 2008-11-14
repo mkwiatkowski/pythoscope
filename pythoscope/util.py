@@ -239,6 +239,10 @@ def cname(obj):
     """Return name of this object's class."""
     return obj.__class__.__name__
 
+def module_path_to_name(module_path, newsep="_"):
+    return re.sub(r'(%s__init__)?\.py$' % re.escape(os.path.sep), '', module_path).\
+        replace(os.path.sep, newsep)
+
 # Regular expressions helpers.
 
 RePatternType = type(re.compile(''))

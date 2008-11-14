@@ -8,13 +8,33 @@ sys.stderr.
 """
 
 import logging
+import re
 
 from time import strftime, localtime
+
+from pythoscope.util import module_path_to_name
+
 
 INFO  = logging.INFO
 DEBUG = logging.DEBUG
 ERROR = logging.ERROR
 
+def path2modname(path, default=""):
+    """Take a path to a pythoscope module and return a module name in dot-style
+    notation. Return default if path doesn't point to a pythoscope module.
+
+    >>> path2modname("sth/pythoscope/astvisitor.py")
+    'astvisitor'
+    >>> path2modname("sth/pythoscope/generator/__init__.py")
+    'generator'
+    >>> path2modname("sth/pythoscope/generator/adder.py")
+    'generator.adder'
+    """
+    match = re.search(r'.*pythoscope/(.*)$', path)
+    if match:
+        return module_path_to_name(match.group(1), newsep=".")
+    else:
+        return default
 
 class LogFormatter(logging.Formatter):
     def format(self, record):
@@ -26,12 +46,14 @@ class LogFormatter(logging.Formatter):
             return "%s.%d %s:%d %s" % \
                 (strftime("%H%M%S", localtime(record.created)),
                  record.msecs,
-                 record.module,
+                 path2modname(record.pathname, default=record.module),
                  record.lineno,
                  message)
         return message
 
-def setup():
+# Don't call this "setup" or nose will assume this is the fixture setup
+# function for this module.
+def setup_logger():
     handler = logging.StreamHandler()
     handler.setFormatter(LogFormatter())
     log.addHandler(handler)
@@ -45,4 +67,4 @@ def set_output(stream):
     log.handlers[0].stream = stream
 
 log = logging.getLogger('pythoscope')
-setup()
+setup_logger()

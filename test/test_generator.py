@@ -13,10 +13,10 @@ from pythoscope.store import Project, Class, Method, Function, \
      MethodCall, FunctionCall, LiveObject, PointOfEntry, GeneratorObject
 from pythoscope.util import read_file_contents, get_last_modification_time
 
-from helper import assert_contains, assert_doesnt_contain, assert_length,\
-     generate_single_test_module, P, ProjectInDirectory, \
-     ProjectWithModules, TestableProject, assert_contains_once, \
-     PointOfEntryMock, get_test_cases, assert_equal_sets, CapturedLogger
+from helper import CapturedDebugLogger, CapturedLogger, P, PointOfEntryMock, \
+    ProjectInDirectory, ProjectWithModules, TestableProject, assert_contains, \
+    assert_contains_once, assert_doesnt_contain, assert_equal_sets, \
+    assert_length, assert_matches, generate_single_test_module, get_test_cases
 
 # Let nose know that those aren't test functions/classes.
 add_tests_to_project.__test__ = False
@@ -657,3 +657,15 @@ class TestGeneratorMessages(CapturedLogger):
                              "Adding generated TestSomeClass to tests/test_module.py.")
         assert_contains_once(self._get_log_output(),
                              "Adding generated TestSomeFunction to tests/test_module.py.")
+
+class TestGeneratorDebugMessages(CapturedDebugLogger):
+    def test_debug_output_includes_packages_and_module_names(self):
+        project = ProjectWithModules(["module.py"])
+        project["module"].objects = [Function('some_function')]
+
+        add_tests_to_project(project, ["module"], 'unittest')
+
+        assert_matches(r"\d+\.\d+ generator:\d+ INFO: Generating tests for module module.py.\n",
+                       self._get_log_output(), anywhere=True)
+        assert_matches(r"\d+\.\d+ generator\.adder:\d+ INFO: Adding generated TestSomeFunction to tests/test_module.py.\n",
+                       self._get_log_output(), anywhere=True)

@@ -9,7 +9,7 @@ from fixture import TempIO
 from nose.tools import assert_equal
 
 from pythoscope.generator import add_tests_to_project
-from pythoscope.logger import INFO, get_output, log, set_output
+from pythoscope.logger import DEBUG, INFO, get_output, log, set_output
 from pythoscope.store import Function, ModuleNotFound, PointOfEntry, Project
 from pythoscope.util import quoted_block, read_file_contents, set
 
@@ -73,8 +73,12 @@ def assert_instance(object, type):
            "Expected object %r to be of type %r, it was of type %r instead." % \
            (object, type, type(object))
 
-def assert_matches(regexp, string):
-    assert re.match(regexp, string), \
+def assert_matches(regexp, string, anywhere=False):
+    if anywhere:
+        match = re.search
+    else:
+        match = re.match
+    assert match(regexp, string), \
         "Expected\n%s\nto match r'%s', but it didn't." % (quoted_block(string), regexp)
 
 class PointOfEntryMock(PointOfEntry):
@@ -168,12 +172,14 @@ class CapturedLogger:
     """Capture all log output and make it available to test via
     _get_log_output() method.
     """
+    log_level = INFO
+
     def setUp(self):
         self._old_output = get_output()
         self._old_level = log.level
         self.captured = StringIO()
         set_output(self.captured)
-        log.level = INFO
+        log.level = self.log_level
 
     def tearDown(self):
         set_output(self._old_output)
@@ -181,3 +187,6 @@ class CapturedLogger:
 
     def _get_log_output(self):
         return self.captured.getvalue()
+
+class CapturedDebugLogger(CapturedLogger):
+    log_level = DEBUG
