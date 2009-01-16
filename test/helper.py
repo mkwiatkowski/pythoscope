@@ -10,7 +10,8 @@ from nose.tools import assert_equal
 
 from pythoscope.generator import add_tests_to_project
 from pythoscope.logger import DEBUG, INFO, get_output, log, set_output
-from pythoscope.store import Function, ModuleNotFound, PointOfEntry, Project
+from pythoscope.store import Execution, Function, ModuleNotFound, \
+    PointOfEntry, Project
 from pythoscope.util import quoted_block, read_file_contents, set
 
 
@@ -68,10 +69,10 @@ def assert_not_raises(exception, callable):
     except exception:
         assert False, "Exception %s has been raised." % exception
 
-def assert_instance(object, type):
-    assert isinstance(object, type), \
+def assert_instance(obj, objtype):
+    assert isinstance(obj, objtype), \
            "Expected object %r to be of type %r, it was of type %r instead." % \
-           (object, type, type(object))
+           (obj, objtype, type(obj))
 
 def assert_matches(regexp, string, anywhere=False):
     if anywhere:
@@ -131,6 +132,9 @@ def TestableProject(more_modules=[], project_type=ProjectInDirectory):
     project = ProjectWithModules(["module.py"] + more_modules, project_type)
     project["module"].objects = [Function("function")]
     return project
+
+def EmptyProjectExecution():
+    return Execution(EmptyProject())
 
 def get_test_module_contents(project):
     """Get contents of the first test module of a project.

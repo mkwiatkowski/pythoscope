@@ -1,6 +1,9 @@
 import gc
+import itertools
+import operator
 import os
 import re
+import sys
 import types
 import warnings
 
@@ -65,6 +68,21 @@ except ImportError:
     def samefile(file1, file2):
         return os.path.realpath(file1) == os.path.realpath(file2)
 
+def compact(lst):
+    "Remove all occurences of None from the given list."
+    return [x for x in lst if x is not None]
+
+def counted(objects):
+    """Count how many times each object appears in a list and return
+    list of (object, count) tuples.
+
+    >>> counted(['a', 'b', 'c', 'a', 'b', 'a'])
+    [('a', 3), ('b', 2), ('c', 1)]
+    >>> counted([])
+    []
+    """
+    return [(obj, len(list(group))) for obj, group in groupby(sorted(objects))]
+
 def camelize(name):
     """Covert name into CamelCase.
 
@@ -78,7 +96,6 @@ def camelize(name):
     def upcase(match):
         return match.group(1).upper()
     return re.sub(r'(?:^|_)(.)', upcase, name)
-
 
 def underscore(name):
     """Convert name into underscore_name.
@@ -168,6 +185,12 @@ def rlistdir(path):
 def get_names(objects):
     return map(lambda c: c.name, objects)
 
+def map_values(function, dictionary):
+    new_dictionary = {}
+    for key, value in dictionary.iteritems():
+        new_dictionary[key] = function(value)
+    return new_dictionary
+
 class DirectoryException(Exception):
     pass
 
@@ -217,6 +240,36 @@ def findfirst(pred, seq):
         if pred(item):
             return item
 
+def flatten(lst):
+    """Flatten given list.
+
+    >>> flatten([[1, 2, 3], [4, 5], [6, 7], [8]])
+    [1, 2, 3, 4, 5, 6, 7, 8]
+    """
+    return list(itertools.chain(*lst))
+
+# :: [set] -> set
+def union(*sets):
+    """Return a union of all the given sets.
+    """
+    # Since 2.6 set.union accepts multiple input iterables.
+    if sys.version_info >= (2, 6):
+        return set.union(*sets)
+    else:
+        return reduce(operator.or_, sets, set())
+
+# :: dict, object -> object
+def key_for_value(dictionary, value):
+    """Return the first key of dictionary that maps to given value.
+
+    >>> key_for_value({'a': 1, 'b': 2}, 2)
+    'b'
+    >>> key_for_value({}, 1)
+    """
+    for k, v in dictionary.iteritems():
+        if v == value:
+            return k
+
 def contains_active_generator(frame):
     return bool(all_of_type(gc.get_referrers(frame), types.GeneratorType))
 
@@ -235,9 +288,16 @@ def compile_without_warnings(stmt):
 def quoted_block(text):
     return ''.join(["> %s" % line for line in text.splitlines(True)])
 
-def cname(obj):
-    """Return name of this object's class."""
-    return obj.__class__.__name__
+def class_of(obj):
+    if hasattr(obj, "__class__"):
+        return obj.__class__
+    return type(obj)
+
+def class_name(obj):
+    return class_of(obj).__name__
+
+def module_name(obj):
+    return class_of(obj).__module__
 
 def module_path_to_name(module_path, newsep="_"):
     return re.sub(r'(%s__init__)?\.py$' % re.escape(os.path.sep), '', module_path).\

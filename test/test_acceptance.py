@@ -1,12 +1,15 @@
+import os.path
+
 from nose.tools import assert_equal
 
 from helper import assert_length, read_data
 
 from pythoscope.inspector import inspect_project
 from pythoscope.generator import add_tests_to_project
-from pythoscope.util import read_file_contents
+from pythoscope.util import read_file_contents, write_string_to_file
 
-from helper import get_test_module_contents, CapturedLogger, ProjectInDirectory
+from helper import get_test_module_contents, CapturedLogger, \
+    ProjectInDirectory, ProjectWithPointsOfEntryFiles
 
 add_tests_to_project.__test__ = False
 
@@ -56,4 +59,18 @@ class TestAppendingTestClasses(CapturedLogger):
         assert_length(project.get_modules(), 2)
         result = read_file_contents(test_module_path)
         expected_result = read_data(expected_output)
+        assert_equal(expected_result, result)
+
+class TestObjectsIdentityPreservation(CapturedLogger):
+    def test_preserves_identity_of_objects(self):
+        expected_result = read_data("objects_identity_output.py")
+        project = ProjectWithPointsOfEntryFiles(["poe.py"])
+        module_path = project.path.putfile("module.py", read_data("objects_identity_module.py"))
+        write_string_to_file(read_data("objects_identity_poe.py"),
+                             os.path.join(project._get_points_of_entry_path(), "poe.py"))
+
+        inspect_project(project)
+        add_tests_to_project(project, [module_path], 'unittest')
+        result = get_test_module_contents(project)
+
         assert_equal(expected_result, result)

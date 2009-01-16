@@ -2,15 +2,17 @@ import sys
 
 from nose.tools import assert_equal
 
-from pythoscope.inspector.dynamic import trace_function, trace_exec, \
-     inspect_point_of_entry, setup_tracing, teardown_tracing
-from pythoscope.serializer import serialize, serialize_call_arguments
-from pythoscope.store import Class, Function, FunctionCall, GeneratorObject, \
-     Method, LiveObject, Project
+from pythoscope.inspector.dynamic import inspect_code_in_context, \
+    inspect_point_of_entry
+from pythoscope.serializer import ImmutableObject, MapObject, UnknownObject, \
+    SequenceObject
+from pythoscope.store import Class, Execution, Function, \
+    GeneratorObject, Method, UserObject, Project
 from pythoscope.util import findfirst
 
 from helper import TestableProject, assert_length, PointOfEntryMock, \
-     assert_equal_sets, ProjectWithModules, ProjectInDirectory, assert_instance
+     assert_equal_sets, ProjectWithModules, ProjectInDirectory, \
+     assert_instance, EmptyProjectExecution
 
 
 class ClassMock(Class):
@@ -30,6 +32,8 @@ class ProjectMock(Project):
     """Project that has all the classes, functions and generators you try to
     find inside it via find_object().
     """
+    ignored_modules = ["__builtin__", "exceptions"]
+
     def __init__(self, ignored_functions=[]):
         self.ignored_functions = ignored_functions
         self.path = "."
@@ -37,6 +41,8 @@ class ProjectMock(Project):
         self._functions = {}
 
     def find_object(self, type, name, modulepath):
+        if modulepath in self.ignored_modules:
+            return None
         if type is Function and name in self.ignored_functions:
             return None
 
@@ -49,8 +55,8 @@ class ProjectMock(Project):
 
     def iter_callables(self):
         for klass in self._classes.values():
-            for live_object in klass.live_objects.values():
-                yield live_object
+            for user_object in klass.user_objects:
+                yield user_object
         for function in self._functions.values():
             yield function
 
@@ -71,20 +77,50 @@ class ProjectMock(Project):
         else:
             return type(name)
 
+def assert_equal_serialized(obj1, obj2):
+    """Equal assertion that ignores UnknownObjects, SequenceObjects and
+    MapObjects identity. For testing purposes only.
+    """
+    def unknown_object_eq(o1, o2):
+        if not isinstance(o2, UnknownObject):
+            return False
+        return o1.partial_reconstructor == o2.partial_reconstructor
+    def sequence_object_eq(o1, o2):
+        if not isinstance(o2, SequenceObject):
+            return False
+        return o1.constructor_format == o2.constructor_format \
+            and o1.contained_objects == o2.contained_objects
+    def map_object_eq(o1, o2):
+        if not isinstance(o2, MapObject):
+            return False
+        return o1.mapping == o2.mapping
+    try:
+        UnknownObject.__eq__ = unknown_object_eq
+        SequenceObject.__eq__ = sequence_object_eq
+        MapObject.__eq__ = map_object_eq
+        assert_equal(obj1, obj2)
+    finally:
+        del UnknownObject.__eq__
+        del SequenceObject.__eq__
+        del MapObject.__eq__
+
 def assert_call(expected_input, expected_output, call):
-    assert_equal(serialize_call_arguments(expected_input), call.input)
+    execution = EmptyProjectExecution()
+    assert_equal_serialized(execution.serialize_call_arguments(expected_input), call.input)
     assert not call.raised_exception()
-    assert_equal(serialize(expected_output), call.output)
+    assert_equal_serialized(execution.serialize(expected_output), call.output)
 
 def assert_call_with_exception(expected_input, expected_exception_name, call):
-    assert_equal(serialize_call_arguments(expected_input), call.input)
+    execution = EmptyProjectExecution()
+    assert_equal_serialized(execution.serialize_call_arguments(expected_input), call.input)
     assert call.raised_exception()
     assert_equal(expected_exception_name, call.exception.type_name)
 
 def assert_generator_object(expected_input, expected_yields, object):
+    execution = EmptyProjectExecution()
     assert_instance(object, GeneratorObject)
-    assert_equal(serialize_call_arguments(expected_input), object.input)
-    assert_equal(map(serialize, expected_yields), object.output)
+    assert_equal_serialized(execution.serialize_call_arguments(expected_input), object.input)
+    assert_equal_serialized(map(execution.serialize, expected_yields), object.output)
 
 def call_graph_as_string(call_or_calls, indentation=0):
     def lines(call):
@@ -369,24 +405,31 @@ def function_calling_function_that_uses_generator():
         return [x for x in generator(y)]
     function(2)
 
+def function_calling_functions_that_use_the_same_sequence_object():
+    def producer():
+        return []
+    def consumer(lst):
+        lst.append(1)
+    consumer(producer())
+
+def function_calling_function_that_uses_the_same_user_object():
+    class Something(object):
+        pass
+    def compare(x, y):
+        return x is y
+    obj = Something()
+    compare(obj, obj)
+
 class DynamicInspectorTest:
     def _collect_callables(self, fun, ignored_functions=[]):
-        if isinstance(fun, str):
-            trace = trace_exec
-        else:
-            trace = trace_function
-
         self.project = ProjectMock(ignored_functions)
-        self.poe = PointOfEntryMock(project=self.project)
+        self.execution = Execution(project=self.project)
 
-        setup_tracing(self.poe)
         try:
-            trace(fun)
+            inspect_code_in_context(fun, self.execution)
         except Exception, e:
             # Don't allow any POEs exceptions to propagate to testing code.
             print "Caught exception inside point of entry:", e
-        finally:
-            teardown_tracing(self.poe)
 
         return self.project.get_callables()
 
@@ -504,16 +547,16 @@ class TestTraceFunction(DynamicInspectorTest):
 
         assert_call({'x': 42}, 43, function.calls[0])
 
-    def test_returns_a_list_with_live_objects(self):
+    def test_returns_a_list_with_user_objects(self):
         trace = self._collect_callables(function_calling_a_method)
 
-        assert all(isinstance(obj, LiveObject) for obj in trace)
+        assert all(isinstance(obj, UserObject) for obj in trace)
 
     def test_handles_methods_with_strangely_named_self(self):
         trace = self._collect_callables(function_calling_methods_with_strangely_named_self)
 
         assert_length(trace, 2)
-        assert all(isinstance(obj, LiveObject) for obj in trace)
+        assert all(isinstance(obj, UserObject) for obj in trace)
         assert_equal_sets(['strange_method', 'another_strange_method'],
                           [obj.calls[0].definition.name for obj in trace])
 
@@ -528,17 +571,17 @@ class TestTraceFunction(DynamicInspectorTest):
 
         assert_equal(1, len(trace))
 
-    def test_creates_a_call_graph_of_execution_for_live_objects(self):
+    def test_creates_a_call_graph_of_execution_for_user_objects(self):
         trace = self._collect_callables(function_calling_method_which_calls_other_method)
 
         assert_length(trace, 1)
 
-        live_object = trace[0]
-        assert_instance(live_object, LiveObject)
-        assert_length(live_object.calls, 2)
-        assert_length(live_object.get_external_calls(), 1)
+        user_object = trace[0]
+        assert_instance(user_object, UserObject)
+        assert_length(user_object.calls, 2)
+        assert_length(user_object.get_external_calls(), 1)
 
-        external_call = live_object.get_external_calls()[0]
+        external_call = user_object.get_external_calls()[0]
         assert_equal('method', external_call.definition.name)
         assert_length(external_call.subcalls, 1)
 
@@ -549,7 +592,7 @@ class TestTraceFunction(DynamicInspectorTest):
         self._collect_callables(function_with_nested_calls)
 
         assert_equal(expected_call_graph_for_function_with_nested_calls,
-                     call_graph_as_string(self.poe.call_graph))
+                     call_graph_as_string(self.execution.call_graph))
 
     def test_handles_functions_that_change_their_argument_bindings(self):
         trace = self._collect_callables(function_changing_its_argument_binding)
@@ -657,11 +700,11 @@ class TestTraceFunction(DynamicInspectorTest):
 
         assert_length(trace, 1)
 
-        live_object = trace.pop()
-        assert_instance(live_object, LiveObject)
-        assert_length(live_object.calls, 1)
+        user_object = trace.pop()
+        assert_instance(user_object, UserObject)
+        assert_length(user_object.calls, 1)
 
-        gobject = live_object.calls[0]
+        gobject = user_object.calls[0]
         assert_instance(gobject, GeneratorObject)
         assert_generator_object({}, [0, 1, 0], gobject)
 
@@ -679,6 +722,38 @@ class TestTraceFunction(DynamicInspectorTest):
         gobject = fcall.subcalls[0]
         assert_instance(gobject, GeneratorObject)
         assert_generator_object({'x': 2}, [2, 3, 4, 8], gobject)
+
+    def test_handles_passing_sequence_objects_around(self):
+        callables = self._collect_callables(function_calling_functions_that_use_the_same_sequence_object)
+
+        assert_length(callables, 2)
+
+        producer = findfirst(lambda f: f.name == "producer", callables)
+        assert_length(producer.calls, 1)
+        producer_call = producer.calls[0]
+
+        consumer = findfirst(lambda f: f.name == "consumer", callables)
+        assert_length(consumer.calls, 1)
+        consumer_call = consumer.calls[0]
+
+        assert_instance(producer_call.output, SequenceObject)
+        assert_instance(consumer_call.input['lst'], SequenceObject)
+        assert producer_call.output is consumer_call.input['lst']
+
+    def test_handles_passing_user_objects_around(self):
+        callables = self._collect_callables(function_calling_function_that_uses_the_same_user_object)
+
+        assert_length(callables, 2)
+
+        user_object = findfirst(lambda c: isinstance(c, UserObject), callables)
+
+        function = findfirst(lambda c: isinstance(c, Function), callables)
+        assert_length(function.calls, 1)
+        call = function.calls[0]
+
+        assert_instance(call.output, ImmutableObject)
+        assert_equal(ImmutableObject(True), call.output)
+        assert call.input['x'] is call.input['y'] is user_object
 
 class TestTraceExec(DynamicInspectorTest):
     "trace_exec"
@@ -711,10 +786,10 @@ class TestInspectPointOfEntry:
 
         inspect_point_of_entry(poe)
 
-        assert_length(klass.live_objects, 1)
-        live_object = klass.live_objects.popitem()[1]
-        assert_length(live_object.calls, 1)
-        assert_call({'x': 42}, 43, live_object.calls[0])
+        assert_length(klass.user_objects, 1)
+        user_object = klass.user_objects[0]
+        assert_length(user_object.calls, 1)
+        assert_call({'x': 42}, 43, user_object.calls[0])
 
     def test_properly_wipes_out_imports_from_sys_modules(self):
         project = ProjectWithModules(["whatever.py"], ProjectInDirectory)

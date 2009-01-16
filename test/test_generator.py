@@ -1,86 +1,111 @@
+import array
 import os
 import re
+import sets
+import sys
 import time
 import types
 
+from nose.exc import SkipTest
 from nose.tools import assert_equal, assert_not_equal, assert_raises
 
 from pythoscope.astvisitor import parse
-from pythoscope.generator import add_tests_to_project
-from pythoscope.serializer import serialize, serialize_call_arguments
-from pythoscope.store import Project, Class, Method, Function, \
+from pythoscope.generator import add_tests_to_project, constructor_as_string
+from pythoscope.serializer import ImmutableObject, UnknownObject
+from pythoscope.store import Project, Class, Function, Method, \
      ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod, \
-     MethodCall, FunctionCall, LiveObject, PointOfEntry, GeneratorObject
-from pythoscope.util import read_file_contents, get_last_modification_time
+     MethodCall, FunctionCall, UserObject, GeneratorObject
+from pythoscope.util import read_file_contents, get_last_modification_time, \
+    sorted
 
-from helper import CapturedDebugLogger, CapturedLogger, P, PointOfEntryMock, \
+from helper import CapturedDebugLogger, CapturedLogger, P, \
     ProjectInDirectory, ProjectWithModules, TestableProject, assert_contains, \
     assert_contains_once, assert_doesnt_contain, assert_equal_sets, \
-    assert_length, assert_matches, generate_single_test_module, get_test_cases
+    assert_length, assert_matches, generate_single_test_module, get_test_cases, \
+    EmptyProjectExecution, assert_equal_strings
 
 # Let nose know that those aren't test functions/classes.
 add_tests_to_project.__test__ = False
 TestClass.__test__ = False
 TestMethod.__test__ = False
 
-def create_method_call(method, input, output, call_type, poe):
+def create_method_call(method, args, output, call_type, execution):
+    sargs = execution.serialize_call_arguments(args)
     if call_type == 'output':
-        return MethodCall(method, serialize_call_arguments(input), output=serialize(output))
+        return MethodCall(method, sargs, output=execution.serialize(output))
     elif call_type == 'exception':
-        return MethodCall(method, serialize_call_arguments(input), exception=serialize(output()))
+        return MethodCall(method, sargs, exception=execution.serialize(output()))
     elif call_type == 'generator':
-        return GeneratorObject(12345, method, poe, serialize_call_arguments(input),
-                               map(serialize, output))
+        return GeneratorObject(method, sargs, map(execution.serialize, output))
 
 def ClassWithMethods(classname, methods, call_type='output'):
     """call_type has to be one of 'output', 'exception' or 'generator'.
     """
+    execution = EmptyProjectExecution()
     method_objects = []
     method_calls = []
-    poe = PointOfEntry(Project('.'), 'poe')
 
     for name, calls in methods:
         method = Method(name)
         method_objects.append(method)
-        for input, output in calls:
-            method_calls.append(create_method_call(method, input, output, call_type, poe))
+        for args, output in calls:
+            method_calls.append(create_method_call(method, args, output, call_type, execution))
 
     klass = Class(classname, methods=method_objects)
-    live_object = LiveObject(12345, klass, poe)
-    live_object.calls = method_calls
-    klass.add_live_object(live_object)
+    user_object = UserObject(None, klass)
+    user_object.calls = method_calls
+    klass.add_user_object(user_object)
 
     return klass
 
+def ClassWithInstanceWithoutReconstruction(name):
+    # Cheating a bit, as this class won't be the same as one defined in
+    # module.py.
+    return Class(name), types.ClassType(name, (object,), {})()
+
+def stable_serialize_call_arguments(execution, args):
+    serialized_args = {}
+    for key, value in sorted(args.iteritems()):
+        serialized_args[key] = execution.serialize(value)
+    return serialized_args
+
 def FunctionWithCalls(funcname, calls):
-    poe = PointOfEntryMock()
+    execution = EmptyProjectExecution()
     function = Function(funcname)
-    function.calls = [FunctionCall(poe, function, serialize_call_arguments(i), serialize(o)) for (i,o) in calls]
+    function.calls = [FunctionCall(function,
+                                   stable_serialize_call_arguments(execution, i),
+                                   execution.serialize(o)) for (i,o) in calls]
     return function
 
 def FunctionWithSingleCall(funcname, input, output):
     return FunctionWithCalls(funcname, [(input, output)])
 
 def FunctionWithExceptions(funcname, calls):
-    poe = PointOfEntryMock()
+    execution = EmptyProjectExecution()
     function = Function(funcname)
-    function.calls = [FunctionCall(poe, function, serialize_call_arguments(i), exception=serialize(e())) for (i,e) in calls]
+    function.calls = [FunctionCall(function,
+                                   execution.serialize_call_arguments(i),
+                                   exception=execution.serialize(e())) for (i,e) in calls]
     return function
 
 def FunctionWithSingleException(funcname, input, exception):
     return FunctionWithExceptions(funcname, [(input, exception)])
 
 def GeneratorWithYields(genname, input, yields):
-    poe = PointOfEntryMock()
+    execution = EmptyProjectExecution()
     generator = Function(genname, is_generator=True)
-    gobject = GeneratorObject(12345, generator, poe, serialize_call_arguments(input), map(serialize, yields))
+    gobject = GeneratorObject(generator,
+                              execution.serialize_call_arguments(input),
+                              map(execution.serialize, yields))
     generator.calls = [gobject]
     return generator
 
 def GeneratorWithSingleException(genname, input, exception):
-    poe = PointOfEntryMock()
+    execution = EmptyProjectExecution()
     generator = Function(genname, is_generator=True)
-    gobject = GeneratorObject(12345, generator, poe, serialize_call_arguments(input), exception=serialize(exception()))
+    gobject = GeneratorObject(generator,
+                              execution.serialize_call_arguments(input),
+                              exception=execution.serialize(exception()))
     generator.calls = [gobject]
     return generator
 
@@ -308,12 +333,12 @@ class TestGenerator:
 
     def test_ignores_internal_object_calls(self):
         klass = ClassWithMethods('Something', [('method', [({'argument': 1}, 'result')])])
-        live_object = klass.live_objects[('poe', 12345)]
-        method_call = live_object.calls[0]
+        user_object = klass.user_objects[0]
+        method_call = user_object.calls[0]
 
-        subcall = MethodCall(Method('private'), {'argument': serialize(2)}, serialize(False))
+        subcall = MethodCall(Method('private'), {'argument': ImmutableObject(2)}, ImmutableObject(False))
         method_call.add_subcall(subcall)
-        live_object.add_call(subcall)
+        user_object.add_call(subcall)
 
         result = generate_single_test_module(objects=[klass])
 
@@ -384,15 +409,21 @@ class TestGenerator:
         assert_contains(result, "self.assertRaises(KeyError, lambda: something.method())")
 
     def test_generates_imports_for_user_defined_exceptions(self):
-        # Cheating a bit, as UserDefinedException class is not the same as one
-        # presumably defined in module.py.
-        class UserDefinedException(Exception): pass
-        function = Function('throw')
-        function.calls = [FunctionCall(None, function, {}, exception=serialize(UserDefinedException()))]
+        klass = Class("UserDefinedException")
+        function = Function("throw")
+        function.calls = [FunctionCall(function, {}, exception=UserObject(None, klass))]
+
+        result = generate_single_test_module(objects=[function, klass])
+
+        assert_contains(result, "from module import UserDefinedException")
+
+    def test_doesnt_generate_imports_for_builtin_exceptions(self):
+        function = Function("throw")
+        function.calls = [FunctionCall(function, {}, exception=UnknownObject(Exception()))]
 
         result = generate_single_test_module(objects=[function])
 
-        assert_contains(result, "from test.test_generator import UserDefinedException")
+        assert_doesnt_contain(result, "import Exception")
 
     def test_generates_assert_equal_type_for_functions_returning_functions(self):
         objects = [FunctionWithSingleCall('higher', {}, lambda: 42)]
@@ -551,6 +582,63 @@ class TestGenerator:
         assert_contains(result, "def test_store_returns_None_for_read_file_contents_function(self):")
         assert_contains(result, "self.assertEqual(None, store(fun=read_file_contents))")
 
+    def test_handles_the_same_object_used_twice(self):
+        obj = []
+        objects = [FunctionWithSingleCall('compare', {'x': obj, 'y': obj}, True)]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_compare_returns_true_for_x_equal_list_and_y_equal_list(self):")
+        assert_contains(result, "alist = []")
+        assert_contains(result, "self.assertEqual(True, compare(x=alist, y=alist))")
+
+    def test_handles_two_objects_used_many_times(self):
+        obj1, obj2 = [], []
+        objects = [FunctionWithSingleCall('four', {'w': obj1, 'x': obj2,
+                                                   'y': obj1, 'z': obj2}, False)]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_four_returns_false_for_w_equal_list_and_x_equal_list_and_y_equal_list_and_z_equal_list(self):")
+        assert_contains(result, "alist1 = []")
+        assert_contains(result, "alist2 = []")
+        assert_contains(result, "self.assertEqual(False, four(w=alist1, x=alist2, y=alist1, z=alist2))")
+
+    def test_handles_many_objects_used_many_times(self):
+        obj1, obj2, obj3 = {}, {}, {}
+        objects = [FunctionWithSingleCall('six', {'a': obj1, 'b': obj2,
+                                                  'c': obj3, 'd': obj1,
+                                                  'e': obj2, 'f': obj3}, False)]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_six_returns_false_for_a_equal_dict_and_b_equal_dict_and_c_equal_dict_and_d_equal_dict_and_e_equal_dict_and_f_equal_dict(self):")
+        assert_contains(result, "adict1 = {}")
+        assert_contains(result, "adict2 = {}")
+        assert_contains(result, "adict3 = {}")
+        assert_contains(result, "self.assertEqual(False, six(a=adict1, b=adict2, c=adict3, d=adict1, e=adict2, f=adict3))")
+
+    def test_uses_argument_name_when_argument_is_used_as_return_value(self):
+        obj = []
+        objects = [FunctionWithSingleCall('identity', {'x': obj}, obj)]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_identity_returns_x_for_x_equal_list(self):")
+        assert_contains(result, "alist = []")
+        assert_contains(result, "self.assertEqual(alist, identity(x=alist))")
+
+    def test_handles_objects_that_depend_on_each_other(self):
+        inner = {}
+        outer = [inner]
+        objects = [FunctionWithSingleCall('contains', {'inner': inner, 'outer': outer}, True)]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_contains_returns_true_for_inner_equal_dict_and_outer_equal_list(self):")
+        assert_contains(result, "adict = {}")
+        assert_contains(result, "self.assertEqual(True, contains(inner=adict, outer=[adict]))")
+
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
         self.project = TestableProject()
@@ -610,7 +698,7 @@ class TestGeneratorWithSingleModule:
         assert_length(self.project["test_other"].test_cases, 0)
 
     def test_comments_assertions_with_user_objects_that_cannot_be_constructed(self):
-        klass, instance = self._class_with_instance_without_reconstruction("Something")
+        klass, instance = ClassWithInstanceWithoutReconstruction("Something")
 
         function = FunctionWithSingleCall("nofun", {'x': instance}, "something else")
         self.project["module"].objects = [klass, function]
@@ -622,7 +710,7 @@ class TestGeneratorWithSingleModule:
         assert_contains(result, "# self.assertEqual('something else', nofun(x=<TODO: test.test_generator.Something>))")
 
     def test_generates_type_assertions_for_calls_with_composite_objects_which_elements_cannot_be_constructed(self):
-        klass, instance = self._class_with_instance_without_reconstruction("Unspeakable")
+        klass, instance = ClassWithInstanceWithoutReconstruction("Unspeakable")
 
         function = FunctionWithSingleCall("morefun", {}, [instance])
         self.project["module"].objects = [klass, function]
@@ -632,11 +720,6 @@ class TestGeneratorWithSingleModule:
 
         assert_contains(result, "def test_morefun_returns_list(self):")
         assert_contains(result, "self.assertEqual(list, type(morefun()))")
-
-    def _class_with_instance_without_reconstruction(self, name):
-        # Cheating a bit, as this class won't be the same as one defined in
-        # module.py.
-        return Class(name), types.ClassType(name, (object,), {})()
 
 class TestGeneratorMessages(CapturedLogger):
     def test_reports_each_module_it_generates_tests_for(self):
@@ -669,3 +752,51 @@ class TestGeneratorDebugMessages(CapturedDebugLogger):
                        self._get_log_output(), anywhere=True)
         assert_matches(r"\d+\.\d+ generator\.adder:\d+ INFO: Adding generated TestSomeFunction to tests/test_module.py.\n",
                        self._get_log_output(), anywhere=True)
+
+class TestConstructorAsString:
+    def setUp(self):
+        self.serialize = EmptyProjectExecution().serialize
+
+    def test_reconstructs_set_from_sets_module(self):
+        call_string = constructor_as_string(self.serialize(sets.Set([1, 2, 3])))
+
+        assert_equal_strings("Set([1, 2, 3])", call_string)
+        assert_equal_sets([("sets", "Set")], call_string.imports)
+
+    def test_reconstructs_immutable_set_from_sets_module(self):
+        call_string = constructor_as_string(self.serialize(sets.ImmutableSet([1, 2, 3])))
+
+        assert_equal_strings("ImmutableSet([1, 2, 3])", call_string)
+        assert_equal_sets([("sets", "ImmutableSet")], call_string.imports)
+
+    def test_reconstructs_builtin_set(self):
+        # Set builtin was added in Python 2.4.
+        if sys.version_info < (2, 4):
+            raise SkipTest
+
+        call_string = constructor_as_string(self.serialize(set([1, 2, 3])))
+
+        assert_equal_strings("set([1, 2, 3])", call_string)
+        assert_equal_sets([], call_string.imports)
+
+    def test_reconstructs_builtin_frozenset(self):
+        # Frozenset builtin was added in Python 2.4.
+        if sys.version_info < (2, 4):
+            raise SkipTest
+
+        call_string = constructor_as_string(self.serialize(frozenset([1, 2, 3])))
+
+        assert_equal_strings("frozenset([1, 2, 3])", call_string)
+        assert_equal_sets([], call_string.imports)
+
+    def test_reconstructs_integer_arrays(self):
+        call_string = constructor_as_string(self.serialize(array.array('I', [1, 2, 3, 4])))
+
+        assert_equal_strings("array.array('I', [1L, 2L, 3L, 4L])", call_string)
+        assert_equal_sets(['array'], call_string.imports)
+
+    def test_reconstructs_floating_point_arrays(self):
+        call_string = constructor_as_string(self.serialize(array.array('d', [1, 2, 3, 4])))
+
+        assert_equal_strings("array.array('d', [1.0, 2.0, 3.0, 4.0])", call_string)
+        assert_equal_sets(['array'], call_string.imports)
