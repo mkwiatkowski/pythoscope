@@ -141,7 +141,7 @@ def main():
         options, args = getopt.getopt(sys.argv[1:], "fhit:qvV",
                         ["force", "help", "init", "template=", "quiet", "verbose", "version"])
     except getopt.GetoptError, err:
-        log.error("Error: %s\n" % err)
+        log.error("%s\n" % err)
         print USAGE % appname
         sys.exit(1)
 
