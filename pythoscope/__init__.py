@@ -180,6 +180,8 @@ def main():
                 print USAGE % appname
             else:
                 generate_tests(args, force, template)
-    except Exception: # KeyboardInterrupt and SystemExit get through
+    except KeyboardInterrupt:
+        log.info("Interrupted by the user.")
+    except Exception: # SystemExit gets through
         log.error("Oops, it seems internal Pythoscope error occured. Please file a bug report at %s\n" % BUGTRACKER_URL)
         raise
