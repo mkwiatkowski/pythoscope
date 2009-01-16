@@ -63,6 +63,12 @@ Available templates:
                  SkipTest as a default test body.
 """
 
+def fail(message):
+    """Log the error message and exit.
+    """
+    log.error(message)
+    sys.exit(1)
+
 class PythoscopeDirectoryMissing(Exception):
     pass
 
@@ -96,7 +102,7 @@ def init_project(path):
         os.makedirs(pythoscope_path)
         os.makedirs(get_points_of_entry_path(path))
     except OSError, err:
-        log.error("Couldn't initialize Pythoscope directory: %s." % err.strerror)
+        fail("Couldn't initialize Pythoscope directory: %s." % err.strerror)
 
 def generate_tests(modules, force, template):
     try:
@@ -105,28 +111,28 @@ def generate_tests(modules, force, template):
         add_tests_to_project(project, modules, template, force)
         project.save()
     except PythoscopeDirectoryMissing:
-        log.error("Can't find .pythoscope/ directory for this project. "
-                  "Initialize the project with the '--init' option first.")
+        fail("Can't find .pythoscope/ directory for this project. "
+             "Initialize the project with the '--init' option first.")
     except ModuleNeedsAnalysis, err:
         if err.out_of_sync:
-            log.error("Tried to generate tests for test module located at %r, "
-                      "but it has been modified during this run. Please try "
-                      "running pythoscope again." % err.path)
+            fail("Tried to generate tests for test module located at %r, "
+                 "but it has been modified during this run. Please try "
+                 "running pythoscope again." % err.path)
         else:
-            log.error("Tried to generate tests for test module located at %r, "
-                      "but it was created during this run. Please try running "
-                      "pythoscope again." % err.path)
+            fail("Tried to generate tests for test module located at %r, "
+                 "but it was created during this run. Please try running "
+                 "pythoscope again." % err.path)
     except ModuleNotFound, err:
         if os.path.exists(err.module):
-            log.error("Couldn't find information on module %r. This shouldn't "
-                      "happen, please file a bug report at %s." % (err.module, BUGTRACKER_URL))
+            fail("Couldn't find information on module %r. This shouldn't "
+                 "happen, please file a bug report at %s." % (err.module, BUGTRACKER_URL))
         else:
-            log.error("File doesn't exist: %s." % err.module)
+            fail("File doesn't exist: %s." % err.module)
     except ModuleSaveError, err:
-        log.error("Couldn't save module %r: %s." % (err.module, err.reason))
+        fail("Couldn't save module %r: %s." % (err.module, err.reason))
     except UnknownTemplate, err:
-        log.error("Couldn't find template named %r. Available templates are "
-                  "'nose' and 'unittest'." % err.template)
+        fail("Couldn't find template named %r. Available templates are "
+             "'nose' and 'unittest'." % err.template)
 
 def main():
     appname = os.path.basename(sys.argv[0])
@@ -174,6 +180,6 @@ def main():
                 print USAGE % appname
             else:
                 generate_tests(args, force, template)
-    except:
+    except Exception: # KeyboardInterrupt and SystemExit get through
         log.error("Oops, it seems internal Pythoscope error occured. Please file a bug report at %s\n" % BUGTRACKER_URL)
         raise
