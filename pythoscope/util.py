@@ -122,6 +122,20 @@ def underscore(name):
     name = re.sub(r'([A-Z]+)', capitalize, name)
     return re.sub(r'([A-Z])', underscore, name)
 
+def pluralize(word, count):
+    """Depending on the counter, return a singular or a plural form of the
+    given word.
+
+    >>> pluralize("word", 1)
+    'one word'
+    >>> pluralize("word", 2)
+    '2 words'
+    """
+    if count == 1:
+        return "one %s" % word
+    else:
+        return "%d %ss" % (count, word)
+
 def read_file_contents(filename):
     fd = file(filename)
     contents = fd.read()

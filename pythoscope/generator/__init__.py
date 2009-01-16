@@ -8,7 +8,7 @@ from pythoscope.store import Class, Function, FunctionCall, TestClass, \
     TestMethod, ModuleNotFound, UserObject, MethodCall, Method, Project, \
     GeneratorObject
 from pythoscope.util import camelize, compact, counted, flatten, \
-    key_for_value, set, sorted, underscore, union
+    key_for_value, pluralize, set, sorted, underscore, union
 
 
 # :: [string] -> string
@@ -624,8 +624,9 @@ class TestGenerator(object):
 
     def _generate_test_method_descriptions_for_function(self, function, module):
         if testable_calls(function.calls):
-            log.debug("Detected %d testable calls in function %s." % \
-                          (len(testable_calls(function.calls)), function.name))
+            log.debug("Detected %s in function %s." % \
+                          (pluralize("testable call", len(testable_calls(function.calls))),
+                           function.name))
 
             # We're calling the function, so we have to make sure it will
             # be imported in the test
