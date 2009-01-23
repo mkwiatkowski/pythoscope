@@ -310,14 +310,23 @@ class MethodCall(Call):
     pass
 
 class Definition(object):
-    def __init__(self, name, code=None, is_generator=False):
+    """Definition of a callable object (function or a method basically),
+    describing its static properties.
+    """
+    def __init__(self, name, args=None, code=None, is_generator=False):
+        if args is None:
+            args = []
         if code is None:
             code = EmptyCode()
         self.name = name
+        self.args = args
         self.code = code
         self.is_generator = is_generator
 
 class Callable(object):
+    """Dynamic aspect of a callable object. Tracks all calls made to given
+    callable.
+    """
     def __init__(self, calls=None):
         if calls is None:
             calls = []
@@ -330,8 +339,8 @@ class Callable(object):
         self.calls.append(call)
 
 class Function(Definition, Callable):
-    def __init__(self, name, code=None, calls=None, is_generator=False, module=None):
-        Definition.__init__(self, name, code, is_generator)
+    def __init__(self, name, args=None, code=None, calls=None, is_generator=False, module=None):
+        Definition.__init__(self, name, args=args, code=code, is_generator=is_generator)
         Callable.__init__(self, calls)
         self.module = module
 
@@ -342,13 +351,25 @@ class Function(Definition, Callable):
         return set(self.calls)
 
     def __repr__(self):
-        return "Function(name=%s, calls=%r)" % (self.name, self.calls)
+        return "Function(name=%s, args=%r, calls=%r)" % (self.name, self.args, self.calls)
 
 # Methods are not Callable, because they cannot be called by itself - they
 # need a bound object. We represent this object by UserObject class, which
 # gathers all MethodCalls for given instance.
 class Method(Definition):
-    pass
+    def get_call_args(self):
+        """Return names of arguments explicitly passed during call to this
+        method.
+
+        In other words, it removes "self" from the list of arguments, as "self"
+        is passed implicitly.
+        """
+        if self.args and self.args[0].startswith('*'):
+            return self.args
+        return self.args[1:]
+
+    def __repr__(self):
+        return "Method(name=%s, args=%r)" % (self.name, self.args)
 
 class GeneratorObject(Call):
     """Representation of a generator object - a callable with an input and many
@@ -449,6 +470,15 @@ class Class(object):
         for method in self.methods:
             if method.name == name:
                 return method
+
+    def get_creational_method(self):
+        """Return either __new__ or __init__ method of this class, with __new__
+        taking precedence.
+        """
+        method = self.find_method_by_name('__new__')
+        if method:
+            return method
+        return self.find_method_by_name('__init__')
 
     def __repr__(self):
         return "Class(name=%s)" % self.name

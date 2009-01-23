@@ -562,8 +562,8 @@ class TestGenerator:
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "assert False")
-        assert_doesnt_contain(result, "assertEqual")
-        assert_doesnt_contain(result, "assertRaises")
+        assert_doesnt_contain(result, "  self.assertEqual")
+        assert_doesnt_contain(result, "  self.assertRaises")
 
     def test_handles_unicode_objects(self):
         objects = [FunctionWithSingleCall('characterize', {'x': u'\xf3'}, "o-acute")]
@@ -638,6 +638,44 @@ class TestGenerator:
         assert_contains(result, "def test_contains_returns_true_for_inner_equal_dict_and_outer_equal_list(self):")
         assert_contains(result, "adict = {}")
         assert_contains(result, "self.assertEqual(True, contains(inner=adict, outer=[adict]))")
+
+    def test_generates_sample_assertions_in_test_stubs_for_functions(self):
+        objects = [Function('something', args=['arg1', 'arg2', '*rest'])]
+        result = generate_single_test_module(template='nose', objects=objects)
+
+        assert_contains(result, "class TestSomething:")
+        assert_contains(result, "# assert_equal(expected, something(arg1, arg2, *rest))")
+        assert_contains(result, "raise SkipTest # TODO: implement your test here")
+
+    def test_generates_sample_setup_and_sample_assertions_in_test_stubs_for_classes_without_init(self):
+        objects = [Class('Something', [Method('method', args=['**kwds'])])]
+        result = generate_single_test_module(template='nose', objects=objects)
+
+        assert_contains(result, "class TestSomething:")
+        assert_contains(result, "def test_method(self):")
+        assert_contains(result, "# something = Something()")
+        assert_contains(result, "# assert_equal(expected, something.method(**kwds))")
+        assert_contains(result, "raise SkipTest # TODO: implement your test here")
+
+    def test_generates_sample_setup_and_sample_assertions_in_test_stubs_for_classes_with_init(self):
+        objects = [Class('SomethingElse', [Method('__init__', args=['self', 'arg'])])]
+        result = generate_single_test_module(template='nose', objects=objects)
+
+        assert_contains(result, "class TestSomethingElse:")
+        assert_contains(result, "def test_object_initialization(self):")
+        assert_contains(result, "# something_else = SomethingElse(arg)")
+        assert_doesnt_contain(result, "# assert_equal(expected, something_else.__init__(arg))")
+        assert_contains(result, "raise SkipTest # TODO: implement your test here")
+
+    def test_generates_sample_setup_and_sample_assertions_in_test_stubs_for_classes_with_new(self):
+        objects = [Class('SomethingCompletelyDifferent', [Method('__new__', args=['self', 'x'])])]
+        result = generate_single_test_module(template='nose', objects=objects)
+
+        assert_contains(result, "class TestSomethingCompletelyDifferent:")
+        assert_contains(result, "def test___new__(self):")
+        assert_contains(result, "# something_completely_different = SomethingCompletelyDifferent(x)")
+        assert_doesnt_contain(result, "# assert_equal(expected, something_completely_different.__new__(x))")
+        assert_contains(result, "raise SkipTest # TODO: implement your test here")
 
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):

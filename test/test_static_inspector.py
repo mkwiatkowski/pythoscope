@@ -198,6 +198,22 @@ function_with_default_argument_value = """def nofun(to='day'):
     return 'home'
 """
 
+function_with_one_argument = """def fun(arg):
+    pass
+"""
+
+function_with_many_arguments = """def fun3(arg1, arg2, arg3):
+    pass
+"""
+
+function_with_many_arguments_and_default_values = """def optfun(arg, opt1=123, opt2='abc'):
+    pass
+"""
+
+function_with_positional_and_keyword_arguments = """def morefun(arg, *args, **kwds):
+    pass
+"""
+
 class TestStaticInspector:
     def _inspect_code(self, code):
         return inspect_code(EmptyProject(), "module.py", code)
@@ -345,7 +361,37 @@ class TestStaticInspector:
         assert method.is_generator
         assert_equal("method_generator", method.name)
 
+    def test_handles_functions_without_arguments(self):
+        info = self._inspect_code(stand_alone_function)
+
+        assert_single_function(info, "a_function", args=[])
+
+    def test_handles_functions_with_one_argument(self):
+        info = self._inspect_code(function_with_one_argument)
+
+        assert_single_function(info, "fun", args=['arg'])
+
+    def test_handles_functions_with_many_arguments(self):
+        info = self._inspect_code(function_with_many_arguments)
+
+        assert_single_function(info, "fun3", args=['arg1', 'arg2', 'arg3'])
+
     def test_handles_functions_with_default_argument_values(self):
         info = self._inspect_code(function_with_default_argument_value)
 
-        assert_single_function(info, "nofun")
+        assert_single_function(info, "nofun", args=['to'])
+
+    def test_handles_functions_with_many_arguments_and_default_values(self):
+        info = self._inspect_code(function_with_many_arguments_and_default_values)
+
+        assert_single_function(info, "optfun", args=['arg', 'opt1', 'opt2'])
+
+    def test_handles_functions_with_positional_and_keyword_arguments(self):
+        info = self._inspect_code(function_with_positional_and_keyword_arguments)
+
+        assert_single_function(info, "morefun", args=['arg', '*args', '**kwds'])
+
+    def test_handles_arguments_of_lambda_definitions(self):
+        info = self._inspect_code(lambda_definition)
+
+        assert_single_function(info, "lambda_function", args=['x'])

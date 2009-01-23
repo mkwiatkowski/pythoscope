@@ -11,6 +11,8 @@ from pythoscope.util import camelize, compact, counted, flatten, \
     key_for_value, pluralize, set, sorted, underscore, union
 
 
+CREATIONAL_METHODS = ['__init__', '__new__']
+
 # :: [string] -> string
 def list_of(strings):
     return "[%s]" % ', '.join(strings)
@@ -460,6 +462,24 @@ def type_of(string):
 def map_types(string):
     return "map(type, %s)" % string
 
+def call_with_args(callable, args):
+    return "%s(%s)" % (callable, ', '.join(args))
+
+def assertion_stub(callable, args):
+    """Create assertion stub over function/method return value, including names
+    of arguments.
+    """
+    return ('equal_stub', 'expected', call_with_args(callable, args))
+
+def class_init_stub(klass):
+    """Create setup that contains stub of object creation for given class.
+    """
+    args = []
+    init_method = klass.get_creational_method()
+    if init_method:
+        args = init_method.get_call_args()
+    return call_with_args(klass.name, args)
+
 # :: (Call, CallString) -> CallString
 def decorate_call(call, string):
     if isinstance(call, GeneratorObject):
@@ -473,7 +493,8 @@ def decorate_call(call, string):
     return string
 
 def should_ignore_method(method):
-    return method.name.startswith('_') and method.name != "__init__"
+    return method.name.startswith('_') and \
+        method.name not in CREATIONAL_METHODS
 
 def testable_calls(calls):
     return [c for c in calls if c.is_testable()]
@@ -524,7 +545,7 @@ class TestMethodDescription(object):
         return ''.join([indentation + line for line in self.setup.splitlines(True)])
 
     def _get_code_assertions(self):
-        return [a for a in self.assertions if a[0] in ['equal', 'raises']]
+        return [a for a in self.assertions if a[0] in ['equal', 'missing', 'raises']]
 
     def _has_complete_setup(self):
         return self.setup and not self.setup.startswith("#")
@@ -560,20 +581,16 @@ class TestGenerator(object):
     def create_test_class(self, class_name, method_descriptions):
         result = "%s\n" % (self.test_class_header(class_name))
         for method_description in method_descriptions:
-            if method_description.assertions:
-                result += "    def %s(self):\n" % method_description.name
-                if method_description.setup:
-                    result += method_description.indented_setup("        ")
-                for assertion in method_description.assertions:
-                    apply_template = getattr(self, "%s_assertion" % assertion[0])
-                    result += "        %s\n" % apply_template(*assertion[1:])
-                # We need at least one statement in a method to be syntatically correct.
-                if not method_description.contains_code():
-                    result += "        pass\n"
-                result += "\n"
-            else:
-                result += "    def %s(self):\n" % method_description.name
-                result += "        %s\n\n" % self.missing_assertion()
+            result += "    def %s(self):\n" % method_description.name
+            if method_description.setup:
+                result += method_description.indented_setup("        ")
+            for assertion in method_description.assertions:
+                apply_template = getattr(self, "%s_assertion" % assertion[0])
+                result += "        %s\n" % apply_template(*assertion[1:])
+            # We need at least one statement in a method to be syntatically correct.
+            if not method_description.contains_code():
+                result += "        pass\n"
+            result += "\n"
         return result
 
     def comment_assertion(self, comment):
@@ -637,7 +654,9 @@ class TestGenerator(object):
         else:
             # No calls were traced, so we're go for a single test stub.
             log.debug("Detected _no_ testable calls in function %s." % function.name)
-            return [TestMethodDescription(name2testname(underscore(function.name)))]
+            name = name2testname(underscore(function.name))
+            assertions = [assertion_stub(function.name, function.args), ('missing',)]
+            return [TestMethodDescription(name, assertions)]
 
     def _generate_test_method_descriptions_for_class(self, klass, module):
         if klass.user_objects:
@@ -651,14 +670,20 @@ class TestGenerator(object):
         # No calls were traced for those methods, so we'll go for simple test stubs.
         for method in klass.get_untraced_methods():
             if not should_ignore_method(method):
-                yield self._generate_test_method_description_for_method(method)
+                yield self._generate_test_method_description_for_method(klass, method)
 
-    def _generate_test_method_description_for_method(self, method):
+    def _generate_test_method_description_for_method(self, klass, method):
         if method.name == '__init__':
             name = "object_initialization"
         else:
             name = method.name
-        return TestMethodDescription(name2testname(name))
+        object_name = underscore(klass.name)
+        setup = '# %s = %s\n' % (object_name, class_init_stub(klass))
+        assertions = [('missing',)]
+        # Generate assertion stub, but only for non-creational methods.
+        if method.name not in CREATIONAL_METHODS:
+            assertions.insert(0, assertion_stub("%s.%s" % (object_name, method.name), method.get_call_args()))
+        return TestMethodDescription(name2testname(name), assertions=assertions, setup=setup)
 
     def _method_descriptions_from_function(self, function):
         for call in testable_calls(function.get_unique_calls()):

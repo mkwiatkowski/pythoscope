@@ -176,12 +176,24 @@ def derive_argument(node):
         return tuple(map(derive_argument,
                          remove_commas(node.children[1].children)))
 
+def derive_arguments_from_typedargslist(typedargslist):
+    prefix = ''
+    for node in remove_defaults(remove_commas(typedargslist.children)):
+        if is_leaf_of_type(node, token.STAR):
+            prefix = '*'
+        elif is_leaf_of_type(node, token.DOUBLESTAR):
+            prefix = '**'
+        elif prefix:
+            yield prefix + derive_argument(node)
+            prefix = ''
+        else:
+            yield derive_argument(node)
+
 def derive_arguments(node):
     if node == []:
         return []
     elif is_node_of_type(node, 'typedargslist'):
-        return map(derive_argument,
-                   remove_defaults(remove_commas(node.children)))
+        return list(derive_arguments_from_typedargslist(node))
     else:
         return [derive_argument(node)]
 
@@ -211,7 +223,7 @@ class ASTVisitor(object):
         ('_visit_class', "body=classdef< 'class' name=NAME ['(' bases=any ')'] ':' any >"),
         ('_visit_function', "body=funcdef< 'def' name=NAME parameters< '(' [args=any] ')' > ':' any >"),
         ('_visit_import', "import_name< 'import' names=any > | import_from< 'from' import_from=any 'import' names=any >"),
-        ('_visit_lambda_assign', "expr_stmt< name=NAME '=' lambdef< 'lambda' any ':' any > >"),
+        ('_visit_lambda_assign', "expr_stmt< name=NAME '=' lambdef< 'lambda' [args=any] ':' any > >"),
         ('_visit_main_snippet', "body=if_stmt< 'if' comparison< '__name__' '==' (\"'__main__'\" | '\"__main__\"' ) > ':' any >"),
     ]
 
@@ -260,7 +272,7 @@ class ASTVisitor(object):
     def visit_import(self, names, import_from):
         pass
 
-    def visit_lambda_assign(self, name):
+    def visit_lambda_assign(self, name, args):
         pass
 
     def visit_main_snippet(self, body):
@@ -284,7 +296,8 @@ class ASTVisitor(object):
                           import_from=derive_import_name(results.get('import_from')))
 
     def _visit_lambda_assign(self, results):
-        self.visit_lambda_assign(name=results['name'].value)
+        self.visit_lambda_assign(name=results['name'].value,
+                                 args=derive_arguments(results.get('args', [])))
 
     def _visit_main_snippet(self, results):
         self.visit_main_snippet(body=results['body'])

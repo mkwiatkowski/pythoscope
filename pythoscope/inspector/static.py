@@ -67,8 +67,9 @@ def is_generator_definition(definition):
         # inside generator.
         return False
 
-def create_definition(name, body, definition_type):
-    return definition_type(name, body, is_generator=is_generator_definition(body))
+def create_definition(name, args, code, definition_type):
+    return definition_type(name, args=args, code=code,
+                           is_generator=is_generator_definition(code))
 
 class ModuleVisitor(ASTVisitor):
     def __init__(self):
@@ -80,18 +81,18 @@ class ModuleVisitor(ASTVisitor):
     def visit_class(self, name, bases, body):
         visitor = descend(body.children, ClassVisitor)
         if is_test_class(name, bases):
-            methods = [TestMethod(n, c) for (n, c) in visitor.methods]
+            methods = [TestMethod(n, c) for (n, a, c) in visitor.methods]
             klass = TestClass(name=name, test_cases=methods, code=body)
         else:
-            methods = [create_definition(n, b, Method) for (n, b) in visitor.methods]
+            methods = [create_definition(n, a, c, Method) for (n, a, c) in visitor.methods]
             klass = Class(name=name, methods=methods, bases=bases)
         self.objects.append(klass)
 
     def visit_function(self, name, args, body):
-        self.objects.append(create_definition(name, body, Function))
+        self.objects.append(create_definition(name, args, body, Function))
 
-    def visit_lambda_assign(self, name):
-        self.objects.append(Function(name))
+    def visit_lambda_assign(self, name, args):
+        self.objects.append(Function(name, args=args))
 
     def visit_import(self, names, import_from):
         if import_from:
@@ -113,7 +114,7 @@ class ClassVisitor(ASTVisitor):
         pass
 
     def visit_function(self, name, args, body):
-        self.methods.append((name, body))
+        self.methods.append((name, args, body))
 
 def inspect_module(project, path):
     return inspect_code(project, path, read_file_contents(path))

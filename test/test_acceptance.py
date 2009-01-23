@@ -1,8 +1,6 @@
 import os.path
 
-from nose.tools import assert_equal
-
-from helper import assert_length, read_data
+from helper import assert_equal_strings, assert_length, read_data
 
 from pythoscope.inspector import inspect_project
 from pythoscope.generator import add_tests_to_project
@@ -23,7 +21,7 @@ class TestStaticAnalysis(CapturedLogger):
         add_tests_to_project(project, [module_path], 'unittest')
         result = get_test_module_contents(project)
 
-        assert_equal(expected_result, result)
+        assert_equal_strings(expected_result, result)
 
 class TestAppendingTestClasses(CapturedLogger):
     def test_appends_test_classes_to_existing_test_modules(self):
@@ -59,7 +57,7 @@ class TestAppendingTestClasses(CapturedLogger):
         assert_length(project.get_modules(), 2)
         result = read_file_contents(test_module_path)
         expected_result = read_data(expected_output)
-        assert_equal(expected_result, result)
+        assert_equal_strings(expected_result, result)
 
 class TestObjectsIdentityPreservation(CapturedLogger):
     def test_preserves_identity_of_objects(self):
@@ -73,4 +71,4 @@ class TestObjectsIdentityPreservation(CapturedLogger):
         add_tests_to_project(project, [module_path], 'unittest')
         result = get_test_module_contents(project)
 
-        assert_equal(expected_result, result)
+        assert_equal_strings(expected_result, result)

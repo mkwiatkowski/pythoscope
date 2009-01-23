@@ -90,9 +90,12 @@ and see a test module generated in the **tests/** directory::
 
   class TestOldPython(unittest.TestCase):
       def test_hiss(self):
+          # old_python = OldPython(age)
+          # self.assertEqual(expected, old_python.hiss())
           assert False # TODO: implement your test here
 
       def test_object_initialization(self):
+          # old_python = OldPython(age)
           assert False # TODO: implement your test here
 
   if __name__ == '__main__':
@@ -148,9 +151,12 @@ that a new test case has been added::
 
   class TestOldPython(unittest.TestCase):
       def test_hiss(self):
+          # old_python = OldPython(age)
+          # self.assertEqual(expected, old_python.hiss())
           assert False # TODO: implement your test here
 
       def test_object_initialization(self):
+          # old_python = OldPython(age)
           assert False # TODO: implement your test here
 
       def test_hiss_returns_sss_cough_cough_after_creation_with_123(self):
