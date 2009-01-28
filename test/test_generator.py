@@ -639,6 +639,18 @@ class TestGenerator:
         assert_contains(result, "adict = {}")
         assert_contains(result, "self.assertEqual(True, contains(inner=adict, outer=[adict]))")
 
+    def test_handles_objects_which_setups_depend_on_each_other(self):
+        inner = []
+        outer = [inner]
+        objects = [FunctionWithSingleCall('mangle', {'a1': inner, 'a2': outer, 'a3': outer}, False)]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_mangle_returns_false_for_a1_equal_list_and_a2_equal_list_and_a3_equal_list(self):")
+        assert_contains(result, "alist1 = []")
+        assert_contains(result, "alist2 = [alist1]")
+        assert_contains(result, "self.assertEqual(False, mangle(a1=alist1, a2=alist2, a3=alist2))")
+
     def test_generates_sample_assertions_in_test_stubs_for_functions(self):
         objects = [Function('something', args=['arg1', 'arg2', '*rest'])]
         result = generate_single_test_module(template='nose', objects=objects)

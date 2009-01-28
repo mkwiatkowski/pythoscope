@@ -303,19 +303,19 @@ def assigned_names_sorted_by_timestamp(items):
 # :: {SerializedObject: str} -> CallString
 def create_setup_for_named_objects(assigned_names):
     full_setup = CallString("")
+    already_assigned_names = {}
+    # Note that since data we have was gathered during real execution there is
+    # no way setup dependencies are cyclic, i.e. there is a strict order of
+    # object creation. We've chosen to sort objects by their creation timestamp.
     for obj, name in assigned_names_sorted_by_timestamp(assigned_names.iteritems()):
-        # TODO: we should pass a mapping of already assigned names to
-        # constructor_as_string, but what if setups depend on each-other?
-        # Note that since data we have was gathered during real execution there
-        # is no way setup dependencies are cyclic, i.e. there is a strict order
-        # of object creation.
-        constructor = constructor_as_string(obj)
+        constructor = constructor_as_string(obj, already_assigned_names)
         setup = "%s = %s\n" % (name, constructor)
         if constructor.uncomplete:
             setup = "# %s" % setup
         full_setup = full_setup.extend("%s%s" % (full_setup, setup),
                                        constructor.uncomplete,
                                        constructor.imports)
+        already_assigned_names[obj] = name
     return full_setup
 
 # :: SerializedObject -> string
