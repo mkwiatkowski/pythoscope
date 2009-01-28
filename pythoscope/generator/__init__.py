@@ -11,8 +11,6 @@ from pythoscope.util import camelize, compact, counted, flatten, \
     key_for_value, pluralize, set, sorted, underscore, union
 
 
-CREATIONAL_METHODS = ['__init__', '__new__']
-
 # :: [string] -> string
 def list_of(strings):
     return "[%s]" % ', '.join(strings)
@@ -493,8 +491,7 @@ def decorate_call(call, string):
     return string
 
 def should_ignore_method(method):
-    return method.name.startswith('_') and \
-        method.name not in CREATIONAL_METHODS
+    return method.is_private()
 
 def testable_calls(calls):
     return [c for c in calls if c.is_testable()]
@@ -678,7 +675,7 @@ class TestGenerator(object):
         setup = '# %s = %s\n' % (object_name, class_init_stub(klass))
         assertions = [('missing',)]
         # Generate assertion stub, but only for non-creational methods.
-        if method.name not in CREATIONAL_METHODS:
+        if not method.is_creational():
             assertions.insert(0, assertion_stub("%s.%s" % (object_name, method.name),
                                                 method.get_call_args()))
         return TestMethodDescription(test_name, assertions=assertions, setup=setup)

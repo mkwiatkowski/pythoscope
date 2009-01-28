@@ -169,9 +169,16 @@ class TestGenerator:
         assert_doesnt_contain(result, "from nose import SkipTest")
 
     def test_ignores_private_methods(self):
-        objects = [Class('SomeClass', map(Method, ['_semiprivate', '__private', '__eq__']))]
+        objects = [Class('SomeClass', map(Method, ['_semiprivate', '__private']))]
         result = generate_single_test_module(objects=objects)
         assert_doesnt_contain(result, "class TestSomeClass(unittest.TestCase):")
+
+    def test_doesnt_ignore_special_methods(self):
+        objects = [Class('SomeClass', map(Method, ['__eq__', '__init__']))]
+        result = generate_single_test_module(objects=objects)
+        assert_contains(result, "class TestSomeClass(unittest.TestCase):")
+        assert_contains(result, "def test___eq__(self):")
+        assert_contains(result, "def test___init__(self):")
 
     def test_ignores_private_functions(self):
         result = generate_single_test_module(objects=[Function('_function')])

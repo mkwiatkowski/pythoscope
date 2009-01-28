@@ -17,6 +17,8 @@ from pythoscope.util import all_of_type, set, module_path_to_name, \
      map_values, class_name, module_name
 
 
+CREATIONAL_METHODS = ['__init__', '__new__']
+
 class ModuleNeedsAnalysis(Exception):
     def __init__(self, path, out_of_sync=False):
         Exception.__init__(self, "Destination test module %r needs analysis." % path)
@@ -367,6 +369,24 @@ class Method(Definition):
         if self.args and self.args[0].startswith('*'):
             return self.args
         return self.args[1:]
+
+    def is_creational(self):
+        return self.name in CREATIONAL_METHODS
+
+    def is_private(self):
+        """Private methods (by convention) start with a single or double
+        underscore.
+
+        Note: Special methods are *not* considered private.
+        """
+        return self.name.startswith('_') and not self.is_special()
+
+    def is_special(self):
+        """Special methods, as defined in
+        <http://docs.python.org/reference/datamodel.html#specialnames>
+        have names starting and ending with a double underscore.
+        """
+        return self.name.startswith('__') and self.name.endswith('__')
 
     def __repr__(self):
         return "Method(name=%s, args=%r)" % (self.name, self.args)
