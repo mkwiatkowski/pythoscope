@@ -12,13 +12,13 @@ class TestSimpleClass(unittest.TestCase):
         assert False # TODO: implement your test here
 
 class TestClassWithInit(unittest.TestCase):
+    def test___init__(self):
+        # class_with_init = ClassWithInit()
+        assert False # TODO: implement your test here
+
     def test_method(self):
         # class_with_init = ClassWithInit()
         # self.assertEqual(expected, class_with_init.method(arg))
-        assert False # TODO: implement your test here
-
-    def test_object_initialization(self):
-        # class_with_init = ClassWithInit()
         assert False # TODO: implement your test here
 
 class TestOldStyleClass(unittest.TestCase):

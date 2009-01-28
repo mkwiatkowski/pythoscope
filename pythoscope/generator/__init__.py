@@ -673,17 +673,15 @@ class TestGenerator(object):
                 yield self._generate_test_method_description_for_method(klass, method)
 
     def _generate_test_method_description_for_method(self, klass, method):
-        if method.name == '__init__':
-            name = "object_initialization"
-        else:
-            name = method.name
+        test_name = name2testname(method.name)
         object_name = underscore(klass.name)
         setup = '# %s = %s\n' % (object_name, class_init_stub(klass))
         assertions = [('missing',)]
         # Generate assertion stub, but only for non-creational methods.
         if method.name not in CREATIONAL_METHODS:
-            assertions.insert(0, assertion_stub("%s.%s" % (object_name, method.name), method.get_call_args()))
-        return TestMethodDescription(name2testname(name), assertions=assertions, setup=setup)
+            assertions.insert(0, assertion_stub("%s.%s" % (object_name, method.name),
+                                                method.get_call_args()))
+        return TestMethodDescription(test_name, assertions=assertions, setup=setup)
 
     def _method_descriptions_from_function(self, function):
         for call in testable_calls(function.get_unique_calls()):

@@ -138,10 +138,10 @@ class TestGenerator:
         assert_contains(result, "def test_one_more(self):")
         assert_contains(result, "def test_a_function(self):")
 
-    def test_generates_nice_name_for_init_method(self):
+    def test_generates_conventional_name_for_init_method(self):
         objects = [Class('SomeClass', [Method('__init__')])]
         result = generate_single_test_module(objects=objects)
-        assert_contains(result, "def test_object_initialization(self):")
+        assert_contains(result, "def test___init__(self):")
 
     def test_ignores_empty_classes(self):
         result = generate_single_test_module(objects=[Class('SomeClass', [])])
@@ -674,7 +674,7 @@ class TestGenerator:
         result = generate_single_test_module(template='nose', objects=objects)
 
         assert_contains(result, "class TestSomethingElse:")
-        assert_contains(result, "def test_object_initialization(self):")
+        assert_contains(result, "def test___init__(self):")
         assert_contains(result, "# something_else = SomethingElse(arg)")
         assert_doesnt_contain(result, "# assert_equal(expected, something_else.__init__(arg))")
         assert_contains(result, "raise SkipTest # TODO: implement your test here")
