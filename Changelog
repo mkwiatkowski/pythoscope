@@ -1,6 +1,15 @@
 Changelog
 =========
 
+0.4
+---
+
+* Stopped `using pickle for object serialization <https://blueprints.launchpad.net/pythoscope/+spec/dont-use-pickle-for-object-serialization>`_ and implemented our own mechanism that carefully captures changing state of objects during dynamic inspection.
+* Implemented `preserve objects identity <https://blueprints.launchpad.net/pythoscope/+spec/preserve-objects-identity>`_ blueprint.
+* Fixed bug related to multiple generator calls (`#295340 <https://bugs.launchpad.net/pythoscope/+bug/295340>`_).
+* Made handling of special method names (like __init__ or __eq__) consistent with handling of normal method names.
+* Made `test stubs more useful <https://blueprints.launchpad.net/pythoscope/+spec/better-test-stubs>`_.
+
 0.3.2
 -----
 
