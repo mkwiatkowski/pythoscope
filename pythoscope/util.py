@@ -4,6 +4,7 @@ import operator
 import os
 import re
 import sys
+import traceback
 import types
 import warnings
 
@@ -316,6 +317,9 @@ def module_name(obj):
 def module_path_to_name(module_path, newsep="_"):
     return re.sub(r'(%s__init__)?\.py$' % re.escape(os.path.sep), '', module_path).\
         replace(os.path.sep, newsep)
+
+def last_traceback():
+    return "".join(traceback.format_tb(sys.exc_info()[2]))
 
 # Regular expressions helpers.
 

@@ -1,7 +1,7 @@
 from pythoscope.inspector import static, dynamic
 from pythoscope.logger import log
 from pythoscope.store import ModuleNotFound
-from pythoscope.util import python_modules_below
+from pythoscope.util import last_traceback, python_modules_below
 
 
 def inspect_project(project):
@@ -59,3 +59,4 @@ def inspect_project_dynamically(project):
             log.warning("Point of entry contains a syntax error: %s" % err)
         except (Exception, KeyboardInterrupt, SystemExit), err:
             log.warning("Point of entry exited with error: %s" % repr(err))
+            log.debug("Full traceback:\n" + last_traceback())
