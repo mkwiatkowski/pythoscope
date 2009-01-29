@@ -658,6 +658,17 @@ class TestGenerator:
         assert_contains(result, "alist2 = [alist1]")
         assert_contains(result, "self.assertEqual(False, mangle(a1=alist1, a2=alist2, a3=alist2))")
 
+    def test_handles_reused_objects_in_method_calls(self):
+        alist = []
+        klass = ClassWithMethods('Doubler', [('double', [({'lst': alist}, (alist, alist))])])
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_double_returns_tuple_for_list(self):")
+        assert_contains(result, "alist = []")
+        assert_contains(result, "doubler = Doubler()")
+        assert_contains(result, "self.assertEqual((alist, alist), doubler.double(lst=alist))")
+
     def test_generates_sample_assertions_in_test_stubs_for_functions(self):
         objects = [Function('something', args=['arg1', 'arg2', '*rest'])]
         result = generate_single_test_module(template='nose', objects=objects)

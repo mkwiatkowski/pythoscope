@@ -183,7 +183,7 @@ def call_as_string(object_name, args, assigned_names={}):
     return CallString("%s(%s)" % (object_name, ', '.join(arguments)),
                       uncomplete=uncomplete, imports=imports)
 
-# :: SerializedObject | FunctionCall | [SerializedObject] -> [SerializedObject]
+# :: SerializedObject | Call | [SerializedObject] -> [SerializedObject]
 def get_contained_objects(obj):
     """Return a list of SerializedObjects this object requires during testing.
 
@@ -203,8 +203,8 @@ def get_contained_objects(obj):
         return get_those_and_contained_objects(flatten(obj.mapping))
     elif isinstance(obj, UserObject):
         calls = compact([obj.get_init_call()]) + obj.get_external_calls()
-        return get_those_and_contained_objects(flatten([call.input.values() + [call.output] for call in calls]))
-    elif isinstance(obj, FunctionCall):
+        return get_contained_objects(calls)
+    elif isinstance(obj, (FunctionCall, MethodCall)):
         if obj.raised_exception():
             output = obj.exception
         else:
@@ -293,6 +293,10 @@ def assign_names_to_objects(objects):
     for obj in objects_sorted_by_timestamp(objects):
         assign_name_to_object(obj, names)
     return names
+
+# :: UserObject | FunctionCall -> {SerializedObject : str}
+def assign_names_for(context):
+    return assign_names_to_objects(objects_worth_naming(get_objects_usage_counts(context)))
 
 # :: {SerializedObject: str} -> [(SerializedObject, str)]
 def assigned_names_sorted_by_timestamp(items):
@@ -682,7 +686,7 @@ class TestGenerator(object):
 
     def _method_descriptions_from_function(self, function):
         for call in testable_calls(function.get_unique_calls()):
-            assigned_names = assign_names_to_objects(objects_worth_naming(get_objects_usage_counts(call)))
+            assigned_names = assign_names_for(call)
             name = call2testname(call, function.name)
             setup = create_setup_for_named_objects(assigned_names)
             assertions = [self._create_assertion(function.name, call,
@@ -695,10 +699,15 @@ class TestGenerator(object):
         init_call = user_object.get_init_call()
         external_calls = testable_calls(user_object.get_external_calls())
         local_name = underscore(user_object.klass.name)
-        constructor = constructor_as_string(user_object)
-        stub_all = constructor.uncomplete
+
+        assigned_names = assign_names_for(user_object)
+        named_objects_setup = create_setup_for_named_objects(assigned_names)
+
+        constructor = constructor_as_string(user_object, assigned_names)
+        stub_all = constructor.uncomplete or named_objects_setup.uncomplete
 
         self.ensure_imports(constructor.imports)
+        self.ensure_imports(named_objects_setup.imports)
 
         def test_name():
             if len(external_calls) == 0 and init_call:
@@ -729,13 +738,13 @@ class TestGenerator(object):
             if init_call and len(external_calls) == 0:
                 # If the constructor raised an exception, object creation should be an assertion.
                 if init_call.raised_exception():
-                    yield self._create_assertion(user_object.klass.name, init_call, stub=stub_all)
+                    yield self._create_assertion(user_object.klass.name, init_call, stub=stub_all, assigned_names=assigned_names)
                 else:
                     yield(('comment', "# Make sure it doesn't raise any exceptions."))
 
             for call in external_calls:
                 name = "%s.%s" % (local_name, call.definition.name)
-                yield(self._create_assertion(name, call, stub=stub_all))
+                yield(self._create_assertion(name, call, stub=stub_all, assigned_names=assigned_names))
 
         def setup():
             if init_call and init_call.raised_exception():
@@ -747,7 +756,9 @@ class TestGenerator(object):
                     setup = "# %s" % setup
                 return setup
 
-        return TestMethodDescription(test_name(), list(assertions()), setup())
+        return TestMethodDescription(test_name(),
+                                     list(assertions()),
+                                     named_objects_setup + setup())
 
     def _create_assertion(self, name, call, stub=False, assigned_names={}):
         """Create a new assertion based on a given call and a name provided
