@@ -943,15 +943,17 @@ class Execution(object):
 
     # :: (str, object, dict, code, frame) -> MethodCall | None
     def create_method_call(self, name, obj, args, code, frame):
-        user_object = self.serialize(obj)
+        serialized_object = self.serialize(obj)
 
-        method = user_object.klass.find_method_by_name(name)
-        if method:
-            return self.create_call(MethodCall, method, user_object, args, code, frame)
-        else:
-            # TODO: We're lacking a definition of a method in a known class,
-            # so at least issue a warning.
-            pass
+        # We ignore the call if we can't find the class of this object.
+        if isinstance(serialized_object, UserObject):
+            method = serialized_object.klass.find_method_by_name(name)
+            if method:
+                return self.create_call(MethodCall, method, serialized_object, args, code, frame)
+            else:
+                # TODO: We're lacking a definition of a method in a known class,
+                # so at least issue a warning.
+                pass
 
     # :: (str, dict, code, frame) -> FunctionCall | None
     def create_function_call(self, name, args, code, frame):
