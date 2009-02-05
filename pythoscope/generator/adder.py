@@ -53,7 +53,7 @@ def find_test_module(project, test_class):
     """
     for module in test_class.associated_modules:
         test_module = find_associate_test_module_by_name(project, module) or \
-                      find_associate_test_module_by_test_classs(project, module)
+                      find_associate_test_module_by_test_class(project, module)
         if test_module:
             return test_module
 
@@ -66,13 +66,13 @@ def find_associate_test_module_by_name(project, module):
         if module.subpath in possible_paths:
             return module
 
-def find_associate_test_module_by_test_classs(project, module):
+def find_associate_test_module_by_test_class(project, module):
     """Try to find a test module with most test cases for the given
     application module.
     """
-    def test_classs_number(mod):
+    def test_class_number(mod):
         return len(mod.get_test_cases_for_module(module))
-    test_module = max_by_not_zero(test_classs_number, project.get_modules())
+    test_module = max_by_not_zero(test_class_number, project.get_modules())
     if test_module:
         return test_module
 
