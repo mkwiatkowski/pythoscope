@@ -3,6 +3,8 @@ from nose.tools import assert_equal
 from pythoscope.astvisitor import parse
 from pythoscope.store import Class, Function, FunctionCall, Module, \
     PointOfEntry, Project, TestClass, UserObject
+from pythoscope.serializer import ImmutableObject, UnknownObject, \
+    SequenceObject, MapObject
 
 from helper import CustomSeparator, assert_equal_sets, assert_length
 
@@ -28,9 +30,11 @@ def inject_user_object(poe, obj, klass):
     klass.add_user_object(user_object)
     return user_object
 
-def inject_function_call(poe, function):
-    call = FunctionCall(function, {})
+def inject_function_call(poe, function, args={}):
+    call = FunctionCall(function, args)
     poe.execution.captured_calls.append(call)
+    for arg in args.values():
+        poe.execution.captured_objects[id(arg)] = arg
     function.add_call(call)
     return call
 
@@ -68,3 +72,14 @@ class TestPointOfEntry:
         # Only the FunctionCall from the second POE remains.
         assert_length(function.calls, 1)
         assert_equal_sets([call3], function.calls)
+
+    def test_clear_previous_run_ignores_not_referenced_objects(self):
+        function = Function('some_function')
+        self._create_project_with_two_points_of_entry(function)
+
+        args = {'i': ImmutableObject(123), 'u': UnknownObject(None),
+                's': SequenceObject([], None), 'm': MapObject({}, None)}
+        inject_function_call(self.first, function, args)
+
+        self.first.clear_previous_run()
+        # Make sure it doesn't raise any exceptions.

@@ -808,16 +808,6 @@ class Module(Localizable, TestSuite):
                 raise ModuleSaveError(self.subpath, err.message)
             self.changed = False
 
-def captured_objects_container_of(obj):
-    """Return a collection given object is contained within.
-    """
-    if isinstance(obj, UserObject):
-        return obj.klass.user_objects
-    elif isinstance(obj, (FunctionCall, GeneratorObject)):
-        return obj.definition.calls
-    else:
-        raise TypeError("Don't know how to get a container of object %r." % obj)
-
 def object_id(obj):
     # The reason why we index generator by its code id is because at the time
     # of GeneratorObject creation we don't have access to the generator itself,
@@ -878,12 +868,23 @@ class Execution(object):
     def destroy(self):
         """Erase any serialized objects and references created during this run.
         """
-        for obj in itertools.chain(self.captured_calls, self.captured_objects.values()):
-            # Method calls will be erased implicitly during removal of their
-            # UserObjects.
-            if not isinstance(obj, MethodCall):
-                captured_objects_container_of(obj).remove(obj)
+        self.destroy_references()
+        self.captured_objects = {}
+        self.captured_calls = []
         self.call_graph = None
+
+    def destroy_references(self):
+        for obj in itertools.chain(self.captured_calls, self.captured_objects.values()):
+            # Method calls will also be erased, implicitly during removal of
+            # their UserObjects.
+            if isinstance(obj, UserObject):
+                obj.klass.user_objects.remove(obj)
+            # FunctionCalls and GeneratorObjects have to be removed from their
+            # definition classes.
+            elif isinstance(obj, (FunctionCall, GeneratorObject)):
+                obj.definition.calls.remove(obj)
+            # Other serializables, like ImmutableObject are not referenced from
+            # anywhere outside of calls in self.captured_calls.
 
     # :: object -> SerializedObject
     def serialize(self, obj):
