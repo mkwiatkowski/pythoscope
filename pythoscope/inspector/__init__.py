@@ -8,7 +8,7 @@ def inspect_project(project):
     remove_deleted_modules(project)
     remove_deleted_points_of_entry(project)
 
-    updates = add_and_update_modules(project) + add_and_update_points_of_entry(project)
+    updates = inspect_project_statically(project)
 
     # If nothing new was discovered statically and there are no new points of
     # entry, don't run dynamic inspection.
@@ -49,6 +49,10 @@ def add_and_update_points_of_entry(project):
         if poe.is_out_of_sync():
             count += 1
     return count
+
+def inspect_project_statically(project):
+    return add_and_update_modules(project) + \
+        add_and_update_points_of_entry(project)
 
 def inspect_project_dynamically(project):
     for poe in project.points_of_entry.values():

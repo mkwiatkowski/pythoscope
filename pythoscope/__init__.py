@@ -4,7 +4,7 @@ import sys
 
 import logger
 
-from inspector import inspect_project
+from inspector import inspect_project, inspect_project_statically
 from generator import add_tests_to_project, UnknownTemplate
 from logger import log
 from store import Project, ModuleNotFound, ModuleNeedsAnalysis, \
@@ -103,6 +103,11 @@ def init_project(path):
         os.makedirs(get_points_of_entry_path(path))
     except OSError, err:
         fail("Couldn't initialize Pythoscope directory: %s." % err.strerror)
+
+    log.debug("Performing initial static inspection of the project source code.")
+    project = Project.from_directory(path)
+    inspect_project_statically(project)
+    project.save()
 
 def generate_tests(modules, force, template):
     try:
