@@ -1,0 +1,10 @@
+Can I use an existing unit test as a point of entry?
+----------------------------------------------------
+
+Yes, you can. Because Pythoscope doesn't execute points of entry in
+separate modules, you won't be able to use **unittest.main()** to
+run them though. Use the following snippet to run a test class
+(see `unittest module documentation <http://docs.python.org/library/unittest.html#basic-example>`_ for details)::
+
+  suite = unittest.TestLoader().loadTestsFromTestCase(YourTestClass)
+  unittest.TextTestRunner(verbosity=2).run(suite)

@@ -50,7 +50,11 @@ def get_human_readable_id(obj):
             return "function"
         return "%s_function" % obj.func_name
     else:
-        string = str(obj)
+        # str() may raise an exception.
+        try:
+            string = str(obj)
+        except:
+            string = "<>"
         # Looks like an instance without a custom __str__ defined.
         if string.startswith("<"):
             return "%s_instance" % underscore(objtype.__name__)
