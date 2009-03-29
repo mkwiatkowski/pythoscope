@@ -8,6 +8,7 @@ sys.stderr.
 """
 
 import logging
+import os.path
 import re
 
 from time import strftime, localtime
@@ -22,15 +23,8 @@ ERROR = logging.ERROR
 def path2modname(path, default=""):
     """Take a path to a pythoscope module and return a module name in dot-style
     notation. Return default if path doesn't point to a pythoscope module.
-
-    >>> path2modname("sth/pythoscope/astvisitor.py")
-    'astvisitor'
-    >>> path2modname("sth/pythoscope/generator/__init__.py")
-    'generator'
-    >>> path2modname("sth/pythoscope/generator/adder.py")
-    'generator.adder'
     """
-    match = re.search(r'.*pythoscope/(.*)$', path)
+    match = re.search(r'.*pythoscope%s(.*)$' % re.escape(os.path.sep), path)
     if match:
         return module_path_to_name(match.group(1), newsep=".")
     else:

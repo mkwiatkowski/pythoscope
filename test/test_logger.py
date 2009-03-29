@@ -1,7 +1,9 @@
-from helper import assert_equal_strings, assert_matches, CapturedLogger, \
-    CapturedDebugLogger
+from nose.tools import assert_equal
 
-from pythoscope.logger import log
+from helper import assert_equal_strings, assert_matches, CapturedLogger, \
+    CapturedDebugLogger, P
+
+from pythoscope.logger import log, path2modname
 
 
 class TestLogger(CapturedLogger):
@@ -14,3 +16,9 @@ class TestDebugLogger(CapturedDebugLogger):
         log.info("Log that")
         assert_matches(r"\d+\.\d+ .*test_logger:\d+ INFO: Log that\n",
                        self._get_log_output())
+
+class TestPath2Modname:
+    def test_path2modname(self):
+        assert_equal('astvisitor', path2modname(P("sth/pythoscope/astvisitor.py")))
+        assert_equal('generator', path2modname(P("sth/pythoscope/generator/__init__.py")))
+        assert_equal('generator.adder', path2modname(P("sth/pythoscope/generator/adder.py")))

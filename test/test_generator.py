@@ -805,9 +805,9 @@ class TestGeneratorMessages(CapturedLogger):
         generate_single_test_module(objects=objects)
 
         assert_contains_once(self._get_log_output(),
-                             "Adding generated TestSomeClass to tests/test_module.py.")
+                             "Adding generated TestSomeClass to %s." % P("tests/test_module.py"))
         assert_contains_once(self._get_log_output(),
-                             "Adding generated TestSomeFunction to tests/test_module.py.")
+                             "Adding generated TestSomeFunction to %s." % P("tests/test_module.py"))
 
 class TestGeneratorDebugMessages(CapturedDebugLogger):
     def test_debug_output_includes_packages_and_module_names(self):
@@ -818,7 +818,7 @@ class TestGeneratorDebugMessages(CapturedDebugLogger):
 
         assert_matches(r"\d+\.\d+ generator:\d+ INFO: Generating tests for module module.py.\n",
                        self._get_log_output(), anywhere=True)
-        assert_matches(r"\d+\.\d+ generator\.adder:\d+ INFO: Adding generated TestSomeFunction to tests/test_module.py.\n",
+        assert_matches(r"\d+\.\d+ generator\.adder:\d+ INFO: Adding generated TestSomeFunction to %s.\n" % re.escape(P("tests/test_module.py")),
                        self._get_log_output(), anywhere=True)
 
 class TestConstructorAsString:
