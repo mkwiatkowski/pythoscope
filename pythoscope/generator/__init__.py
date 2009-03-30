@@ -465,7 +465,20 @@ def map_types(string):
     return "map(type, %s)" % string
 
 def call_with_args(callable, args):
-    return "%s(%s)" % (callable, ', '.join(args))
+    """Return an example of a call to callable with all its standard arguments.
+
+    >>> call_with_args('fun', ['x', 'y'])
+    'fun(x, y)'
+    >>> call_with_args('fun', [('a', 'b'), 'c'])
+    'fun((a, b), c)'
+    >>> call_with_args('fun', ['a', ('b', ('c', 'd'))])
+    'fun(a, (b, (c, d)))'
+    """
+    def call_arglist(args):
+        if isinstance(args, (list, tuple)):
+            return "(%s)" % ', '.join(map(call_arglist, args))
+        return args
+    return "%s%s" % (callable, call_arglist(args))
 
 def assertion_stub(callable, args):
     """Create assertion stub over function/method return value, including names

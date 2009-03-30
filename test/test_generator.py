@@ -707,6 +707,18 @@ class TestGenerator:
         assert_doesnt_contain(result, "# assert_equal(expected, something_completely_different.__new__(x))")
         assert_contains(result, "raise SkipTest # TODO: implement your test here")
 
+    def test_generates_valid_setup_in_test_stubs_for_classes_with_init_that_uses_nested_arguments(self):
+        objects = [Class('Something', [Method('__init__', args=['self', ('narg1', 'narg2')])])]
+        result = generate_single_test_module(template='nose', objects=objects)
+
+        assert_contains(result, "# something = Something((narg1, narg2))")
+
+    def test_generates_valid_assertions_in_test_stubs_for_functions_that_use_nested_arguments(self):
+        objects = [Function('something', args=['arg1', ('narg1', 'narg2'), 'arg2'])]
+        result = generate_single_test_module(template='nose', objects=objects)
+
+        assert_contains(result, "# assert_equal(expected, something(arg1, (narg1, narg2), arg2))")
+
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):
         self.project = TestableProject()

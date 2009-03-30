@@ -3,7 +3,7 @@ import sys
 from nose.tools import assert_equal
 from nose.exc import SkipTest
 from helper import assert_length, assert_single_class, assert_single_function, \
-     assert_equal_sets, EmptyProject, assert_instance
+     assert_equal_sets, EmptyProject, assert_instance, assert_function
 
 from pythoscope.inspector.static import inspect_code
 from pythoscope.astvisitor import regenerate
@@ -214,6 +214,14 @@ function_with_positional_and_keyword_arguments = """def morefun(arg, *args, **kw
     pass
 """
 
+functions_with_nested_arguments = """def nestfun((a, b), c):
+    pass
+def nestfun2(a, (b, c)):
+    pass
+def nestfun3(a, (b, c), d):
+    pass
+"""
+
 class TestStaticInspector:
     def _inspect_code(self, code):
         return inspect_code(EmptyProject(), "module.py", code)
@@ -395,3 +403,11 @@ class TestStaticInspector:
         info = self._inspect_code(lambda_definition)
 
         assert_single_function(info, "lambda_function", args=['x'])
+
+    def test_handles_functions_with_nested_arguments(self):
+        info = self._inspect_code(functions_with_nested_arguments)
+
+        assert_length(info.functions, 3)
+        assert_function(info.functions[0], "nestfun", [('a', 'b'), 'c'])
+        assert_function(info.functions[1], "nestfun2", ['a', ('b', 'c')])
+        assert_function(info.functions[2], "nestfun3", ['a', ('b', 'c'), 'd'])
