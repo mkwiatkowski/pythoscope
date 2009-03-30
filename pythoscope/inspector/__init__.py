@@ -44,7 +44,7 @@ def remove_deleted_points_of_entry(project):
 
 def add_and_update_points_of_entry(project):
     count = 0
-    for path in python_modules_below(project._get_points_of_entry_path()):
+    for path in python_modules_below(project.get_points_of_entry_path()):
         poe = project.ensure_point_of_entry(path)
         if poe.is_out_of_sync():
             count += 1

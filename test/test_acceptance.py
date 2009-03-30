@@ -65,7 +65,7 @@ class TestObjectsIdentityPreservation(CapturedLogger):
         project = ProjectWithPointsOfEntryFiles(["poe.py"])
         module_path = project.path.putfile("module.py", read_data("objects_identity_module.py"))
         write_string_to_file(read_data("objects_identity_poe.py"),
-                             os.path.join(project._get_points_of_entry_path(), "poe.py"))
+                             project.path_for_point_of_entry("poe.py"))
 
         inspect_project(project)
         add_tests_to_project(project, [module_path], 'unittest')

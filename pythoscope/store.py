@@ -36,14 +36,16 @@ class ModuleSaveError(Exception):
         self.module = module
         self.reason = reason
 
+PYTHOSCOPE_SUBPATH = ".pythoscope"
+PICKLE_SUBPATH = os.path.join(PYTHOSCOPE_SUBPATH, "project.pickle")
+POINTS_OF_ENTRY_SUBPATH = os.path.join(PYTHOSCOPE_SUBPATH, "points-of-entry")
+
 def get_pythoscope_path(project_path):
-    return os.path.join(project_path, ".pythoscope")
-
+    return os.path.join(project_path, PYTHOSCOPE_SUBPATH)
 def get_pickle_path(project_path):
-    return os.path.join(get_pythoscope_path(project_path), "project.pickle")
-
+    return os.path.join(project_path, PICKLE_SUBPATH)
 def get_points_of_entry_path(project_path):
-    return os.path.join(get_pythoscope_path(project_path), "points-of-entry")
+    return os.path.join(project_path, POINTS_OF_ENTRY_SUBPATH)
 
 def get_test_objects(objects):
     def is_test_object(object):
@@ -85,8 +87,14 @@ class Project(object):
     def _get_pickle_path(self):
         return get_pickle_path(self.path)
 
-    def _get_points_of_entry_path(self):
+    def get_points_of_entry_path(self):
         return get_points_of_entry_path(self.path)
+
+    def path_for_point_of_entry(self, name):
+        return os.path.join(self.path, self.subpath_for_point_of_entry(name))
+
+    def subpath_for_point_of_entry(self, name):
+        return os.path.join(POINTS_OF_ENTRY_SUBPATH, name)
 
     def _find_new_tests_directory(self):
         for path in directories_under(self.path):
@@ -178,7 +186,7 @@ class Project(object):
 
         Assumes the given path is under points of entry path.
         """
-        return extract_subpath(path, self._get_points_of_entry_path())
+        return extract_subpath(path, self.get_points_of_entry_path())
 
     def _extract_subpath(self, path):
         """Takes the file path and returns subpath relative to the
@@ -1007,8 +1015,7 @@ class PointOfEntry(Localizable):
     attribute.
     """
     def __init__(self, project, name):
-        poes_subpath = project._extract_subpath(project._get_points_of_entry_path())
-        Localizable.__init__(self, project, os.path.join(poes_subpath, name))
+        Localizable.__init__(self, project, project.subpath_for_point_of_entry(name))
 
         self.project = project
         self.name = name
@@ -1022,7 +1029,7 @@ class PointOfEntry(Localizable):
     created = property(_get_created, _set_created)
 
     def get_path(self):
-        return os.path.join(self.project._get_points_of_entry_path(), self.name)
+        return self.project.path_for_point_of_entry(self.name)
 
     def get_content(self):
         return read_file_contents(self.get_path())
