@@ -765,26 +765,29 @@ class TestTraceExec(DynamicInspectorTest):
         assert_call({'x': 42}, 43, function.calls[1])
 
 class TestInspectPointOfEntry:
+    def _init_project(self, module_code="", poe_content=""):
+        self.project = TestableProject()
+        self.project.path.putfile("module.py", module_code)
+        self.poe = PointOfEntryMock(self.project, content=poe_content)
+
     def test_properly_gathers_all_input_and_output_values_of_a_function_call(self):
-        project = TestableProject()
-        project.path.putfile("module.py", "def function(x):\n  return x + 1\n")
-        poe = PointOfEntryMock(project, content="from module import function\nfunction(42)\n")
+        self._init_project("def function(x):\n  return x + 1\n",
+                           "from module import function\nfunction(42)\n")
 
-        inspect_point_of_entry(poe)
+        inspect_point_of_entry(self.poe)
 
-        assert_length(project["module"].functions, 1)
-        assert_length(project["module"].functions[0].calls, 1)
-        assert_call({'x': 42}, 43, project["module"].functions[0].calls[0])
+        assert_length(self.project["module"].functions, 1)
+        assert_length(self.project["module"].functions[0].calls, 1)
+        assert_call({'x': 42}, 43, self.project["module"].functions[0].calls[0])
 
     def test_properly_gathers_all_input_and_output_values_of_a_method_call(self):
+        self._init_project("class SomeClass:\n  def some_method(self, x): return x + 1\n",
+                           "from module import SomeClass\nSomeClass().some_method(42)\n")
         method = Method("some_method")
         klass = Class("SomeClass", methods=[method])
-        project = TestableProject()
-        project["module"].objects = [klass]
-        project.path.putfile("module.py", "class SomeClass:\n  def some_method(self, x): return x + 1\n")
-        poe = PointOfEntryMock(project, content="from module import SomeClass\nSomeClass().some_method(42)\n")
+        self.project["module"].objects = [klass]
 
-        inspect_point_of_entry(poe)
+        inspect_point_of_entry(self.poe)
 
         assert_length(klass.user_objects, 1)
         user_object = klass.user_objects[0]
@@ -792,10 +795,8 @@ class TestInspectPointOfEntry:
         assert_call({'x': 42}, 43, user_object.calls[0])
 
     def test_properly_wipes_out_imports_from_sys_modules(self):
-        project = ProjectWithModules(["whatever.py"], ProjectInDirectory)
-        project.path.putfile("whatever.py", "")
-        poe = PointOfEntryMock(project, content="import whatever")
+        self._init_project(poe_content="import module")
 
-        inspect_point_of_entry(poe)
+        inspect_point_of_entry(self.poe)
 
-        assert 'whatever' not in sys.modules
+        assert 'module' not in sys.modules
