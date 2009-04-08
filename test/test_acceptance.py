@@ -4,7 +4,7 @@ from helper import assert_equal_strings, assert_length, read_data
 
 from pythoscope.inspector import inspect_project
 from pythoscope.generator import add_tests_to_project
-from pythoscope.util import read_file_contents, write_string_to_file
+from pythoscope.util import read_file_contents, write_content_to_file
 
 from helper import get_test_module_contents, CapturedLogger, \
     ProjectInDirectory, ProjectWithPointsOfEntryFiles
@@ -64,8 +64,8 @@ class TestObjectsIdentityPreservation(CapturedLogger):
         expected_result = read_data("objects_identity_output.py")
         project = ProjectWithPointsOfEntryFiles(["poe.py"])
         module_path = project.path.putfile("module.py", read_data("objects_identity_module.py"))
-        write_string_to_file(read_data("objects_identity_poe.py"),
-                             project.path_for_point_of_entry("poe.py"))
+        write_content_to_file(read_data("objects_identity_poe.py"),
+                              project.path_for_point_of_entry("poe.py"))
 
         inspect_project(project)
         add_tests_to_project(project, [module_path], 'unittest')

@@ -11,7 +11,7 @@ from pythoscope.astvisitor import EmptyCode, Newline, create_import, \
 from pythoscope.serializer import ImmutableObject, MapObject, UnknownObject, \
     SequenceObject, SerializedObject, is_immutable, is_sequence, is_mapping
 from pythoscope.util import all_of_type, set, module_path_to_name, \
-     write_string_to_file, ensure_directory, DirectoryException, \
+     write_content_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, is_generator_code, \
      extract_subpath, directories_under, findfirst, contains_active_generator, \
      map_values, class_name, module_name
@@ -66,7 +66,7 @@ class Project(object):
         """
         project_path = os.path.realpath(project_path)
         try:
-            fd = open(get_pickle_path(project_path))
+            fd = open(get_pickle_path(project_path), 'rb')
             project = cPickle.load(fd)
             fd.close()
             # Update project's path, as the directory could've been moved.
@@ -111,7 +111,7 @@ class Project(object):
         for module in self.get_modules():
             module.save()
 
-        write_string_to_file(pickled_project, self._get_pickle_path())
+        write_content_to_file(pickled_project, self._get_pickle_path(), binary=True)
 
     def find_module_by_full_path(self, path):
         subpath = self._extract_subpath(path)
@@ -689,7 +689,7 @@ class Localizable(object):
         Creates the containing directories if needed.
         """
         ensure_directory(os.path.dirname(self.get_path()))
-        write_string_to_file(new_content, self.get_path())
+        write_content_to_file(new_content, self.get_path())
         self.created = time.time()
 
     def exists(self):

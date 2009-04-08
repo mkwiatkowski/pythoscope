@@ -137,14 +137,19 @@ def pluralize(word, count):
     else:
         return "%d %ss" % (count, word)
 
-def read_file_contents(filename):
-    fd = file(filename)
+def file_mode(base, binary):
+    if binary:
+        return base + 'b'
+    return base
+
+def read_file_contents(filename, binary=False):
+    fd = file(filename, file_mode('r', binary))
     contents = fd.read()
     fd.close()
     return contents
 
-def write_string_to_file(string, filename):
-    fd = file(filename, 'w')
+def write_content_to_file(string, filename, binary=False):
+    fd = file(filename, file_mode('w', binary))
     fd.write(string)
     fd.close()
 
