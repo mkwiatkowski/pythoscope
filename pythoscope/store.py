@@ -8,17 +8,111 @@ import types
 from pythoscope.astvisitor import EmptyCode, Newline, create_import, \
     find_last_leaf, get_starting_whitespace, is_node_of_type, regenerate, \
     remove_trailing_whitespace
+from pythoscope.logger import log
 from pythoscope.serializer import ImmutableObject, MapObject, UnknownObject, \
     SequenceObject, SerializedObject, is_immutable, is_sequence, is_mapping
 from pythoscope.util import all_of_type, set, module_path_to_name, \
      write_content_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, is_generator_code, \
      extract_subpath, directories_under, findfirst, contains_active_generator, \
-     map_values, class_name, module_name
+     map_values, class_name, module_name, string2filename
 
 
 CREATIONAL_METHODS = ['__init__', '__new__']
 
+########################################################################
+## CodeTreesManager classes.
+##
+class CodeTreeNotFound(Exception):
+    def __init__(self, module_subpath):
+        Exception.__init__(self, "Couldn't find code tree for module %r." % module_subpath)
+        self.module_subpath = module_subpath
+
+class CodeTreesManager(object):
+    def __init__(self, code_trees_path):
+        raise NotImplementedError
+
+    # :: (CodeTree, str) -> None
+    def remember_code_tree(self, code_tree, module_subpath):
+        raise NotImplementedError
+
+    # :: str -> CodeTree
+    def recall_code_tree(self, module_subpath):
+        """Return code tree corresponding to a module located under given subpath.
+
+        May raise CodeTreeNotFound exception.
+        """
+        raise NotImplementedError
+
+    # :: str -> None
+    def forget_code_tree(self, module_subpath):
+        """Get rid of the CodeTree for a module located under given subpath.
+        Do nothing if the module doesn't exist.
+        """
+        raise NotImplementedError
+
+    def clear_cache(self):
+        pass
+
+class FilesystemCodeTreesManager(CodeTreesManager):
+    """Manager of CodeTree instances that keeps at most one CodeTree instance
+    in a memory, storing the rest in files.
+    """
+    def __init__(self, code_trees_path):
+        self.code_trees_path = code_trees_path
+        self._cached_code_tree = None
+
+    def remember_code_tree(self, code_tree, module_subpath):
+        log.debug("Saving code tree for module %r to a file and caching..." % \
+                      module_subpath)
+        code_tree.save(self._code_tree_path(module_subpath))
+        self._cache(code_tree, module_subpath)
+
+    def recall_code_tree(self, module_subpath):
+        if self._is_cached(module_subpath):
+            return self._cached_code_tree[1]
+        try:
+            log.debug("Loading code tree for module %r from a file and caching..." % \
+                          module_subpath)
+            code_tree = CodeTree.load(self._code_tree_path(module_subpath))
+            self._cache(code_tree, module_subpath)
+            return code_tree
+        except IOError:
+            raise CodeTreeNotFound(module_subpath)
+
+    def forget_code_tree(self, module_subpath):
+        try:
+            os.remove(self._code_tree_path(module_subpath))
+        except OSError:
+            pass
+        self._remove_from_cache(module_subpath)
+
+    def clear_cache(self):
+        if self._cached_code_tree:
+            old_module_subpath, old_code_tree = self._cached_code_tree
+            log.debug("Code tree for module %r gets out of cache, "\
+                          "saving to a file..." %  old_module_subpath)
+            old_code_tree.save(self._code_tree_path(old_module_subpath))
+        self._cached_code_tree = None
+
+    def _cache(self, code_tree, module_subpath):
+        self.clear_cache()
+        self._cached_code_tree = (module_subpath, code_tree)
+
+    def _is_cached(self, module_subpath):
+        return self._cached_code_tree and self._cached_code_tree[0] == module_subpath
+
+    def _remove_from_cache(self, module_subpath):
+        if self._is_cached(module_subpath):
+            self._cached_code_tree = None
+
+    def _code_tree_path(self, module_subpath):
+        code_tree_filename = string2filename(module_subpath) + '.pickle'
+        return os.path.join(self.code_trees_path, code_tree_filename)
+
+########################################################################
+## Project class and helpers.
+##
 class ModuleNeedsAnalysis(Exception):
     def __init__(self, path, out_of_sync=False):
         Exception.__init__(self, "Destination test module %r needs analysis." % path)
@@ -47,10 +141,19 @@ def get_pickle_path(project_path):
 def get_points_of_entry_path(project_path):
     return os.path.join(project_path, POINTS_OF_ENTRY_SUBPATH)
 
+def get_code_trees_path(project_path):
+    return os.path.join(get_pythoscope_path(project_path), "code-trees")
+
 def get_test_objects(objects):
     def is_test_object(object):
         return isinstance(object, TestCase)
     return filter(is_test_object, objects)
+
+def load_pickle_from(path):
+    fd = open(path, 'rb')
+    obj = cPickle.load(fd)
+    fd.close()
+    return obj
 
 class Project(object):
     """Object representing the whole project under Pythoscope wings.
@@ -66,9 +169,7 @@ class Project(object):
         """
         project_path = os.path.realpath(project_path)
         try:
-            fd = open(get_pickle_path(project_path), 'rb')
-            project = cPickle.load(fd)
-            fd.close()
+            project = load_pickle_from(get_pickle_path(project_path))
             # Update project's path, as the directory could've been moved.
             project.path = project_path
         except IOError:
@@ -76,11 +177,20 @@ class Project(object):
         return project
     from_directory = classmethod(from_directory)
 
-    def __init__(self, path):
+    def __init__(self, path, code_trees_manager_class=FilesystemCodeTreesManager):
+        """Initialize a Project instance using the given path as the project's
+        top directory.
+
+        During normal operation code_trees_manager_class is the class that
+        the Project delegates to all CodeTree management tasks, but during
+        testing this can be replaced with something else, possibly a class
+        that doesn't touch the file system.
+        """
         self.path = path
         self.new_tests_directory = "tests"
         self.points_of_entry = {}
         self._modules = {}
+        self.code_trees_manager = code_trees_manager_class(get_code_trees_path(path))
 
         self._find_new_tests_directory()
 
@@ -102,15 +212,20 @@ class Project(object):
                 self.new_tests_directory = path
 
     def save(self):
-        # Try pickling the project first, because if this fails, we shouldn't
-        # save any changes at all.
-        pickled_project = cPickle.dumps(self, cPickle.HIGHEST_PROTOCOL)
-
         # To avoid inconsistencies try to save all project's modules first. If
         # any of those saves fail, the pickle file won't get updated.
         for module in self.get_modules():
+            log.debug("Calling save() on module %r" % module.subpath)
             module.save()
 
+        # We don't want to have a single AST in a Project instance.
+        self.code_trees_manager.clear_cache()
+
+        # Pickling the project after saving all of its modules, so any changes
+        # made by Module instances during save() will be preserved as well.
+        pickled_project = cPickle.dumps(self, cPickle.HIGHEST_PROTOCOL)
+
+        log.debug("Writing project pickle to disk...")
         write_content_to_file(pickled_project, self._get_pickle_path(), binary=True)
 
     def find_module_by_full_path(self, path):
@@ -140,6 +255,8 @@ class Project(object):
 
         if module.subpath in self._modules.keys():
             self._replace_references_to_module(module)
+            # Don't need to forget the old CallTree, as the creation of
+            # the Module instance above overwrites it anyway.
 
         self._modules[module.subpath] = module
 
@@ -158,7 +275,7 @@ class Project(object):
 
     def remove_module(self, subpath):
         """Remove a module from this Project along with all references to it
-        from other modules.
+        from other modules and its CodeTree.
         """
         module = self[subpath]
         for test_case in self.iter_test_cases():
@@ -167,6 +284,15 @@ class Project(object):
             except ValueError:
                 pass
         del self._modules[subpath]
+        self.code_trees_manager.forget_code_tree(module.subpath)
+
+    # :: (CodeTree, Module) -> None
+    def remember_code_tree(self, code_tree, module):
+        self.code_trees_manager.remember_code_tree(code_tree, module.subpath)
+
+    # :: Module -> CodeTree
+    def recall_code_tree(self, module):
+        return self.code_trees_manager.recall_code_tree(module.subpath)
 
     def _replace_references_to_module(self, module):
         """Remove a module with the same subpath as given module from this
@@ -319,18 +445,27 @@ class FunctionCall(Call):
 class MethodCall(Call):
     pass
 
-class Definition(object):
+class ObjectInModule(object):
+    """Named object that can be localized in a module via the AST.
+
+    Note that the code attribute will be removed from the object once it
+    becomes a part of a Module.
+    """
+    def __init__(self, name, code):
+        self.name = name
+        if code is None:
+            code = EmptyCode()
+        self.code = code
+
+class Definition(ObjectInModule):
     """Definition of a callable object (function or a method basically),
     describing its static properties.
     """
     def __init__(self, name, args=None, code=None, is_generator=False):
+        ObjectInModule.__init__(self, name, code)
         if args is None:
             args = []
-        if code is None:
-            code = EmptyCode()
-        self.name = name
         self.args = args
-        self.code = code
         self.is_generator = is_generator
 
 class Callable(object):
@@ -367,6 +502,10 @@ class Function(Definition, Callable):
 # need a bound object. We represent this object by UserObject class, which
 # gathers all MethodCalls for given instance.
 class Method(Definition):
+    def __init__(self, name, args=None, code=None, is_generator=False, klass=None):
+        Definition.__init__(self, name, args=args, code=code, is_generator=is_generator)
+        self.klass = klass
+
     def get_call_args(self):
         """Return names of arguments explicitly passed during call to this
         method.
@@ -463,13 +602,27 @@ class UserObject(Callable, SerializedObject):
     def __repr__(self):
         return "UserObject(klass=%r, calls=%r)" % (self.klass.name, self.calls)
 
-class Class(object):
-    def __init__(self, name, methods=[], bases=[], module=None):
-        self.name = name
-        self.methods = methods
+class Class(ObjectInModule):
+    def __init__(self, name, methods=[], bases=[], code=None, module=None):
+        ObjectInModule.__init__(self, name, code)
+        self.methods = []
         self.bases = bases
         self.module = module
         self.user_objects = []
+
+        self.add_methods(methods)
+
+    def _set_class_for_method(self, method):
+        if method.klass is not None:
+            raise TypeError("Trying to add %r to class %r, while the "
+                            "method is already inside %r." % \
+                                (method, self.name, method.klass.name))
+        method.klass = self
+
+    def add_methods(self, methods):
+        for method in methods:
+            self._set_class_for_method(method)
+            self.methods.append(method)
 
     def is_testable(self):
         ignored_superclasses = ['Exception', 'unittest.TestCase']
@@ -515,11 +668,7 @@ class TestCase(object):
     """A single test object, possibly contained within a test suite (denoted
     as parent attribute).
     """
-    def __init__(self, name, code=None, parent=None):
-        if code is None:
-            code = EmptyCode()
-        self.name = name
-        self.code = code
+    def __init__(self, parent=None):
         self.parent = parent
 
     def replace_itself_with(self, new_test_case):
@@ -532,15 +681,15 @@ class TestSuite(TestCase):
     """
     allowed_test_case_classes = []
 
-    def __init__(self, name, code=None, parent=None, test_cases=[], imports=None):
-        TestCase.__init__(self, name, code, parent)
+    def __init__(self, parent=None, imports=None):
+        TestCase.__init__(self, parent)
 
         if imports is None:
             imports = []
+        self.imports = imports
 
         self.changed = False
         self.test_cases = []
-        self.imports = imports
 
     def add_test_cases(self, test_cases, append_code=True):
         for test_case in test_cases:
@@ -556,20 +705,35 @@ class TestSuite(TestCase):
             self._append_test_case_code(test_case.code)
             self.mark_as_changed()
 
+    def _remove_test_case(self, test_case):
+        """Try to remove given test case from this test suite.
+
+        Raise ValueError if the given test case is not a part of thise test
+        suite.
+
+        Note: this method doesn't modify the AST of the test suite.
+        """
+        try:
+            self.test_cases.remove(test_case)
+        except ValueError:
+            raise ValueError("Given test case is not a part of this test suite.")
+
     def replace_test_case(self, old_test_case, new_test_case):
-        self._check_test_case_type(new_test_case)
-        if old_test_case not in self.test_cases:
-            raise ValueError("Given test case is not part of this test suite.")
+        """Replace one test case object with another.
 
-        self.test_cases.remove(old_test_case)
+        As a side effect, AST of the new test case will replace part of the AST
+        in the old test case parent.
 
+        `Code` attribute of the new test case object will be removed.
+        """
         # The easiest way to get the new code inside the AST is to call
         # replace() on the old test case code.
         # It is destructive, but since we're discarding the old test case
         # anyway, it doesn't matter.
-        old_test_case.code.replace(new_test_case.code)
+        code_of(old_test_case).replace(new_test_case.code)
 
-        self.add_test_case(new_test_case, False)
+        self._remove_test_case(old_test_case)
+        self.add_test_case(new_test_case, append_code=False)
         self.mark_as_changed()
 
     def mark_as_changed(self):
@@ -595,10 +759,12 @@ class TestSuite(TestCase):
         if not isinstance(test_case, tuple(self.allowed_test_case_classes)):
             raise TypeError("Given test case isn't allowed to be added to this test suite.")
 
-class TestMethod(TestCase):
-    pass
+class TestMethod(ObjectInModule, TestCase):
+    def __init__(self, name, code=None, parent=None):
+        ObjectInModule.__init__(self, name, code)
+        TestCase.__init__(self, parent)
 
-class TestClass(TestSuite):
+class TestClass(ObjectInModule, TestSuite):
     """Testing class, either generated by Pythoscope or hand-writen by the user.
 
     Each test class contains a set of requirements its surrounding must meet,
@@ -611,7 +777,8 @@ class TestClass(TestSuite):
 
     def __init__(self, name, code=None, parent=None, test_cases=[],
                  imports=None, main_snippet=None, associated_modules=None):
-        TestSuite.__init__(self, name, code, parent, test_cases, imports)
+        ObjectInModule.__init__(self, name, code)
+        TestSuite.__init__(self, parent, imports)
 
         if associated_modules is None:
             associated_modules = []
@@ -620,16 +787,31 @@ class TestClass(TestSuite):
         self.associated_modules = associated_modules
 
         # Code of test cases passed to the constructor is already contained
-        # within the class code.
-        self.add_test_cases(test_cases, False)
+        # within the class code, so we don't need to append it.
+        self.add_test_cases(test_cases, append_code=False)
+
+    def _get_methods(self):
+        return self.test_cases
+    methods = property(_get_methods)
+
+    def add_test_case(self, test_case, append_code=True):
+        TestSuite.add_test_case(self, test_case, append_code)
+
+        if self.parent is not None:
+            CodeTree.of(self).add_object_with_code(test_case)
+        else:
+            # This TestClass is not attached to a Module yet. We will leave
+            # the just-added test case as it is and let Module instance handle
+            # the rest when the time comes (see `Module#add_object`).
+            pass
 
     def _append_test_case_code(self, code):
         """Append to the right node, so that indentation level of the
         new method is good.
         """
-        if self.code.children and is_node_of_type(self.code.children[-1], 'suite'):
+        if code_of(self).children and is_node_of_type(code_of(self).children[-1], 'suite'):
             remove_trailing_whitespace(code)
-            suite = self.code.children[-1]
+            suite = code_of(self).children[-1]
             # Prefix the definition with the right amount of whitespace.
             node = find_last_leaf(suite.children[-2])
             ident = get_starting_whitespace(suite)
@@ -641,7 +823,7 @@ class TestClass(TestSuite):
             # Insert before the class contents dedent.
             suite.insert_child(-1, code)
         else:
-            self.code.append_child(code)
+            code_of(self).append_child(code)
         self.mark_as_changed()
 
     def find_method_by_name(self, name):
@@ -702,30 +884,34 @@ class Module(Localizable, TestSuite):
                  main_snippet=None, errors=[]):
         if objects is None:
             objects = []
-        test_cases = get_test_objects(objects)
 
         Localizable.__init__(self, project, subpath)
-        TestSuite.__init__(self, self.locator, code, None, test_cases, imports)
+        TestSuite.__init__(self, imports=imports)
+
+        if code is None:
+            code = EmptyCode()
+
+        # Persistence of CodeTree instances is managed by the Project instance.
+        code_tree = CodeTree(code)
+        project.remember_code_tree(code_tree, self)
 
         self.objects = []
         self.main_snippet = main_snippet
         self.errors = errors
 
-        for obj in objects:
-            self.add_object(obj)
+        self.add_objects(objects)
 
-        # Code of test cases passed to the constructor is already contained
-        # within the module code.
-        self.add_test_cases(test_cases, False)
+    def _get_code(self):
+        return code_of(self)
+    code = property(_get_code)
 
-    def add_object(self, obj):
+    def _set_module_for_object(self, obj):
         if isinstance(obj, (Class, Function)):
             if obj.module is not None:
                 raise TypeError("Trying to add %r to module %r, while the "
                                 "object is already inside %r." % \
                                     (obj, self.locator, obj.module.locator))
             obj.module = self
-        self.objects.append(obj)
 
     def _get_testable_objects(self):
         return [o for o in self.objects if o.is_testable()]
@@ -743,18 +929,54 @@ class Module(Localizable, TestSuite):
         return all_of_type(self.objects, TestClass)
     test_classes = property(_get_test_classes)
 
+    def add_objects(self, objects):
+        """Add objects to this module.
+
+        Note: AST of those objects will *not* be appended to the module's AST.
+        """
+        for obj in objects:
+            # Adding a test case requires some extra effort than adding
+            # a regular object, but they all land in `self.objects` list anyway.
+            if isinstance(obj, TestCase):
+                # By using the `add_objects()` interface user states that
+                # the code of objects passed is already contained within
+                # the module code, so we don't need to append it.
+                self.add_test_case(obj, append_code=False)
+            else:
+                self.add_object(obj)
+
+    def add_object(self, obj):
+        self._set_module_for_object(obj)
+        self.objects.append(obj)
+        CodeTree.of(self).add_object_with_code(obj)
+
+        # When attaching a class to a module we not only have to store its own
+        # code reference, but also code references of its methods.
+        if isinstance(obj, (Class, TestClass)):
+            for method in obj.methods:
+                CodeTree.of(self).add_object_with_code(method)
+
+    def remove_object(self, obj):
+        self.objects.remove(obj)
+        CodeTree.of(self).remove_object(obj)
+
     def add_test_case(self, test_case, append_code=True):
         TestSuite.add_test_case(self, test_case, append_code)
+        self.add_object(test_case)
 
         self.ensure_imports(test_case.imports)
         self._ensure_main_snippet(test_case.main_snippet)
+
+    def _remove_test_case(self, test_case):
+        TestSuite._remove_test_case(self, test_case)
+        self.remove_object(test_case)
 
     # def replace_test_case:
     #   Using the default definition. We don't remove imports or main_snippet,
     #   because we may unintentionally break something.
 
     def get_content(self):
-        return regenerate(self.code)
+        return regenerate(code_of(self))
 
     def get_test_cases_for_module(self, module):
         """Return all test cases that are associated with given module.
@@ -770,7 +992,7 @@ class Module(Localizable, TestSuite):
 
         if not self.main_snippet:
             self.main_snippet = main_snippet
-            self.code.append_child(main_snippet)
+            code_of(self).append_child(main_snippet)
             self.mark_as_changed()
         elif force:
             self.main_snippet.replace(main_snippet)
@@ -780,14 +1002,14 @@ class Module(Localizable, TestSuite):
     def _ensure_import(self, import_desc):
         # Add an extra newline separating imports from the code.
         if not self.imports:
-            self.code.insert_child(0, Newline())
+            code_of(self).insert_child(0, Newline())
             self.mark_as_changed()
         if not self._contains_import(import_desc):
             self._add_import(import_desc)
 
     def _add_import(self, import_desc):
         self.imports.append(import_desc)
-        self.code.insert_child(0, create_import(import_desc))
+        code_of(self).insert_child(0, create_import(import_desc))
         self.mark_as_changed()
 
     def _append_test_case_code(self, code):
@@ -796,13 +1018,13 @@ class Module(Localizable, TestSuite):
         if self.main_snippet:
             self._insert_before_main_snippet(code)
         else:
-            self.code.append_child(code)
+            code_of(self).append_child(code)
         self.mark_as_changed()
 
     def _insert_before_main_snippet(self, code):
-        for i, child in enumerate(self.code.children):
+        for i, child in enumerate(code_of(self).children):
             if child == self.main_snippet:
-                self.code.insert_child(i, code)
+                code_of(self).insert_child(i, code)
                 break
 
     def save(self):
@@ -1037,3 +1259,103 @@ class PointOfEntry(Localizable):
     def clear_previous_run(self):
         self.execution.destroy()
         self.execution = Execution(self.project)
+
+########################################################################
+## CodeTree and helper functions.
+##
+class CodeTree(object):
+    """Container of a module's AST (from lib2to3.pytree).
+
+    Each Module object has one corresponding CodeTree instance, which holds
+    its whole AST in the `code` attribute. Moreover, references to subtrees
+    inside this AST correspond to definitions inside a Module, and are stored
+    inside a `code_references` attribute.
+
+    Modules are identified by their subpath, which (within the scope of
+    a project) is known to be unique. CodeTree instance doesn't need to know
+    this subpath. It is used only by the Project class, for identification
+    of modules and ultimately - storage and retrieval of CodeTree instances
+    (see Project#remember_code_tree and Project#recall_code_tree methods).
+
+    CodeTree instances are not saved to disk unless the save() method is
+    called on them. They also will *not* be accesible  via `CodeTree.of()`
+    interface unless you remember them in a Project instance first (see
+    Project#remember_code_tree).
+    """
+    def of(cls, obj):
+        """Return a CodeTree instance that handles code of the given object.
+        """
+        module = module_of(obj)
+        return module.project.recall_code_tree(module)
+    of = classmethod(of)
+
+    def __init__(self, code):
+        self.code = code
+        self.code_references = {}
+
+    def add_object(self, obj, code):
+        self.code_references[module_level_id(obj)] = code
+
+    def add_object_with_code(self, obj):
+        """Take an object holding an AST in its `code` attribute and store it
+        as a part of this CodeTree.
+
+        As a side effect, `code` attribute is removed. The object will no
+        longer hold any references to the AST, so they can be pickled
+        separately.
+        """
+        self.add_object(obj, obj.code)
+        del obj.code
+
+    def remove_object(self, obj):
+        del self.code_references[module_level_id(obj)]
+
+    def get_code_of(self, obj):
+        if isinstance(obj, Module):
+            return self.code
+        return self.code_references[module_level_id(obj)]
+
+    def save(self, path):
+        """Pickle and save this CodeTree under given path.
+        """
+        pickled_code_tree = cPickle.dumps(self, cPickle.HIGHEST_PROTOCOL)
+        write_content_to_file(pickled_code_tree, path, binary=True)
+
+    def load(cls, path):
+        return load_pickle_from(path)
+    load = classmethod(load)
+
+def module_of(obj):
+    """Return the Module given object is contained within.
+    """
+    if isinstance(obj, Module):
+        return obj
+    elif isinstance(obj, (Function, Class)):
+        return obj.module
+    elif isinstance(obj, Method):
+        return module_of(obj.klass)
+    elif isinstance(obj, TestCase):
+        return module_of(obj.parent)
+    else:
+        raise TypeError("Don't know how to find the module of %r" % obj)
+
+# :: ObjectInModule -> hashable
+def module_level_id(obj):
+    """Take an object and return something that unambiguously identifies
+    it in the scope of its module.
+    """
+    if isinstance(obj, Class):
+        return ('Class', obj.name)
+    elif isinstance(obj, Function):
+        return ('Function', obj.name)
+    elif isinstance(obj, Method):
+        return ('Method', (obj.klass.name, obj.name))
+    elif isinstance(obj, TestClass):
+        return ('TestClass', obj.name)
+    elif isinstance(obj, TestMethod):
+        return ('TestMethod', (obj.parent.name, obj.name))
+    else:
+        raise TypeError("Don't know how to generate a module-level id for %r" % obj)
+
+def code_of(obj):
+    return CodeTree.of(obj).get_code_of(obj)

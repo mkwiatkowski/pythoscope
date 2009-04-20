@@ -119,6 +119,7 @@ class ClassVisitor(ASTVisitor):
 def inspect_module(project, path):
     return inspect_code(project, path, read_file_contents(path))
 
+# :: (Project, string, string) -> Module
 def inspect_code(project, path, code):
     try:
         tree = parse(code)

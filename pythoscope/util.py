@@ -137,6 +137,25 @@ def pluralize(word, count):
     else:
         return "%d %ss" % (count, word)
 
+# :: string -> string
+def string2id(string):
+    """Remove from string all characters that cannot be used in an identifier.
+    """
+    return re.sub(r'[^a-zA-Z0-9_]', '', re.sub(r'\s+', '_', string.strip()))
+
+# :: string -> string
+def string2filename(string):
+    """Remove from string all characters that cannot be used in a file name.
+
+    >>> string2filename('file.txt')
+    'file.txt'
+    >>> string2filename(os.path.join('package', 'module.py'))
+    'package_module.py'
+    >>> string2filename(os.path.join('directory with spaces', 'file.with.dots'))
+    'directory with spaces_file.with.dots'
+    """
+    return re.sub(re.escape(os.path.sep), '_', string)
+
 def file_mode(base, binary):
     if binary:
         return base + 'b'

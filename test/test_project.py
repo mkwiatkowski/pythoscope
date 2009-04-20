@@ -4,10 +4,10 @@ from cPickle import PicklingError
 from fixture import TempIO
 from nose.tools import assert_equal, assert_raises
 
-from pythoscope.store import Project, Class, Function, TestClass, \
+from pythoscope.store import Project, Class, Function, Method, TestClass, \
      TestMethod, ModuleNotFound
 from pythoscope.inspector import remove_deleted_modules
-from pythoscope.util import read_file_contents
+from pythoscope.util import get_names, read_file_contents
 
 from helper import assert_equal_strings, assert_length, assert_not_raises, \
     EmptyProject, P, ProjectInDirectory, ProjectWithModules, \
@@ -21,7 +21,8 @@ TestMethod.__test__ = False
 class TestProject:
     def test_can_be_saved_and_restored_from_file(self):
         project = ProjectWithRealModules(["good_module.py", "bad_module.py"])
-        project['good_module'].objects = [Class("AClass", ["amethod"]), Function("afunction")]
+        project['good_module'].add_objects([Class("AClass", [Method("amethod")]),
+                                            Function("afunction")])
         project['bad_module'].errors = ["Syntax error"]
         project.save()
 
@@ -32,9 +33,9 @@ class TestProject:
 
         assert_equal(2, len(project.get_modules()))
         assert_equal(2, len(project['good_module'].objects))
-        assert_equal("AClass", project['good_module'].classes[0].name)
-        assert_equal(["amethod"], project['good_module'].classes[0].methods)
-        assert_equal("afunction", project['good_module'].functions[0].name)
+        assert_equal(["AClass"], get_names(project['good_module'].classes))
+        assert_equal(["amethod"], get_names(project['good_module'].classes[0].methods))
+        assert_equal(["afunction"], get_names(project['good_module'].functions))
         assert_equal(["Syntax error"], project['bad_module'].errors)
 
     def test_can_be_queried_for_modules_by_their_path(self):

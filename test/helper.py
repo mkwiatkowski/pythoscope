@@ -10,8 +10,8 @@ from nose.tools import assert_equal
 
 from pythoscope.generator import add_tests_to_project
 from pythoscope.logger import DEBUG, INFO, get_output, log, set_output
-from pythoscope.store import Execution, Function, ModuleNotFound, \
-    PointOfEntry, Project
+from pythoscope.store import CodeTreesManager, CodeTreeNotFound, Execution, \
+    Function, ModuleNotFound, PointOfEntry, Project
 from pythoscope.util import quoted_block, read_file_contents, set
 
 
@@ -101,8 +101,27 @@ class PointOfEntryMock(PointOfEntry):
     def get_content(self):
         return self.content
 
+# Use memory to store code trees during testing, not the file system.
+class MemoryCodeTreesManager(CodeTreesManager):
+    def __init__(self, code_trees_path):
+        self.code_trees_path = code_trees_path
+        self._code_trees = {}
+
+    def remember_code_tree(self, code_tree, module_subpath):
+        self._code_trees[module_subpath] = code_tree
+
+    def recall_code_tree(self, module_subpath):
+        try:
+            return self._code_trees[module_subpath]
+        except KeyError:
+            raise CodeTreeNotFound(module_subpath)
+
+    def forget_code_tree(self, module_subpath):
+        self._code_trees.pop(module_subpath, None)
+
 def EmptyProject():
-    project = Project(path=os.path.realpath("."))
+    project = Project(path=os.path.realpath("."),
+                      code_trees_manager_class=MemoryCodeTreesManager)
     # Preserve the default value.
     project.new_tests_directory = "tests"
     return project
@@ -110,6 +129,7 @@ def EmptyProject():
 def ProjectInDirectory():
     project_path = TempIO()
     project_path.mkdir(".pythoscope")
+    project_path.mkdir(P(".pythoscope/code-trees"))
     project = Project(project_path)
     # Save the TempIO reference, so we can delay its destruction later.
     project._tmpdir = project_path
@@ -136,8 +156,9 @@ def ProjectWithPointsOfEntryFiles(paths):
 
 def TestableProject(more_modules=[], project_type=ProjectInDirectory):
     project = ProjectWithModules(["module.py"] + more_modules, project_type)
-    project["module"].objects = [Function("function")]
+    project["module"].add_object(Function("function"))
     return project
+TestableProject.__test__ = False
 
 def EmptyProjectExecution():
     return Execution(EmptyProject())

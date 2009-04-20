@@ -227,60 +227,60 @@ class TestStaticInspector:
         return inspect_code(EmptyProject(), "module.py", code)
 
     def test_inspects_top_level_classes(self):
-        info = self._inspect_code(new_style_class)
+        module = self._inspect_code(new_style_class)
 
-        assert_single_class(info, "AClass")
+        assert_single_class(module, "AClass")
 
     def test_inspects_top_level_functions(self):
-        info = self._inspect_code(stand_alone_function)
+        module = self._inspect_code(stand_alone_function)
 
-        assert_single_function(info, "a_function")
+        assert_single_function(module, "a_function")
 
     def test_doesnt_count_methods_as_functions(self):
-        info = self._inspect_code(new_style_class)
+        module = self._inspect_code(new_style_class)
 
-        assert_length(info.functions, 0)
+        assert_length(module.functions, 0)
 
     def test_inspects_old_style_classes(self):
-        info = self._inspect_code(old_style_class)
+        module = self._inspect_code(old_style_class)
 
-        assert_single_class(info, "OldStyleClass")
+        assert_single_class(module, "OldStyleClass")
 
     def test_inspects_classes_without_methods(self):
-        info = self._inspect_code(class_without_methods)
+        module = self._inspect_code(class_without_methods)
 
-        assert_single_class(info, "ClassWithoutMethods")
+        assert_single_class(module, "ClassWithoutMethods")
 
     def test_ignores_inner_classes_and_functions(self):
-        info = self._inspect_code(inner_classes_and_function)
+        module = self._inspect_code(inner_classes_and_function)
 
-        assert_single_class(info, "OuterClass")
-        assert_single_function(info, "outer_function")
+        assert_single_class(module, "OuterClass")
+        assert_single_function(module, "outer_function")
 
     def test_inspects_methods_of_a_class(self):
-        info = self._inspect_code(class_with_methods)
+        module = self._inspect_code(class_with_methods)
 
         assert_equal(["first_method", "second_method", "third_method"],
-                     get_names(info.classes[0].methods))
+                     get_names(module.classes[0].methods))
 
     def test_collector_handles_syntax_errors(self):
-        info = self._inspect_code(syntax_error)
+        module = self._inspect_code(syntax_error)
 
-        assert_length(info.errors, 1)
+        assert_length(module.errors, 1)
 
     def test_collector_handles_indentation_errors(self):
-        info = self._inspect_code(indentation_error)
+        module = self._inspect_code(indentation_error)
 
-        assert_length(info.errors, 1)
+        assert_length(module.errors, 1)
 
     def test_inspects_functions_and_classes_inside_other_blocks(self):
         suite = [definitions_inside_try_except, definitions_inside_if,
                  definitions_inside_while, definitions_inside_for]
 
         for case in suite:
-            info = self._inspect_code(case)
-            assert_single_class(info, "InsideClass")
-            assert_single_function(info, "inside_function")
+            module = self._inspect_code(case)
+            assert_single_class(module, "InsideClass")
+            assert_single_function(module, "inside_function")
 
     def test_inspects_functions_and_classes_inside_with(self):
         # With statement was introduced in Python 2.5, so skip this test for
@@ -288,121 +288,121 @@ class TestStaticInspector:
         if sys.version_info < (2, 5):
             raise SkipTest
 
-        info = self._inspect_code(definitions_inside_with)
-        assert_single_class(info, "InsideClass")
-        assert_single_function(info, "inside_function")
+        module = self._inspect_code(definitions_inside_with)
+        assert_single_class(module, "InsideClass")
+        assert_single_function(module, "inside_function")
 
     def test_inspects_functions_defined_using_lambda(self):
-        info = self._inspect_code(lambda_definition)
+        module = self._inspect_code(lambda_definition)
 
-        assert_single_function(info, "lambda_function")
+        assert_single_function(module, "lambda_function")
 
     def test_inspects_class_bases(self):
         suite = [class_without_parents, class_with_one_parent, class_with_two_parents]
         expected_results = [[], ["object"], ["Mother", "Father"]]
 
         for case, expected in zip(suite, expected_results):
-            info = self._inspect_code(case)
-            assert_equal(expected, info.classes[0].bases)
+            module = self._inspect_code(case)
+            assert_equal(expected, module.classes[0].bases)
 
     def test_correctly_inspects_bases_from_other_modules(self):
-        info = self._inspect_code(class_inheriting_from_some_other_module_class)
+        module = self._inspect_code(class_inheriting_from_some_other_module_class)
 
-        assert_length(info.objects, 1)
-        assert_equal(["othermodule.Class"], info.objects[0].bases)
+        assert_length(module.objects, 1)
+        assert_equal(["othermodule.Class"], module.objects[0].bases)
 
     def test_ignores_existance_of_any_inner_class_methods(self):
-        info = self._inspect_code(class_with_inner_class)
+        module = self._inspect_code(class_with_inner_class)
 
-        assert_single_class(info, "OuterClass")
+        assert_single_class(module, "OuterClass")
         assert_equal(["__init__", "outer_class_method"],
-                     get_names(info.classes[0].methods))
+                     get_names(module.classes[0].methods))
 
     def test_inspects_test_modules(self):
-        info = self._inspect_code(two_test_classes)
+        module = self._inspect_code(two_test_classes)
 
-        assert_equal(["unittest"], info.imports)
+        assert_equal(["unittest"], module.imports)
         assert_equal(["FirstTestClass", "TestMore"],
-                     get_names(info.test_classes))
+                     get_names(module.test_classes))
         assert_equal(["test_this", "test_that"],
-                     get_names(info.test_classes[0].test_cases))
+                     get_names(module.test_classes[0].test_cases))
         assert_equal(["test_more"],
-                     get_names(info.test_classes[1].test_cases))
+                     get_names(module.test_classes[1].test_cases))
 
     def test_recognizes_unrecognized_chunks_of_test_code(self):
-        info = self._inspect_code(strange_test_code)
+        module = self._inspect_code(strange_test_code)
 
-        assert_equal(strange_test_code, regenerate(info.code))
+        assert_equal(strange_test_code, module.get_content())
 
     def test_recognizes_nose_style_test_code(self):
-        info = self._inspect_code(nose_style_test_functions)
+        module = self._inspect_code(nose_style_test_functions)
 
-        assert_equal(["nose"], info.imports)
-        assert_equal(nose_style_test_functions, regenerate(info.code))
-        assert_equal(None, info.main_snippet)
+        assert_equal(["nose"], module.imports)
+        assert_equal(nose_style_test_functions, module.get_content())
+        assert_equal(None, module.main_snippet)
 
     def test_inspects_test_classes_inside_application_modules(self):
-        info = self._inspect_code(application_module_with_test_class)
+        module = self._inspect_code(application_module_with_test_class)
 
-        assert_equal_sets(["os", "unittest"], info.imports)
-        assert_equal(application_module_with_test_class, regenerate(info.code))
-        assert info.main_snippet is not None
-        assert_equal(["TestFib"], get_names(info.test_classes))
-        assert_equal(["fib"], get_names(info.functions))
+        assert_equal_sets(["os", "unittest"], module.imports)
+        assert_equal(application_module_with_test_class, module.get_content())
+        assert module.main_snippet is not None
+        assert_equal(["TestFib"], get_names(module.test_classes))
+        assert_equal(["fib"], get_names(module.functions))
 
     def test_recognizes_generator_definitions(self):
-        info = self._inspect_code(standard_generator_definition)
+        module = self._inspect_code(standard_generator_definition)
 
-        assert_single_function(info, "gen")
-        assert info.functions[0].is_generator
+        assert_single_function(module, "gen")
+        assert module.functions[0].is_generator
 
     def test_treats_functions_returning_generator_objects_as_functions(self):
-        info = self._inspect_code(function_returning_generator_object)
+        module = self._inspect_code(function_returning_generator_object)
 
-        assert_single_function(info, "fun")
-        assert not info.functions[0].is_generator
+        assert_single_function(module, "fun")
+        assert not module.functions[0].is_generator
 
     def test_recognizes_generator_methods(self):
-        info = self._inspect_code(class_with_method_generator_definition)
+        module = self._inspect_code(class_with_method_generator_definition)
 
-        method = info.classes[0].methods[0]
+        method = module.classes[0].methods[0]
         assert method.is_generator
         assert_equal("method_generator", method.name)
 
     def test_handles_functions_without_arguments(self):
-        info = self._inspect_code(stand_alone_function)
+        module = self._inspect_code(stand_alone_function)
 
-        assert_single_function(info, "a_function", args=[])
+        assert_single_function(module, "a_function", args=[])
 
     def test_handles_functions_with_one_argument(self):
-        info = self._inspect_code(function_with_one_argument)
+        module = self._inspect_code(function_with_one_argument)
 
-        assert_single_function(info, "fun", args=['arg'])
+        assert_single_function(module, "fun", args=['arg'])
 
     def test_handles_functions_with_many_arguments(self):
-        info = self._inspect_code(function_with_many_arguments)
+        module = self._inspect_code(function_with_many_arguments)
 
-        assert_single_function(info, "fun3", args=['arg1', 'arg2', 'arg3'])
+        assert_single_function(module, "fun3", args=['arg1', 'arg2', 'arg3'])
 
     def test_handles_functions_with_default_argument_values(self):
-        info = self._inspect_code(function_with_default_argument_value)
+        module = self._inspect_code(function_with_default_argument_value)
 
-        assert_single_function(info, "nofun", args=['to'])
+        assert_single_function(module, "nofun", args=['to'])
 
     def test_handles_functions_with_many_arguments_and_default_values(self):
-        info = self._inspect_code(function_with_many_arguments_and_default_values)
+        module = self._inspect_code(function_with_many_arguments_and_default_values)
 
-        assert_single_function(info, "optfun", args=['arg', 'opt1', 'opt2'])
+        assert_single_function(module, "optfun", args=['arg', 'opt1', 'opt2'])
 
     def test_handles_functions_with_positional_and_keyword_arguments(self):
-        info = self._inspect_code(function_with_positional_and_keyword_arguments)
+        module = self._inspect_code(function_with_positional_and_keyword_arguments)
 
-        assert_single_function(info, "morefun", args=['arg', '*args', '**kwds'])
+        assert_single_function(module, "morefun", args=['arg', '*args', '**kwds'])
 
     def test_handles_arguments_of_lambda_definitions(self):
-        info = self._inspect_code(lambda_definition)
+        module = self._inspect_code(lambda_definition)
 
-        assert_single_function(info, "lambda_function", args=['x'])
+        assert_single_function(module, "lambda_function", args=['x'])
 
     def test_handles_functions_with_nested_arguments(self):
         info = self._inspect_code(functions_with_nested_arguments)

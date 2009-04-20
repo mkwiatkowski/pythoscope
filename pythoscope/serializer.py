@@ -4,7 +4,7 @@ import sets
 import types
 
 from pythoscope.util import RePatternType, all, class_name, frozenset, \
-    module_name, regexp_flags_as_string, set, underscore
+    module_name, regexp_flags_as_string, set, string2id, underscore
 
 
 # :: SerializedObject | [SerializedObject] -> bool
@@ -14,12 +14,6 @@ def can_be_constructed(obj):
     elif isinstance(obj, SequenceObject):
         return all(map(can_be_constructed, obj.contained_objects))
     return not isinstance(obj, UnknownObject)
-
-# :: string -> string
-def string2id(string):
-    """Remove from string all characters that cannot be used in an identifier.
-    """
-    return re.sub(r'[^a-zA-Z0-9_]', '', re.sub(r'\s+', '_', string.strip()))
 
 # :: object -> string
 def get_human_readable_id(obj):

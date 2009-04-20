@@ -14,7 +14,7 @@ from pythoscope.generator import add_tests_to_project, constructor_as_string
 from pythoscope.serializer import ImmutableObject, UnknownObject
 from pythoscope.store import Project, Class, Function, Method, \
      ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod, \
-     MethodCall, FunctionCall, UserObject, GeneratorObject
+     MethodCall, FunctionCall, UserObject, GeneratorObject, CodeTree
 from pythoscope.util import read_file_contents, get_last_modification_time, \
     sorted
 
@@ -741,7 +741,7 @@ class TestGeneratorWithTestDirectoryAsFile:
 class TestGeneratorWithSingleModule:
     def setUp(self):
         self.project = ProjectWithModules(["module.py", "test_module.py"])
-        self.project["module"].objects = [Function("function")]
+        self.project["module"].add_object(Function("function"))
         self.module_path = os.path.join(self.project.path, "module.py")
 
     def test_adds_imports_to_existing_test_files_only_if_they_arent_present(self):
@@ -754,13 +754,15 @@ class TestGeneratorWithSingleModule:
         assert_equal_sets(['unittest', ('nose', 'SkipTest')], self.project["test_module"].imports)
 
     def test_appends_new_test_classes_to_existing_test_files(self):
+        module = self.project["test_module"]
         TEST_CONTENTS = "class TestSomething: pass\n\n"
-        self.project["test_module"].code = parse(TEST_CONTENTS)
+        code_tree = CodeTree(parse(TEST_CONTENTS))
+        self.project.remember_code_tree(code_tree, module)
 
         add_tests_to_project(self.project, [self.module_path], 'unittest')
 
-        assert_contains(self.project["test_module"].get_content(), TEST_CONTENTS)
-        assert_contains(self.project["test_module"].get_content(), "class TestFunction(unittest.TestCase):")
+        assert_contains(module.get_content(), TEST_CONTENTS)
+        assert_contains(module.get_content(), "class TestFunction(unittest.TestCase):")
 
     def test_associates_test_cases_with_application_modules(self):
         add_tests_to_project(self.project, [self.module_path], 'unittest')
@@ -781,7 +783,7 @@ class TestGeneratorWithSingleModule:
         klass, instance = ClassWithInstanceWithoutReconstruction("Something")
 
         function = FunctionWithSingleCall("nofun", {'x': instance}, "something else")
-        self.project["module"].objects = [klass, function]
+        self.project["module"].add_objects([klass, function])
 
         add_tests_to_project(self.project, [self.module_path], 'unittest')
         result = self.project["test_module"].get_content()
@@ -793,7 +795,7 @@ class TestGeneratorWithSingleModule:
         klass, instance = ClassWithInstanceWithoutReconstruction("Unspeakable")
 
         function = FunctionWithSingleCall("morefun", {}, [instance])
-        self.project["module"].objects = [klass, function]
+        self.project["module"].add_objects([klass, function])
 
         add_tests_to_project(self.project, [self.module_path], 'unittest')
         result = self.project["test_module"].get_content()
@@ -824,7 +826,7 @@ class TestGeneratorMessages(CapturedLogger):
 class TestGeneratorDebugMessages(CapturedDebugLogger):
     def test_debug_output_includes_packages_and_module_names(self):
         project = ProjectWithModules(["module.py"])
-        project["module"].objects = [Function('some_function')]
+        project["module"].add_object(Function('some_function'))
 
         add_tests_to_project(project, ["module"], 'unittest')
 

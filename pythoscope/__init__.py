@@ -8,7 +8,8 @@ from inspector import inspect_project, inspect_project_statically
 from generator import add_tests_to_project, UnknownTemplate
 from logger import log
 from store import Project, ModuleNotFound, ModuleNeedsAnalysis, \
-     ModuleSaveError, get_pythoscope_path, get_points_of_entry_path
+     ModuleSaveError, get_pythoscope_path, get_points_of_entry_path, \
+     get_code_trees_path
 from util import samefile
 
 
@@ -101,6 +102,7 @@ def init_project(path):
         log.debug("Initializing .pythoscope directory: %s" % (os.path.abspath(pythoscope_path)))
         os.makedirs(pythoscope_path)
         os.makedirs(get_points_of_entry_path(path))
+        os.makedirs(get_code_trees_path(path))
     except OSError, err:
         fail("Couldn't initialize Pythoscope directory: %s." % err.strerror)
 
