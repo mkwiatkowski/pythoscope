@@ -1,6 +1,19 @@
 Changelog
 =========
 
+0.4.1
+-----
+
+* Greatly improved `information storage performance <https://blueprints.launchpad.net/pythoscope/+spec/improve-information-storage-performance>`_.
+* Added Pythoscope module for Emacs to the misc/ directory in the source tree.
+* Unittests can now be used as points of entry (`#275059 <https://bugs.launchpad.net/bugs/275059>`_).
+* Pythoscope now ignores source control files (`#284568 <https://bugs.launchpad.net/bugs/284568>`_).
+* Static inspection happens on --init, as it should be (`#325928 <https://bugs.launchpad.net/bugs/325928>`_).
+* Ported itertive pattern matcher for lib2to3 from Python trunk (`#304541 <https://bugs.launchpad.net/bugs/304541>`_).
+* Fixed test generation bug related to nested function arguments (`#344220 <https://bugs.launchpad.net/bugs/344220>`_).
+* Fixed point of entry cleanup bug (`#324522 <https://bugs.launchpad.net/bugs/324522>`_).
+* Fixed some more Windows-specific bugs (`#348136 <https://bugs.launchpad.net/bugs/348136>`_).
+
 0.4
 ---
 

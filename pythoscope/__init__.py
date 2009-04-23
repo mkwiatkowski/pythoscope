@@ -13,7 +13,7 @@ from store import Project, ModuleNotFound, ModuleNeedsAnalysis, \
 from util import samefile
 
 
-__version__ = '0.4'
+__version__ = '0.4.1'
 
 BUGTRACKER_URL = "https://bugs.launchpad.net/pythoscope"
 USAGE = """Pythoscope usage:
