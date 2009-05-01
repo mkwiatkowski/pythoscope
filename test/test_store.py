@@ -7,8 +7,7 @@ from pythoscope.store import Class, Function, FunctionCall, Method, Module, \
 from pythoscope.serializer import ImmutableObject, UnknownObject, \
     SequenceObject, MapObject
 
-from helper import CustomSeparator, EmptyProject, assert_equal_sets, \
-    assert_length
+from helper import CustomSeparator, EmptyProject, assert_equal_sets
 
 # Let nose know that those aren't test cases.
 TestClass.__test__ = False
@@ -83,7 +82,6 @@ class TestPointOfEntry:
         self.first.clear_previous_run()
 
         # Only the UserObject from the second POE remains.
-        assert_length(klass.user_objects, 1)
         assert_equal_sets([obj3], klass.user_objects)
 
     def test_clear_previous_run_removes_function_calls_from_functions(self):
@@ -97,7 +95,6 @@ class TestPointOfEntry:
         self.first.clear_previous_run()
 
         # Only the FunctionCall from the second POE remains.
-        assert_length(function.calls, 1)
         assert_equal_sets([call3], function.calls)
 
     def test_clear_previous_run_ignores_not_referenced_objects(self):

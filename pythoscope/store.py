@@ -9,13 +9,14 @@ from pythoscope.astvisitor import EmptyCode, Newline, create_import, \
     find_last_leaf, get_starting_whitespace, is_node_of_type, regenerate, \
     remove_trailing_whitespace
 from pythoscope.logger import log
-from pythoscope.serializer import ImmutableObject, MapObject, UnknownObject, \
-    SequenceObject, SerializedObject, is_immutable, is_sequence, is_mapping
+from pythoscope.serializer import BuiltinException, ImmutableObject, \
+    MapObject, UnknownObject, SequenceObject, SerializedObject, is_immutable, \
+    is_sequence, is_mapping, is_builtin_exception
 from pythoscope.util import all_of_type, set, module_path_to_name, \
      write_content_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, is_generator_code, \
      extract_subpath, directories_under, findfirst, contains_active_generator, \
-     map_values, class_name, module_name, string2filename
+     map_values, class_name, module_name, starts_with_path, string2filename
 
 
 CREATIONAL_METHODS = ['__init__', '__new__']
@@ -322,6 +323,12 @@ class Project(object):
         """
         return extract_subpath(path, self.path)
 
+    def contains_path(self, path):
+        """Returns True if given path is under this project's path and False
+        otherwise.
+        """
+        return starts_with_path(path, self.path)
+
     def iter_test_cases(self):
         for module in self.iter_modules():
             for test_case in module.test_cases:
@@ -581,7 +588,7 @@ class UserObject(Callable, SerializedObject):
 
     # Defined lazily to ease testing - classes may be assigned to modules after
     # creation of UserObject, or never at all.
-    module_name = property(lambda self: self.klass.module.locator)
+    module_name = property(lambda self: self.klass.module.locator, lambda s,v: None)
 
     def get_init_call(self):
         """Return a call to __init__ or None if it wasn't called.
@@ -1142,6 +1149,8 @@ class Execution(object):
             return SequenceObject(obj, self.serialize)
         elif is_mapping(obj):
             return MapObject(obj, self.serialize)
+        elif is_builtin_exception(obj):
+            return BuiltinException(obj, self.serialize)
         else:
             return UnknownObject(obj)
 
@@ -1188,10 +1197,12 @@ class Execution(object):
 
     # :: (str, dict, code, frame) -> FunctionCall | None
     def create_function_call(self, name, args, code, frame):
-        modulename = self.project._extract_subpath(code.co_filename)
-        function = self.project.find_object(Function, name, modulename)
-        if function:
-            return self.create_call(FunctionCall, function, function, args, code, frame)
+        if self.project.contains_path(code.co_filename):
+            modulename = self.project._extract_subpath(code.co_filename)
+            function = self.project.find_object(Function, name, modulename)
+            if function:
+                return self.create_call(FunctionCall, function, function,
+                                        args, code, frame)
 
     def _retrieve_or_capture(self, obj, capture_callback):
         """Return existing description of the given object or create and return

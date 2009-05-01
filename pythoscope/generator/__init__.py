@@ -2,8 +2,9 @@ from pythoscope.astvisitor import descend, parse_fragment, ASTVisitor, \
     EmptyCode
 from pythoscope.logger import log
 from pythoscope.generator.adder import add_test_case_to_project
-from pythoscope.serializer import CompositeObject, ImmutableObject, MapObject, \
-    UnknownObject, SequenceObject, SerializedObject, can_be_constructed
+from pythoscope.serializer import BuiltinException, CompositeObject, \
+    ImmutableObject, MapObject, UnknownObject, SequenceObject, \
+    SerializedObject, can_be_constructed, is_serialized_string
 from pythoscope.store import Class, Function, FunctionCall, TestClass, \
     TestMethod, ModuleNotFound, UserObject, MethodCall, Method, Project, \
     GeneratorObject
@@ -26,6 +27,12 @@ def type_as_string(object):
         return list_of(map(type_as_string, object))
 
     return object.type_name
+
+# :: string -> string
+def todo_value(value):
+    """Wrap given value in a <TODO: value> block.
+    """
+    return "<TODO: %s>" % value
 
 class CallString(str):
     """A string that holds information on the function/method call it
@@ -118,9 +125,24 @@ def constructor_as_string(object, assigned_names={}):
                           imports=union(object.imports, *imports),
                           uncomplete=any(uncomplete))
     elif isinstance(object, UnknownObject):
-        return CallString("<TODO: %s>" % object.partial_reconstructor, uncomplete=True)
+        return CallString(todo_value(object.partial_reconstructor), uncomplete=True)
     else:
         raise TypeError("constructor_as_string expected SerializedObject at input, not %s" % object)
+
+# :: ([SerializedObject], {SerializedObject: str}) -> [(str, set, bool)]
+def get_objects_collection_info(objs, assigned_names):
+    for obj in objs:
+        cs = constructor_as_string(obj, assigned_names)
+        yield (cs, cs.imports, cs.uncomplete)
+
+# :: ({SerializedObject: SerializedObject}, {SerializedObject: str}) -> [(str, set, bool)]
+def get_objects_mapping_info(mapping, assigned_names):
+    for key, value in mapping:
+        keycs = constructor_as_string(key, assigned_names)
+        valuecs = constructor_as_string(value, assigned_names)
+        yield ("%s: %s" % (keycs, valuecs),
+               union(keycs.imports, valuecs.imports),
+               keycs.uncomplete or valuecs.uncomplete)
 
 # :: (CompositeObject, {SerializedObject: str}) -> [(str, set, bool)]
 def get_contained_objects_info(obj, assigned_names):
@@ -128,16 +150,13 @@ def get_contained_objects_info(obj, assigned_names):
     each object contained within a composite object.
     """
     if isinstance(obj, SequenceObject):
-        for subobj in obj.contained_objects:
-            cs = constructor_as_string(subobj, assigned_names)
-            yield(cs, cs.imports, cs.uncomplete)
+        return get_objects_collection_info(obj.contained_objects, assigned_names)
     elif isinstance(obj, MapObject):
-        for key, value in obj.mapping:
-            keycs = constructor_as_string(key, assigned_names)
-            valuecs = constructor_as_string(value, assigned_names)
-            yield("%s: %s" % (keycs, valuecs),
-                  union(keycs.imports, valuecs.imports),
-                  keycs.uncomplete or valuecs.uncomplete)
+        return get_objects_mapping_info(obj.mapping, assigned_names)
+    elif isinstance(obj, BuiltinException):
+        return get_objects_collection_info(obj.args, assigned_names)
+    else:
+        raise TypeError("Wrong argument to get_contained_objects_info: %r." % obj)
 
 # :: (string, dict, {SerializedObject: str}) -> CallString
 def call_as_string(object_name, args, assigned_names={}):
@@ -201,6 +220,8 @@ def get_contained_objects(obj):
         return get_those_and_contained_objects(obj.contained_objects)
     elif isinstance(obj, MapObject):
         return get_those_and_contained_objects(flatten(obj.mapping))
+    elif isinstance(obj, BuiltinException):
+        return get_those_and_contained_objects(obj.args)
     elif isinstance(obj, UserObject):
         calls = compact([obj.get_init_call()]) + obj.get_external_calls()
         return get_contained_objects(calls)
@@ -785,14 +806,7 @@ class TestGenerator(object):
         self.ensure_imports(callstring.imports)
 
         if call.raised_exception():
-            if callstring.uncomplete or stub:
-                assertion_type = 'raises_stub'
-            else:
-                assertion_type = 'raises'
-            self.ensure_import(call.exception.type_import)
-            return (assertion_type,
-                    call.exception.type_name,
-                    in_lambda(callstring))
+            return self._exception_assertion(call.exception, callstring, stub)
         else:
             if callstring.uncomplete or stub:
                 assertion_type = 'equal_stub'
@@ -812,6 +826,31 @@ class TestGenerator(object):
                     callstring_type = type_of(callstring)
                 self.ensure_import('types')
                 return (assertion_type, output_type, callstring_type)
+
+    def _exception_assertion(self, exception, callstring, stub):
+        if is_serialized_string(exception):
+            # We generate assertion stub because assertRaises handles string
+            # exceptions by identity, not value. This is also the default
+            # behavior of CPython's except clause, see:
+            #
+            # <http://docs.python.org/reference/executionmodel.html#exceptions>
+            #     Exceptions can also be identified by strings, in which case
+            #     the except clause is selected by object identity.
+            #
+            # TODO: It is possible to write assertRaisesString, which compares
+            # string exceptions by value. We don't use this solution, because
+            # currently in Pythoscope there is no facility for attaching and
+            # using test helpers.
+            return ('raises_stub',
+                    todo_value(exception.reconstructor),
+                    in_lambda(callstring))
+
+        if callstring.uncomplete or stub:
+            assertion_type = 'raises_stub'
+        else:
+            assertion_type = 'raises'
+        self.ensure_import(exception.type_import)
+        return (assertion_type, exception.type_name, in_lambda(callstring))
 
 class UnittestTestGenerator(TestGenerator):
     main_snippet = parse_fragment("if __name__ == '__main__':\n    unittest.main()\n")

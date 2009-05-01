@@ -11,7 +11,7 @@ from nose.tools import assert_equal, assert_not_equal, assert_raises
 
 from pythoscope.astvisitor import parse
 from pythoscope.generator import add_tests_to_project, constructor_as_string
-from pythoscope.serializer import ImmutableObject, UnknownObject
+from pythoscope.serializer import ImmutableObject
 from pythoscope.store import Project, Class, Function, Method, \
      ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod, \
      MethodCall, FunctionCall, UserObject, GeneratorObject, CodeTree
@@ -29,12 +29,24 @@ add_tests_to_project.__test__ = False
 TestClass.__test__ = False
 TestMethod.__test__ = False
 
+def stable_serialize_call_arguments(execution, args):
+    """Work just like execution.serialize_call_arguments, but serialize
+    arguments in lexicographical order, so test outputs are stable.
+
+    This doesn't change semantics of the serialization process (as objects
+    identity will be preserved), yet it makes testing it much easier.
+    """
+    serialized_args = {}
+    for key, value in sorted(args.iteritems()):
+        serialized_args[key] = execution.serialize(value)
+    return serialized_args
+
 def create_method_call(method, args, output, call_type, execution):
-    sargs = execution.serialize_call_arguments(args)
+    sargs = stable_serialize_call_arguments(execution, args)
     if call_type == 'output':
         return MethodCall(method, sargs, output=execution.serialize(output))
     elif call_type == 'exception':
-        return MethodCall(method, sargs, exception=execution.serialize(output()))
+        return MethodCall(method, sargs, exception=execution.serialize(output))
     elif call_type == 'generator':
         return GeneratorObject(method, sargs, map(execution.serialize, output))
 
@@ -63,12 +75,6 @@ def ClassWithInstanceWithoutReconstruction(name):
     # module.py.
     return Class(name), types.ClassType(name, (object,), {})()
 
-def stable_serialize_call_arguments(execution, args):
-    serialized_args = {}
-    for key, value in sorted(args.iteritems()):
-        serialized_args[key] = execution.serialize(value)
-    return serialized_args
-
 def FunctionWithCalls(funcname, calls):
     execution = EmptyProjectExecution()
     function = Function(funcname)
@@ -84,8 +90,8 @@ def FunctionWithExceptions(funcname, calls):
     execution = EmptyProjectExecution()
     function = Function(funcname)
     function.calls = [FunctionCall(function,
-                                   execution.serialize_call_arguments(i),
-                                   exception=execution.serialize(e())) for (i,e) in calls]
+                                   stable_serialize_call_arguments(execution, i),
+                                   exception=execution.serialize(e)) for (i,e) in calls]
     return function
 
 def FunctionWithSingleException(funcname, input, exception):
@@ -95,7 +101,7 @@ def GeneratorWithYields(genname, input, yields):
     execution = EmptyProjectExecution()
     generator = Function(genname, is_generator=True)
     gobject = GeneratorObject(generator,
-                              execution.serialize_call_arguments(input),
+                              stable_serialize_call_arguments(execution, input),
                               map(execution.serialize, yields))
     generator.calls = [gobject]
     return generator
@@ -104,8 +110,8 @@ def GeneratorWithSingleException(genname, input, exception):
     execution = EmptyProjectExecution()
     generator = Function(genname, is_generator=True)
     gobject = GeneratorObject(generator,
-                              execution.serialize_call_arguments(input),
-                              exception=execution.serialize(exception()))
+                              stable_serialize_call_arguments(execution, input),
+                              exception=execution.serialize(exception))
     generator.calls = [gobject]
     return generator
 
@@ -382,56 +388,6 @@ class TestGenerator:
         assert_contains(result, "# something = Something(param=<TODO: function>)")
         assert_contains(result, "# self.assertEqual(1, something.method()")
 
-    def test_generates_assert_raises_for_functions_with_exceptions(self):
-        function = FunctionWithSingleException('square', {'x': 'hello'}, TypeError)
-
-        result = generate_single_test_module(objects=[function])
-
-        assert_contains(result, "def test_square_raises_type_error_for_hello(self):")
-        assert_contains(result, "self.assertRaises(TypeError, lambda: square(x='hello'))")
-
-    def test_generates_assert_raises_for_init_methods_with_exceptions(self):
-        klass = ClassWithMethods('Something', [('__init__', [({'x': 123}, ValueError)])], 'exception')
-
-        result = generate_single_test_module(objects=[klass])
-
-        assert_contains(result, "def test_creation_with_123_raises_value_error(self):")
-        assert_contains(result, "self.assertRaises(ValueError, lambda: Something(x=123))")
-
-    def test_generates_assert_raises_stub_for_init_methods_with_exceptions(self):
-        klass = ClassWithMethods('Something', [('__init__', [({'x': lambda: 42}, ValueError)])], 'exception')
-
-        result = generate_single_test_module(objects=[klass])
-
-        assert_contains(result, "def test_creation_with_function_raises_value_error(self):")
-        assert_contains(result, "# self.assertRaises(ValueError, lambda: Something(x=<TODO: function>))")
-
-    def test_generates_assert_raises_for_normal_methods_with_exceptions(self):
-        klass = ClassWithMethods('Something', [('method', [({}, KeyError)])], 'exception')
-
-        result = generate_single_test_module(objects=[klass])
-
-        assert_contains(result, "def test_method_raises_key_error(self):")
-        assert_contains(result, "something = Something()")
-        assert_contains(result, "self.assertRaises(KeyError, lambda: something.method())")
-
-    def test_generates_imports_for_user_defined_exceptions(self):
-        klass = Class("UserDefinedException")
-        function = Function("throw")
-        function.calls = [FunctionCall(function, {}, exception=UserObject(None, klass))]
-
-        result = generate_single_test_module(objects=[function, klass])
-
-        assert_contains(result, "from module import UserDefinedException")
-
-    def test_doesnt_generate_imports_for_builtin_exceptions(self):
-        function = Function("throw")
-        function.calls = [FunctionCall(function, {}, exception=UnknownObject(Exception()))]
-
-        result = generate_single_test_module(objects=[function])
-
-        assert_doesnt_contain(result, "import Exception")
-
     def test_generates_assert_equal_type_for_functions_returning_functions(self):
         objects = [FunctionWithSingleCall('higher', {}, lambda: 42)]
 
@@ -477,14 +433,6 @@ class TestGenerator:
 
         assert_contains(result, "def test_highest_returns_function_for_function(self):")
         assert_contains(result, "# self.assertEqual(types.FunctionType, type(highest(f=<TODO: function>)))")
-
-    def test_generates_assert_raises_test_stub_for_functions_which_take_functions_as_arguments(self):
-        function = FunctionWithSingleException('high', {'f': lambda: 42}, NotImplementedError)
-
-        result = generate_single_test_module(objects=[function])
-
-        assert_contains(result, "def test_high_raises_not_implemented_error_for_function(self):")
-        assert_contains(result, "# self.assertRaises(NotImplementedError, lambda: high(f=<TODO: function>))")
 
     def test_handles_regular_expression_pattern_objects(self):
         objects = [FunctionWithSingleCall('matches', {'x': re.compile('abcd')}, True)]
@@ -545,14 +493,6 @@ class TestGenerator:
 
         assert_contains(result, "def test_lambdify_yields_function_then_function_for_1(self):")
         assert_contains(result, "self.assertEqual([types.FunctionType, types.FunctionType], map(type, list(islice(lambdify(x=1), 2))))")
-
-    def test_generates_assert_raises_for_generator_functions_with_exceptions(self):
-        objects = [GeneratorWithSingleException('throw', {'string': {}}, TypeError)]
-
-        result = generate_single_test_module(objects=objects)
-
-        assert_contains(result, "def test_throw_raises_type_error_for_dict(self):")
-        assert_contains(result, "self.assertRaises(TypeError, lambda: list(islice(throw(string={}), 1)))")
 
     def test_takes_slice_of_generated_values_list_to_work_around_infinite_generators(self):
         objects = [GeneratorWithYields('nats', {'start': 1}, [1, 2, 3])]
@@ -718,6 +658,107 @@ class TestGenerator:
         result = generate_single_test_module(template='nose', objects=objects)
 
         assert_contains(result, "# assert_equal(expected, something(arg1, (narg1, narg2), arg2))")
+
+class TestRaisedExceptions:
+    def test_generates_assert_raises_for_functions_with_exceptions(self):
+        function = FunctionWithSingleException('square', {'x': 'hello'}, TypeError())
+
+        result = generate_single_test_module(objects=[function])
+
+        assert_contains(result, "def test_square_raises_type_error_for_hello(self):")
+        assert_contains(result, "self.assertRaises(TypeError, lambda: square(x='hello'))")
+
+    def test_generates_assert_raises_stub_for_functions_with_string_exceptions(self):
+        function = FunctionWithSingleException('bad_function', {}, "bad error")
+
+        result = generate_single_test_module(objects=[function])
+
+        assert_contains(result, "def test_bad_function_raises_bad_error(self):")
+        assert_contains(result, "# self.assertRaises(<TODO: 'bad error'>, lambda: bad_function())")
+
+    def test_generates_assert_raises_for_init_methods_with_exceptions(self):
+        klass = ClassWithMethods('Something', [('__init__', [({'x': 123}, ValueError())])], 'exception')
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_creation_with_123_raises_value_error(self):")
+        assert_contains(result, "self.assertRaises(ValueError, lambda: Something(x=123))")
+
+    def test_generates_assert_raises_stub_for_init_methods_with_exceptions(self):
+        klass = ClassWithMethods('Something', [('__init__', [({'x': lambda: 42}, ValueError())])], 'exception')
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_creation_with_function_raises_value_error(self):")
+        assert_contains(result, "# self.assertRaises(ValueError, lambda: Something(x=<TODO: function>))")
+
+    def test_generates_assert_raises_for_normal_methods_with_exceptions(self):
+        klass = ClassWithMethods('Something', [('method', [({}, KeyError())])], 'exception')
+
+        result = generate_single_test_module(objects=[klass])
+
+        assert_contains(result, "def test_method_raises_key_error(self):")
+        assert_contains(result, "something = Something()")
+        assert_contains(result, "self.assertRaises(KeyError, lambda: something.method())")
+
+    def test_generates_imports_for_user_defined_exceptions(self):
+        klass = Class("UserDefinedException")
+        function = Function("throw")
+        function.calls = [FunctionCall(function, {}, exception=UserObject(None, klass))]
+
+        result = generate_single_test_module(objects=[function, klass])
+
+        assert_contains(result, "from module import UserDefinedException")
+
+    def test_doesnt_generate_imports_for_builtin_exceptions(self):
+        function = FunctionWithSingleException('throw', {}, Exception())
+
+        result = generate_single_test_module(objects=[function])
+
+        assert_doesnt_contain(result, "import Exception")
+
+    def test_generates_assert_raises_test_stub_for_functions_which_take_functions_as_arguments(self):
+        function = FunctionWithSingleException('high', {'f': lambda: 42}, NotImplementedError())
+
+        result = generate_single_test_module(objects=[function])
+
+        assert_contains(result, "def test_high_raises_not_implemented_error_for_function(self):")
+        assert_contains(result, "# self.assertRaises(NotImplementedError, lambda: high(f=<TODO: function>))")
+
+    def test_generates_assert_raises_for_generator_functions_with_exceptions(self):
+        objects = [GeneratorWithSingleException('throw', {'string': {}}, TypeError())]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_throw_raises_type_error_for_dict(self):")
+        assert_contains(result, "self.assertRaises(TypeError, lambda: list(islice(throw(string={}), 1)))")
+
+class TestExceptionsPassedAsValues:
+    def test_generates_assert_equal_for_exception_returned_as_value(self):
+        objects = [FunctionWithSingleCall('error_factory', {}, MemoryError(0, "OOM!"))]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_error_factory_returns_memory_error(self):")
+        assert_contains(result, "self.assertEqual(MemoryError(0, 'OOM!'), error_factory())")
+
+    def test_handles_environment_error_with_two_arguments(self):
+        objects = [FunctionWithSingleCall('arg_list_too_long',
+                                          {}, EnvironmentError(7, 'Arg list too long'))]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_arg_list_too_long_returns_environment_error(self):")
+        assert_contains(result, "self.assertEqual(EnvironmentError(7, 'Arg list too long'), arg_list_too_long())")
+
+    def test_handles_environment_error_with_three_arguments(self):
+        objects = [FunctionWithSingleCall('bad_address',
+                                          {}, EnvironmentError(14, 'Bad address', 'module.py'))]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains(result, "def test_bad_address_returns_environment_error(self):")
+        assert_contains(result, "self.assertEqual(EnvironmentError(14, 'Bad address', 'module.py'), bad_address())")
 
 class TestGeneratorWithTestDirectoryAsFile:
     def setUp(self):

@@ -1,7 +1,9 @@
 import difflib
 import os
 import re
+import sys
 import types
+import warnings
 
 from StringIO import StringIO
 
@@ -64,6 +66,11 @@ def assert_single_function(info, name, args=None):
         assert_equal(args, info.functions[0].args)
 
 def assert_equal_sets(collection1, collection2):
+    """Assert that both collections have the same number and set of elements.
+    """
+    # Checking length of both collections first, so we catch duplicates that
+    # appear in one collection and not the other.
+    assert_length(collection2, len(collection1))
     assert_equal(set(collection1), set(collection2))
 
 def assert_equal_strings(s1, s2):
@@ -185,6 +192,14 @@ def get_test_cases(project):
     return list(project.iter_test_cases())
 get_test_cases.__test__ = False
 
+def last_exception_as_string():
+    exc_type, exc_value = sys.exc_info()[:2]
+    # Special case for string exceptions.
+    if isinstance(exc_type, str):
+        return exc_type
+    else:
+        return repr(exc_value)
+
 ###############################################################################
 # Test superclasses
 #   Subclass one of those to get a desired test fixture.
@@ -221,3 +236,10 @@ class CapturedLogger:
 
 class CapturedDebugLogger(CapturedLogger):
     log_level = DEBUG
+
+class IgnoredWarnings:
+    def setUp(self):
+        warnings.filterwarnings('ignore')
+
+    def tearDown(self):
+        warnings.resetwarnings()

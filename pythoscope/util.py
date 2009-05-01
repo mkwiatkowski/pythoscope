@@ -254,6 +254,11 @@ def get_last_modification_time(path):
         # File may not exist, in which case it was never modified.
         return 0
 
+def starts_with_path(path, prefix):
+    """Return True if given path starts with given prefix and False otherwise.
+    """
+    return os.path.realpath(path).startswith(os.path.realpath(prefix))
+
 def extract_subpath(path, prefix):
     """Remove prefix from given path to generate subpath, so the following
     correspondence is preserved:
@@ -263,6 +268,7 @@ def extract_subpath(path, prefix):
     in terms of physical path (i.e. not necessarily strict string
     equality).
     """
+    prefix = os.path.realpath(prefix)
     prefix_length = len(prefix)
     if not prefix.endswith(os.path.sep):
         prefix_length += 1

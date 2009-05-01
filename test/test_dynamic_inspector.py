@@ -1,20 +1,24 @@
 import sys
 
+from nose import SkipTest
 from nose.tools import assert_equal
 
 from pythoscope.inspector.dynamic import inspect_code_in_context, \
     inspect_point_of_entry
 from pythoscope.serializer import ImmutableObject, MapObject, UnknownObject, \
-    SequenceObject
+    SequenceObject, BuiltinException
 from pythoscope.store import Class, Execution, Function, \
     GeneratorObject, Method, UserObject, Project
 from pythoscope.util import findfirst
 
 from helper import TestableProject, assert_length, PointOfEntryMock, \
-     assert_equal_sets, ProjectWithModules, ProjectInDirectory, \
-     assert_instance, EmptyProjectExecution
+     assert_equal_sets, assert_instance, EmptyProjectExecution, \
+     last_exception_as_string, IgnoredWarnings
 
 
+########################################################################
+## Dynamic inspection test helpers.
+##
 class ClassMock(Class):
     """Class that has all the methods you try to find inside it via
     find_method_by_name().
@@ -94,33 +98,61 @@ def assert_equal_serialized(obj1, obj2):
         if not isinstance(o2, MapObject):
             return False
         return o1.mapping == o2.mapping
+    def builtin_exception_eq(o1, o2):
+        if not isinstance(o2, BuiltinException):
+            return False
+        return o1.args == o2.args
     try:
         UnknownObject.__eq__ = unknown_object_eq
         SequenceObject.__eq__ = sequence_object_eq
         MapObject.__eq__ = map_object_eq
+        BuiltinException.__eq__ = builtin_exception_eq
         assert_equal(obj1, obj2)
     finally:
         del UnknownObject.__eq__
         del SequenceObject.__eq__
         del MapObject.__eq__
+        del BuiltinException.__eq__
+
+def serialize_value(value):
+    return EmptyProjectExecution().serialize(value)
+def serialize_collection(collection):
+    return map(serialize_value, collection)
+def serialize_arguments(args):
+    return EmptyProjectExecution().serialize_call_arguments(args)
+
+def assert_serialized(expected_unserialized, actual_serialized):
+    assert_equal_serialized(serialize_value(expected_unserialized), actual_serialized)
+def assert_collection_of_serialized(expected_collection, actual_collection):
+    assert_equal_serialized(serialize_collection(expected_collection), actual_collection)
+def assert_call_arguments(expected_args, actual_args):
+    assert_equal_serialized(serialize_arguments(expected_args), actual_args)
 
 def assert_call(expected_input, expected_output, call):
-    execution = EmptyProjectExecution()
-    assert_equal_serialized(execution.serialize_call_arguments(expected_input), call.input)
+    assert_call_arguments(expected_input, call.input)
     assert not call.raised_exception()
-    assert_equal_serialized(execution.serialize(expected_output), call.output)
+    assert_serialized(expected_output, call.output)
 
 def assert_call_with_exception(expected_input, expected_exception_name, call):
-    execution = EmptyProjectExecution()
-    assert_equal_serialized(execution.serialize_call_arguments(expected_input), call.input)
+    assert_call_arguments(expected_input, call.input)
     assert call.raised_exception()
     assert_equal(expected_exception_name, call.exception.type_name)
 
-def assert_generator_object(expected_input, expected_yields, object):
-    execution = EmptyProjectExecution()
-    assert_instance(object, GeneratorObject)
-    assert_equal_serialized(execution.serialize_call_arguments(expected_input), object.input)
-    assert_equal_serialized(map(execution.serialize, expected_yields), object.output)
+def assert_call_with_string_exception(expected_input, expected_string, call):
+    assert_call_with_exception(expected_input, 'str', call)
+    assert_serialized(expected_string, call.exception)
+
+def assert_generator_object(expected_input, expected_yields, obj):
+    assert_instance(obj, GeneratorObject)
+    assert_call_arguments(expected_input, obj.input)
+    assert_collection_of_serialized(expected_yields, obj.output)
+
+def assert_one_element_and_return(collection):
+    """Assert that the collection has exactly one element and return this
+    element.
+    """
+    assert_length(collection, 1)
+    return collection[0]
 
 def call_graph_as_string(call_or_calls, indentation=0):
     def lines(call):
@@ -133,7 +165,45 @@ def call_graph_as_string(call_or_calls, indentation=0):
     else:
         return "".join(lines(call_or_calls))
 
+def inspect_returning_callables_and_execution(fun, ignored_functions):
+    project = ProjectMock(ignored_functions or [])
+    execution = Execution(project=project)
 
+    try:
+        inspect_code_in_context(fun, execution)
+    # Don't allow any POEs exceptions to propagate to the testing code.
+    # Catch both string and normal exceptions.
+    except:
+        print "Caught exception inside point of entry:", last_exception_as_string()
+
+    return project.get_callables(), execution
+
+def inspect_returning_callables(fun, ignored_functions=None):
+    return inspect_returning_callables_and_execution(fun, ignored_functions)[0]
+
+def inspect_returning_execution(fun):
+    return inspect_returning_callables_and_execution(fun, None)[1]
+
+def inspect_returning_single_callable(fun):
+    callables = inspect_returning_callables(fun)
+    return assert_one_element_and_return(callables)
+
+def inspect_returning_single_call(fun):
+    callables = inspect_returning_callables(fun)
+    callable = assert_one_element_and_return(callables)
+    return assert_one_element_and_return(callable.calls)
+
+def is_function(obj):
+    return isinstance(obj, Function)
+def is_user_object(obj):
+    return isinstance(obj, UserObject)
+
+def find_first_with_name(name, collection):
+    return findfirst(lambda f: f.name == name, collection)
+
+########################################################################
+## Functions for inspection.
+##
 was_run = False
 def function_setting_was_run():
     global was_run
@@ -308,31 +378,6 @@ expected_call_graph_for_function_with_nested_calls = """top()
         do_that()
 """
 
-def function_raising_an_exception():
-    def function(x):
-        raise ValueError()
-    function(42)
-
-class UserDefinedException(Exception):
-    pass
-
-def function_raising_a_user_defined_exception():
-    def function(x):
-        raise UserDefinedException()
-    function(42)
-
-def function_handling_other_function_exception():
-    def other_function(x):
-        if not isinstance(x, int):
-            raise TypeError
-        return x + 1
-    def function(number):
-        try:
-            return other_function(number)
-        except TypeError:
-            return other_function(int(number))
-    function("123")
-
 def function_returning_function():
     def function(x):
         return lambda y: x + y
@@ -420,73 +465,59 @@ def function_calling_function_that_uses_the_same_user_object():
     obj = Something()
     compare(obj, obj)
 
-class DynamicInspectorTest:
-    def _collect_callables(self, fun, ignored_functions=[]):
-        self.project = ProjectMock(ignored_functions)
-        self.execution = Execution(project=self.project)
-
-        try:
-            inspect_code_in_context(fun, self.execution)
-        except Exception, e:
-            # Don't allow any POEs exceptions to propagate to testing code.
-            print "Caught exception inside point of entry:", e
-
-        return self.project.get_callables()
-
-class TestTraceFunction(DynamicInspectorTest):
+########################################################################
+## Actual tests.
+##
+class TestTraceFunction:
     "trace_function"
 
     def test_runs_given_function(self):
-        self._collect_callables(function_setting_was_run)
+        inspect_returning_callables(function_setting_was_run)
 
         assert was_run, "Function wasn't executed."
 
     def test_returns_empty_list_when_no_calls_to_other_functions_were_made(self):
-        trace = self._collect_callables(function_doing_nothing)
+        callables = inspect_returning_callables(function_doing_nothing)
 
-        assert_equal([], trace)
+        assert_equal([], callables)
 
     def test_returns_a_list_with_a_single_element_when_calls_to_a_single_functions_were_made(self):
-        trace = self._collect_callables(function_calling_other_function)
+        callables = inspect_returning_callables(function_calling_other_function)
 
-        assert_equal(1, len(trace))
+        assert_length(callables, 1)
 
     def test_returns_a_list_with_function_objects(self):
-        trace = self._collect_callables(function_calling_two_different_functions)
+        callables = inspect_returning_callables(function_calling_two_different_functions)
 
-        assert all(isinstance(obj, Function) for obj in trace)
+        assert all(map(is_function, callables))
 
     def test_returns_function_objects_corresponding_to_functions_that_were_called(self):
-        trace = self._collect_callables(function_calling_two_different_functions)
+        callables = inspect_returning_callables(function_calling_two_different_functions)
 
-        assert_equal(set(['first_function', 'second_function']),
-                     set(f.name for f in trace))
+        assert_equal_sets(['first_function', 'second_function'],
+                          [f.name for f in callables])
 
     def test_returns_function_objects_with_all_calls_recorded(self):
-        trace = self._collect_callables(function_calling_other_function)
-        function = trace.pop()
+        function = inspect_returning_single_callable(function_calling_other_function)
 
-        assert_equal(2, len(function.calls))
+        assert_length(function.calls, 2)
 
     def test_returns_function_objects_with_calls_that_use_required_arguments(self):
-        trace = self._collect_callables(function_calling_another_with_two_required_arguments)
-        function = trace.pop()
+        function = inspect_returning_single_callable(function_calling_another_with_two_required_arguments)
 
         assert_call({'x':7,  'y':13},  20, function.calls[0])
         assert_call({'x':1,  'y':2},    3, function.calls[1])
         assert_call({'x':42, 'y':43},  85, function.calls[2])
 
     def test_returns_function_objects_with_calls_that_use_optional_arguments(self):
-        trace = self._collect_callables(function_calling_another_with_optional_arguments)
-        function = trace.pop()
+        function = inspect_returning_single_callable(function_calling_another_with_optional_arguments)
 
         assert_call({'x': "Hello",  'y': "world", 'w': 4, 'z': "!"}, "Hello world!!!!", function.calls[0])
         assert_call({'x': "Bye",    'y': "world", 'w': 2, 'z': "!"}, "Bye world!!",     function.calls[1])
         assert_call({'x': "Humble", 'y': "hello", 'w': 1, 'z': "."}, "Humble hello.",   function.calls[2])
 
     def test_returns_function_objects_with_calls_that_use_keyword_arguments(self):
-        trace = self._collect_callables(function_calling_another_with_keyword_arguments)
-        function = trace.pop()
+        function = inspect_returning_single_callable(function_calling_another_with_keyword_arguments)
 
         assert_call({'x': 1, 'y': 1},  0, function.calls[0])
         assert_call({'x': 2, 'y': 1},  1, function.calls[1])
@@ -494,36 +525,31 @@ class TestTraceFunction(DynamicInspectorTest):
         assert_call({'x': 5, 'y': 6}, -1, function.calls[3])
 
     def test_returns_function_objects_with_calls_that_use_varargs(self):
-        trace = self._collect_callables(function_calling_another_with_varargs)
-        function = trace.pop()
+        function = inspect_returning_single_callable(function_calling_another_with_varargs)
 
         assert_call({'x': 1, 'rest': ()},     [1],     function.calls[0])
         assert_call({'x': 2, 'rest': (3,)},   [3,2],   function.calls[1])
         assert_call({'x': 4, 'rest': (5, 6)}, [5,6,4], function.calls[2])
 
     def test_returns_function_objects_with_calls_that_use_varargs_only(self):
-        trace = self._collect_callables(function_calling_another_with_varargs_only)
-        function = trace.pop()
+        call = inspect_returning_single_call(function_calling_another_with_varargs_only)
 
-        assert_call({'args': ()}, 0, function.calls[0])
+        assert_call({'args': ()}, 0, call)
 
     def test_returns_function_objects_with_calls_that_use_nested_arguments(self):
-        trace = self._collect_callables(function_calling_another_with_nested_arguments)
-        function = trace.pop()
+        call = inspect_returning_single_call(function_calling_another_with_nested_arguments)
 
-        assert_call({'a': 1, 'b': 2, 'c': 3}, [3, 2, 1], function.calls[0])
+        assert_call({'a': 1, 'b': 2, 'c': 3}, [3, 2, 1], call)
 
     def test_returns_function_objects_with_calls_that_use_varkw(self):
-        trace = self._collect_callables(function_calling_another_with_varkw)
-        function = trace.pop()
+        function = inspect_returning_single_callable(function_calling_another_with_varkw)
 
         assert_call({'x': 'a', 'kwds': {}},                       42, function.calls[0])
         assert_call({'x': 'b', 'kwds': {'a': 1, 'b': 2}},          2, function.calls[1])
         assert_call({'x': 'c', 'kwds': {'y': 3, 'w': 4, 'z': 5}}, 42, function.calls[2])
 
     def test_interprets_recursive_calls_properly(self):
-        trace = self._collect_callables(function_calling_recursive_function)
-        function = trace.pop()
+        function = inspect_returning_single_callable(function_calling_recursive_function)
 
         assert_call({'x': 4}, 24, function.calls[0])
         assert_call({'x': 3}, 6, function.calls[1])
@@ -532,109 +558,79 @@ class TestTraceFunction(DynamicInspectorTest):
         assert_call({'x': 0}, 1, function.calls[4])
 
     def test_ignores_new_style_class_creation(self):
-        trace = self._collect_callables(function_creating_new_style_class)
+        callables = inspect_returning_callables(function_creating_new_style_class)
 
-        assert_equal([], trace)
+        assert_equal([], callables)
 
     def test_ignores_old_style_class_creation(self):
-        trace = self._collect_callables(function_creating_old_style_class)
+        callables = inspect_returning_callables(function_creating_old_style_class)
 
-        assert_equal([], trace)
+        assert_equal([], callables)
 
     def test_traces_function_calls_inside_class_definitions(self):
-        trace = self._collect_callables(function_creating_class_with_function_calls)
-        function = trace.pop()
+        call = inspect_returning_single_call(function_creating_class_with_function_calls)
 
-        assert_call({'x': 42}, 43, function.calls[0])
+        assert_call({'x': 42}, 43, call)
 
     def test_returns_a_list_with_user_objects(self):
-        trace = self._collect_callables(function_calling_a_method)
+        callables = inspect_returning_callables(function_calling_a_method)
 
-        assert all(isinstance(obj, UserObject) for obj in trace)
+        assert all(map(is_user_object, callables))
 
     def test_handles_methods_with_strangely_named_self(self):
-        trace = self._collect_callables(function_calling_methods_with_strangely_named_self)
+        callables = inspect_returning_callables(function_calling_methods_with_strangely_named_self)
 
-        assert_length(trace, 2)
-        assert all(isinstance(obj, UserObject) for obj in trace)
+        assert_length(callables, 2)
+        assert all(map(is_user_object, callables))
         assert_equal_sets(['strange_method', 'another_strange_method'],
-                          [obj.calls[0].definition.name for obj in trace])
+                          [obj.calls[0].definition.name for obj in callables])
 
     def test_distinguishes_between_methods_with_the_same_name_from_different_classes(self):
-        trace = self._collect_callables(function_calling_two_methods_with_the_same_name_from_different_classes)
+        callables = inspect_returning_callables(function_calling_two_methods_with_the_same_name_from_different_classes)
 
         assert_equal_sets([('FirstClass', 1, 'method'), ('SecondClass', 1, 'method')],
-                          [(obj.klass.name, len(obj.calls), obj.calls[0].definition.name) for obj in trace])
+                          [(obj.klass.name, len(obj.calls), obj.calls[0].definition.name) for obj in callables])
 
     def test_distinguishes_between_classes_and_functions(self):
-        trace = self._collect_callables(function_calling_other_which_uses_name_and_module_variables)
-
-        assert_equal(1, len(trace))
+        function = inspect_returning_single_callable(function_calling_other_which_uses_name_and_module_variables)
+        assert is_function(function)
 
     def test_creates_a_call_graph_of_execution_for_user_objects(self):
-        trace = self._collect_callables(function_calling_method_which_calls_other_method)
+        user_object = inspect_returning_single_callable(function_calling_method_which_calls_other_method)
 
-        assert_length(trace, 1)
-
-        user_object = trace[0]
         assert_instance(user_object, UserObject)
         assert_length(user_object.calls, 2)
-        assert_length(user_object.get_external_calls(), 1)
 
-        external_call = user_object.get_external_calls()[0]
+        external_call = assert_one_element_and_return(user_object.get_external_calls())
         assert_equal('method', external_call.definition.name)
-        assert_length(external_call.subcalls, 1)
 
-        subcall = external_call.subcalls[0]
+        subcall = assert_one_element_and_return(external_call.subcalls)
         assert_equal('other_method', subcall.definition.name)
 
     def test_creates_a_call_graph_of_execution_for_nested_calls(self):
-        self._collect_callables(function_with_nested_calls)
+        execution = inspect_returning_execution(function_with_nested_calls)
 
         assert_equal(expected_call_graph_for_function_with_nested_calls,
-                     call_graph_as_string(self.execution.call_graph))
+                     call_graph_as_string(execution.call_graph))
 
     def test_handles_functions_that_change_their_argument_bindings(self):
-        trace = self._collect_callables(function_changing_its_argument_binding)
-        function = trace.pop()
+        call = inspect_returning_single_call(function_changing_its_argument_binding)
 
-        assert_call({'a': 1, 'b': 2, 'c': 3}, (3, 2, 7), function.calls[0])
-
-    def test_handles_functions_which_raise_exceptions(self):
-        trace = self._collect_callables(function_raising_an_exception)
-        function = trace.pop()
-
-        assert_call_with_exception({'x': 42}, 'ValueError', function.calls[0])
-
-    def test_handles_functions_which_handle_other_function_exceptions(self):
-        trace = self._collect_callables(function_handling_other_function_exception)
-        function = findfirst(lambda f: f.name == "function", trace)
-        other_function = findfirst(lambda f: f.name == "other_function", trace)
-
-        assert_call_with_exception({'x': "123"}, 'TypeError', other_function.calls[0])
-        assert_call({'x': 123}, 124, other_function.calls[1])
-        assert_call({'number': "123"}, 124, function.calls[0])
-
-    def test_handles_functions_which_raise_user_defined_exceptions(self):
-        trace = self._collect_callables(function_raising_a_user_defined_exception)
-        function = trace.pop()
-
-        assert_call_with_exception({'x': 42}, 'UserDefinedException', function.calls[0])
+        assert_call({'a': 1, 'b': 2, 'c': 3}, (3, 2, 7), call)
 
     def test_saves_function_objects_as_types(self):
-        trace = self._collect_callables(function_returning_function)
-        function = trace.pop()
-        call = function.calls[0]
+        function = inspect_returning_single_callable(function_returning_function)
+        call = assert_one_element_and_return(function.calls)
 
         assert_equal('types.FunctionType', call.output.type_name)
 
     def test_correctly_recognizes_interleaved_ignored_and_traced_calls(self):
-        trace = self._collect_callables(function_with_ignored_function, ['ignored'])
+        callables = inspect_returning_callables(function_with_ignored_function, ['ignored'])
 
-        assert_length(trace, 2)
+        assert_length(callables, 2)
 
-        outer_function = findfirst(lambda f: f.name == "not_ignored_outer", trace)
-        inner_function = findfirst(lambda f: f.name == "not_ignored_inner", trace)
+        outer_function = find_first_with_name("not_ignored_outer", callables)
+        inner_function = find_first_with_name("not_ignored_inner", callables)
 
         assert_length(outer_function.calls, 1)
         assert_length(inner_function.calls, 1)
@@ -642,124 +638,251 @@ class TestTraceFunction(DynamicInspectorTest):
         assert_call({'z': 13}, 75, outer_function.calls[0])
         assert_call({'x': 24}, 25, inner_function.calls[0])
 
+class TestGenerators:
     def test_handles_yielded_values(self):
-        trace = self._collect_callables(function_calling_generator)
-
-        assert_length(trace, 1)
-        generator = trace.pop()
+        generator = inspect_returning_single_callable(function_calling_generator)
 
         assert_instance(generator, Function)
-        assert_length(generator.calls, 1)
-        gobject = generator.calls.pop()
+        gobject = assert_one_element_and_return(generator.calls)
 
         assert_generator_object({'x': 2}, [2, 3, 4, 8], gobject)
 
     def test_handles_single_yielded_value(self):
-        trace = self._collect_callables(function_calling_generator_that_yields_one)
-
-        assert_length(trace, 1)
-        generator = trace.pop()
+        generator = inspect_returning_single_callable(function_calling_generator_that_yields_one)
 
         assert_instance(generator, Function)
-        assert_length(generator.calls, 1)
-        gobject = generator.calls.pop()
+        gobject = assert_one_element_and_return(generator.calls)
 
         assert_generator_object({}, [1], gobject)
         assert not gobject.raised_exception()
 
     def test_handles_yielded_nones(self):
-        trace = self._collect_callables(function_calling_generator_that_yields_none)
-
-        gobject = trace.pop().calls.pop()
+        gobject = inspect_returning_single_call(function_calling_generator_that_yields_none)
 
         assert_generator_object({}, [None], gobject)
 
     def test_handles_empty_generators(self):
-        trace = self._collect_callables(function_calling_empty_generator)
-
-        gobject = trace.pop().calls.pop()
+        gobject = inspect_returning_single_call(function_calling_empty_generator)
 
         assert_generator_object({'x': 123}, [], gobject)
 
     def test_handles_generator_objects_that_werent_destroyed(self):
-        trace = self._collect_callables(function_calling_generator_that_doesnt_get_destroyed)
-
-        gobject = trace.pop().calls.pop()
+        gobject = inspect_returning_single_call(function_calling_generator_that_doesnt_get_destroyed)
 
         assert_generator_object({}, [1], gobject)
 
     def test_handles_generator_objects_that_yield_none_and_dont_get_destroyed(self):
-        trace = self._collect_callables(function_calling_generator_that_yields_none_and_doesnt_get_destroyed)
-
-        gobject = trace.pop().calls.pop()
+        gobject = inspect_returning_single_call(function_calling_generator_that_yields_none_and_doesnt_get_destroyed)
 
         assert_generator_object({}, [None], gobject)
 
     def test_handles_generator_methods(self):
-        trace = self._collect_callables(function_calling_generator_method)
-
-        assert_length(trace, 1)
-
-        user_object = trace.pop()
+        user_object = inspect_returning_single_callable(function_calling_generator_method)
         assert_instance(user_object, UserObject)
-        assert_length(user_object.calls, 1)
 
-        gobject = user_object.calls[0]
-        assert_instance(gobject, GeneratorObject)
+        gobject = assert_one_element_and_return(user_object.calls)
         assert_generator_object({}, [0, 1, 0], gobject)
 
     def test_handles_generators_called_not_from_top_level(self):
-        trace = self._collect_callables(function_calling_function_that_uses_generator)
-
-        assert_length(trace, 2)
-
-        function = findfirst(lambda f: f.name == "function", trace)
-        assert_length(function.calls, 1)
-
-        fcall = function.calls[0]
-        assert_length(fcall.subcalls, 1)
-
-        gobject = fcall.subcalls[0]
-        assert_instance(gobject, GeneratorObject)
-        assert_generator_object({'x': 2}, [2, 3, 4, 8], gobject)
-
-    def test_handles_passing_sequence_objects_around(self):
-        callables = self._collect_callables(function_calling_functions_that_use_the_same_sequence_object)
+        callables = inspect_returning_callables(function_calling_function_that_uses_generator)
 
         assert_length(callables, 2)
 
-        producer = findfirst(lambda f: f.name == "producer", callables)
-        assert_length(producer.calls, 1)
-        producer_call = producer.calls[0]
+        function = find_first_with_name("function", callables)
 
-        consumer = findfirst(lambda f: f.name == "consumer", callables)
-        assert_length(consumer.calls, 1)
-        consumer_call = consumer.calls[0]
+        fcall = assert_one_element_and_return(function.calls)
+
+        gobject = assert_one_element_and_return(fcall.subcalls)
+        assert_generator_object({'x': 2}, [2, 3, 4, 8], gobject)
+
+class TestObjectsIdentityPreservation:
+    def test_handles_passing_sequence_objects_around(self):
+        callables = inspect_returning_callables(function_calling_functions_that_use_the_same_sequence_object)
+
+        assert_length(callables, 2)
+
+        producer = find_first_with_name("producer", callables)
+        producer_call = assert_one_element_and_return(producer.calls)
+
+        consumer = find_first_with_name("consumer", callables)
+        consumer_call = assert_one_element_and_return(consumer.calls)
 
         assert_instance(producer_call.output, SequenceObject)
         assert_instance(consumer_call.input['lst'], SequenceObject)
         assert producer_call.output is consumer_call.input['lst']
 
     def test_handles_passing_user_objects_around(self):
-        callables = self._collect_callables(function_calling_function_that_uses_the_same_user_object)
+        callables = inspect_returning_callables(function_calling_function_that_uses_the_same_user_object)
 
         assert_length(callables, 2)
 
-        user_object = findfirst(lambda c: isinstance(c, UserObject), callables)
+        user_object = findfirst(is_user_object, callables)
 
-        function = findfirst(lambda c: isinstance(c, Function), callables)
-        assert_length(function.calls, 1)
-        call = function.calls[0]
+        function = findfirst(is_function, callables)
+        call = assert_one_element_and_return(function.calls)
 
         assert_instance(call.output, ImmutableObject)
         assert_equal(ImmutableObject(True), call.output)
         assert call.input['x'] is call.input['y'] is user_object
 
-class TestTraceExec(DynamicInspectorTest):
+class TestRaisedExceptions(IgnoredWarnings):
+    def test_handles_functions_which_raise_exceptions(self):
+        def function_raising_an_exception():
+            def function(x):
+                raise ValueError()
+            function(42)
+        call = inspect_returning_single_call(function_raising_an_exception)
+
+        assert_call_with_exception({'x': 42}, 'ValueError', call)
+
+    def test_handles_functions_which_handle_other_function_exceptions(self):
+        def function_handling_other_function_exception():
+            def other_function(x):
+                if not isinstance(x, int):
+                    raise TypeError
+                return x + 1
+            def function(number):
+                try:
+                    return other_function(number)
+                except TypeError:
+                    return other_function(int(number))
+            function("123")
+        callables = inspect_returning_callables(function_handling_other_function_exception)
+        function = find_first_with_name("function", callables)
+        other_function = find_first_with_name("other_function", callables)
+
+        assert_call_with_exception({'x': "123"}, 'TypeError', other_function.calls[0])
+        assert_call({'x': 123}, 124, other_function.calls[1])
+        assert_call({'number': "123"}, 124, function.calls[0])
+
+    def test_handles_functions_which_raise_user_defined_exceptions(self):
+        def function_raising_a_user_defined_exception():
+            class UserDefinedException(Exception):
+                pass
+            def function(x):
+                raise UserDefinedException()
+            function(42)
+        callables = inspect_returning_callables(function_raising_a_user_defined_exception)
+        function = findfirst(is_function, callables)
+
+        assert_call_with_exception({'x': 42}, 'UserDefinedException', function.calls[0])
+
+    def test_handles_exceptions_raised_by_the_interpreter_like_index_error(self):
+        def causes_interpreter_to_raise_index_error():
+            def raising_index_error(): return [][0]
+            try: raising_index_error()
+            except: pass
+
+        call = inspect_returning_single_call(causes_interpreter_to_raise_index_error)
+        assert_call_with_exception({}, 'IndexError', call)
+
+    def test_handles_exceptions_raised_by_the_interpreter_like_name_error(self):
+        def causes_interpreter_to_raise_name_error():
+            def raising_name_error(): return foobar
+            try: raising_name_error()
+            except: pass
+
+        call = inspect_returning_single_call(causes_interpreter_to_raise_name_error)
+        assert_call_with_exception({}, 'NameError', call)
+
+    def test_handles_multiargument_exceptions_raised_by_the_interpreter_like_syntax_error(self):
+        def causes_interpreter_to_raise_syntax_error():
+            def raising_syntax_error(): exec 'a b c'
+            try: raising_syntax_error()
+            except: pass
+        syntax_error_exc_args = ('invalid syntax', ('<string>', 1, 3, 'a b c'))
+
+        call = inspect_returning_single_call(causes_interpreter_to_raise_syntax_error)
+        assert_call_with_exception({}, 'SyntaxError', call)
+
+        exc = call.exception
+        assert_instance(exc, BuiltinException)
+        assert_collection_of_serialized(syntax_error_exc_args, exc.args)
+
+    def test_handles_string_exceptions_without_values(self):
+        # String exceptions were removed in Python 2.6.
+        if sys.version_info >= (2, 6):
+            raise SkipTest
+
+        def raises_string_exception():
+            def raising_string_exception():
+                raise "deprecated"
+            raising_string_exception()
+        function = inspect_returning_single_callable(raises_string_exception)
+        call = assert_one_element_and_return(function.calls)
+
+        assert_call_with_string_exception({}, "deprecated", call)
+
+    def test_handles_string_exceptions_with_values(self):
+        # String exceptions were removed in Python 2.6.
+        if sys.version_info >= (2, 6):
+            raise SkipTest
+
+        def raises_string_exception():
+            def raising_string_exception():
+                raise "this is not a drill", True
+            raising_string_exception()
+        function = inspect_returning_single_callable(raises_string_exception)
+        call = assert_one_element_and_return(function.calls)
+
+        assert_call_with_string_exception({}, "this is not a drill", call)
+
+class TestExceptionsPassedAsValues:
+    def test_builtin_exceptions_are_serialized_as_builin_exception_type_with_args_attribute(self):
+        exc = serialize_value(AttributeError("foo", "bar"))
+
+        assert_instance(exc, BuiltinException)
+        assert_collection_of_serialized(("foo", "bar"), exc.args)
+
+    def test_handles_passing_standard_exception_objects_as_arguments(self):
+        def function_passing_eof_error():
+            def error_printer(exc):
+                pass
+            error_printer(EOFError("The end", 101))
+        call = inspect_returning_single_call(function_passing_eof_error)
+
+        assert_call({'exc': EOFError("The end", 101)}, None, call)
+
+    def test_handles_using_standard_exception_objects_as_return_values(self):
+        def function_returning_os_error():
+            def error_factory(num):
+                return OSError(num)
+            error_factory(42)
+        call = inspect_returning_single_call(function_returning_os_error)
+
+        assert_call({'num': 42}, OSError(42), call)
+
+    def test_handles_catching_and_returning_interpreter_exceptions(self):
+        def function():
+            def returning_name_error():
+                try:
+                    no_such_variable # raises NameError
+                except NameError, e:
+                    return e
+            returning_name_error()
+        call = inspect_returning_single_call(function)
+
+        assert_call({}, NameError("global name 'no_such_variable' is not defined"), call)
+
+    def test_handles_exceptions_containing_user_objects(self):
+        def function():
+            class Something(object):
+                pass
+            def returning_exception_with_something():
+                return OverflowError(Something())
+            returning_exception_with_something()
+        callables = inspect_returning_callables(function)
+        function = findfirst(is_function, callables)
+        user_object = findfirst(is_user_object, callables)
+
+        call = assert_one_element_and_return(function.calls)
+        user_object_in_exc = assert_one_element_and_return(call.output.args)
+        assert user_object is user_object_in_exc
+
+class TestTraceExec:
     "trace_exec"
     def test_returns_function_objects_with_all_calls_recorded(self):
-        trace = self._collect_callables("f = lambda x: x + 1; f(5); f(42)")
-        function = trace.pop()
+        function = inspect_returning_single_callable("f = lambda x: x + 1; f(5); f(42)")
 
         assert_call({'x': 5},  6,  function.calls[0])
         assert_call({'x': 42}, 43, function.calls[1])
@@ -789,10 +912,9 @@ class TestInspectPointOfEntry:
 
         inspect_point_of_entry(self.poe)
 
-        assert_length(klass.user_objects, 1)
-        user_object = klass.user_objects[0]
-        assert_length(user_object.calls, 1)
-        assert_call({'x': 42}, 43, user_object.calls[0])
+        user_object = assert_one_element_and_return(klass.user_objects)
+        call = assert_one_element_and_return(user_object.calls)
+        assert_call({'x': 42}, 43, call)
 
     def test_properly_wipes_out_imports_from_sys_modules(self):
         self._init_project(poe_content="import module")
