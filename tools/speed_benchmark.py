@@ -5,12 +5,11 @@ import os.path
 import sys
 import timeit
 
-from fixture import TempIO
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from pythoscope import init_project
 from pythoscope.store import get_pickle_path
+from test.helper import putfile, rmtree, tmpdir
 
 
 def make_class(name, methods_count=20):
@@ -68,10 +67,10 @@ def human_size(bytes, prefixes=['', 'K', 'M', 'G']):
 
 def benchmark_project_load_performance(modules_count=25):
     print "==> Creating project with %d modules..." % modules_count
-    project_path = TempIO()
+    project_path = tmpdir()
     module = make_module()
     for i in range(modules_count):
-        project_path.putfile("module%s.py" % i, module)
+        putfile(project_path, "module%s.py" % i, module)
     init_project(project_path)
 
     print "==> Inspecting project.."
@@ -91,6 +90,8 @@ def benchmark_project_load_performance(modules_count=25):
                         "from pythoscope.store import Project")
     print "It took %f seconds to read project information from %s pickle." % \
         (elapsed, human_size(os.path.getsize(get_pickle_path(project_path))))
+
+    rmtree(project_path)
 
 if __name__ == "__main__":
     benchmark_project_load_performance()

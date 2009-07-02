@@ -1,7 +1,9 @@
 import difflib
 import os
 import re
+import shutil
 import sys
+import tempfile
 import types
 import warnings
 
@@ -14,7 +16,8 @@ from pythoscope.generator import add_tests_to_project
 from pythoscope.logger import DEBUG, INFO, get_output, log, set_output
 from pythoscope.store import CodeTreesManager, CodeTreeNotFound, Execution, \
     Function, ModuleNotFound, PointOfEntry, Project
-from pythoscope.util import quoted_block, read_file_contents, set
+from pythoscope.util import quoted_block, read_file_contents, set, \
+    write_content_to_file
 
 
 UNPICKABLE_OBJECT = types.ClassType('class', (), {})
@@ -199,6 +202,17 @@ def last_exception_as_string():
         return exc_type
     else:
         return repr(exc_value)
+
+###############################################################################
+# Temporary directories/files helpers
+
+def tmpdir():
+    return tempfile.mkdtemp(prefix="pythoscope-")
+
+def putfile(directory, filename, contents):
+    write_content_to_file(contents, os.path.join(directory, filename))
+
+rmtree = shutil.rmtree
 
 ###############################################################################
 # Test superclasses
