@@ -5,11 +5,11 @@ import shutil
 import sys
 import tempfile
 import types
+import unittest
 import warnings
 
 from StringIO import StringIO
 
-from fixture import TempIO
 from nose.tools import assert_equal
 
 from pythoscope.generator import add_tests_to_project
@@ -136,14 +136,26 @@ def EmptyProject():
     project.new_tests_directory = "tests"
     return project
 
-def ProjectInDirectory():
-    project_path = TempIO()
-    project_path.mkdir(".pythoscope")
-    project_path.mkdir(P(".pythoscope/code-trees"))
+def ProjectInDirectory(project_path):
+    putdir(project_path, ".pythoscope")
+    putdir(project_path, P(".pythoscope/code-trees"))
     project = Project(project_path)
-    # Save the TempIO reference, so we can delay its destruction later.
-    project._tmpdir = project_path
     return project
+
+def with_modules(project, paths, create_files=True):
+    for path in paths:
+        project.create_module(os.path.join(project.path, path))
+        if create_files:
+            putfile(project.path, path, "")
+    return project
+Project.with_modules = with_modules
+
+def with_points_of_entry(project, paths):
+    poe_path = putdir(project.path, P(".pythoscope/points-of-entry"))
+    for path in paths:
+        putfile(poe_path, path, "")
+    return project
+Project.with_points_of_entry = with_points_of_entry
 
 def ProjectWithModules(paths, project_type=EmptyProject):
     project = project_type()
@@ -151,21 +163,8 @@ def ProjectWithModules(paths, project_type=EmptyProject):
         project.create_module(os.path.join(project.path, path))
     return project
 
-def ProjectWithRealModules(paths):
-    project = ProjectWithModules(paths, ProjectInDirectory)
-    for path in paths:
-        project.path.putfile(path, "")
-    return project
-
-def ProjectWithPointsOfEntryFiles(paths):
-    project = ProjectInDirectory()
-    project.path.mkdir(P(".pythoscope/points-of-entry"))
-    for path in paths:
-        project.path.putfile(os.path.join(P(".pythoscope/points-of-entry"), path), "")
-    return project
-
-def TestableProject(more_modules=[], project_type=ProjectInDirectory):
-    project = ProjectWithModules(["module.py"] + more_modules, project_type)
+def TestableProject(path, more_modules=[]):
+    project = ProjectWithModules(["module.py"] + more_modules, lambda: ProjectInDirectory(path))
     project["module"].add_object(Function("function"))
     return project
 TestableProject.__test__ = False
@@ -209,8 +208,25 @@ def last_exception_as_string():
 def tmpdir():
     return tempfile.mkdtemp(prefix="pythoscope-")
 
+def mkdirs(path):
+    try:
+        os.makedirs(path)
+    except OSError, err:
+        # os.makedirs raises OSError(17, 'File exists') when last part of
+        # the path exists and we don't care.
+        if err.errno != 17:
+            raise
+
 def putfile(directory, filename, contents):
-    write_content_to_file(contents, os.path.join(directory, filename))
+    filepath = os.path.join(directory, filename)
+    mkdirs(os.path.dirname(filepath))
+    write_content_to_file(contents, filepath)
+    return filepath
+
+def putdir(directory, dirname):
+    dirpath = os.path.join(directory, dirname)
+    mkdirs(dirpath)
+    return dirpath
 
 rmtree = shutil.rmtree
 
@@ -218,17 +234,28 @@ rmtree = shutil.rmtree
 # Test superclasses
 #   Subclass one of those to get a desired test fixture.
 
-class CustomSeparator:
+class TempDirectory(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tmpdir()
+        super(TempDirectory, self).setUp()
+
+    def tearDown(self):
+        rmtree(self.tmpdir)
+        super(TempDirectory, self).tearDown()
+
+class CustomSeparator(unittest.TestCase):
     """Subclass CustomSeparator to test your code with alternative os.path.sep.
     """
     def setUp(self):
         self.old_sep = os.path.sep
         os.path.sep = '#'
+        super(CustomSeparator, self).setUp()
 
     def tearDown(self):
         os.path.sep = self.old_sep
+        super(CustomSeparator, self).tearDown()
 
-class CapturedLogger:
+class CapturedLogger(unittest.TestCase):
     """Capture all log output and make it available to test via
     _get_log_output() method.
     """
@@ -240,10 +267,12 @@ class CapturedLogger:
         self.captured = StringIO()
         set_output(self.captured)
         log.level = self.log_level
+        super(CapturedLogger, self).setUp()
 
     def tearDown(self):
         set_output(self._old_output)
         log.level = self._old_level
+        super(CapturedLogger, self).tearDown()
 
     def _get_log_output(self):
         return self.captured.getvalue()
@@ -251,9 +280,11 @@ class CapturedLogger:
 class CapturedDebugLogger(CapturedLogger):
     log_level = DEBUG
 
-class IgnoredWarnings:
+class IgnoredWarnings(unittest.TestCase):
     def setUp(self):
         warnings.filterwarnings('ignore')
+        super(IgnoredWarnings, self).setUp()
 
     def tearDown(self):
         warnings.resetwarnings()
+        super(IgnoredWarnings, self).tearDown()

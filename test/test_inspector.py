@@ -1,19 +1,19 @@
 from pythoscope.inspector import inspect_project
 
 from helper import assert_contains_once, assert_equal_strings, CapturedLogger, \
-    P, ProjectInDirectory, ProjectWithPointsOfEntryFiles, ProjectWithRealModules
+    P, ProjectInDirectory, TempDirectory
 
 
-class TestInspector(CapturedLogger):
+class TestInspector(CapturedLogger, TempDirectory):
     def test_skips_dynamic_inspection_when_no_changes_were_made_to_the_project(self):
-        project = ProjectInDirectory()
+        project = ProjectInDirectory(self.tmpdir)
         inspect_project(project)
         assert_equal_strings("INFO: No changes discovered in the source code, skipping dynamic inspection.\n",
                              self._get_log_output())
 
     def test_skips_inspection_of_up_to_date_modules(self):
         paths = ["module.py", "something_else.py", P("module/in/directory.py")]
-        project = ProjectWithRealModules(paths)
+        project = ProjectInDirectory(self.tmpdir).with_modules(paths)
 
         inspect_project(project)
 
@@ -23,7 +23,7 @@ class TestInspector(CapturedLogger):
 
     def test_reports_each_inspected_module(self):
         paths = ["module.py", "something_else.py", P("module/in/directory.py")]
-        project = ProjectWithRealModules(paths)
+        project = ProjectInDirectory(self.tmpdir).with_modules(paths)
         # Force the inspection by faking files creation time.
         project["module"].created = 0
         project["something_else"].created = 0
@@ -37,7 +37,7 @@ class TestInspector(CapturedLogger):
 
     def test_reports_each_inspected_point_of_entry(self):
         paths = ["one.py", "two.py"]
-        project = ProjectWithPointsOfEntryFiles(paths)
+        project = ProjectInDirectory(self.tmpdir).with_points_of_entry(paths)
 
         inspect_project(project)
 

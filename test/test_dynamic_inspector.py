@@ -13,7 +13,7 @@ from pythoscope.util import findfirst
 
 from helper import TestableProject, assert_length, PointOfEntryMock, \
      assert_equal_sets, assert_instance, EmptyProjectExecution, \
-     last_exception_as_string, IgnoredWarnings
+     last_exception_as_string, IgnoredWarnings, putfile, TempDirectory
 
 
 ########################################################################
@@ -887,10 +887,10 @@ class TestTraceExec:
         assert_call({'x': 5},  6,  function.calls[0])
         assert_call({'x': 42}, 43, function.calls[1])
 
-class TestInspectPointOfEntry:
+class TestInspectPointOfEntry(TempDirectory):
     def _init_project(self, module_code="", poe_content=""):
-        self.project = TestableProject()
-        self.project.path.putfile("module.py", module_code)
+        self.project = TestableProject(self.tmpdir)
+        putfile(self.project.path, "module.py", module_code)
         self.poe = PointOfEntryMock(self.project, content=poe_content)
 
     def test_properly_gathers_all_input_and_output_values_of_a_function_call(self):

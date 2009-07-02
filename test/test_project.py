@@ -11,7 +11,7 @@ from pythoscope.util import get_names, read_file_contents
 
 from helper import assert_equal_strings, assert_length, assert_not_raises, \
     EmptyProject, P, ProjectInDirectory, ProjectWithModules, \
-    ProjectWithRealModules, UNPICKABLE_OBJECT
+    UNPICKABLE_OBJECT, TempDirectory
 
 # Let nose know that those aren't test classes.
 TestClass.__test__ = False
@@ -19,25 +19,6 @@ TestMethod.__test__ = False
 
 
 class TestProject:
-    def test_can_be_saved_and_restored_from_file(self):
-        project = ProjectWithRealModules(["good_module.py", "bad_module.py"])
-        project['good_module'].add_objects([Class("AClass", [Method("amethod")]),
-                                            Function("afunction")])
-        project['bad_module'].errors = ["Syntax error"]
-        project.save()
-
-        # Make a reference to TempIO, so it doesn't auto-destruct.
-        tmpdir = project._tmpdir
-
-        project = Project.from_directory(project.path)
-
-        assert_equal(2, len(project.get_modules()))
-        assert_equal(2, len(project['good_module'].objects))
-        assert_equal(["AClass"], get_names(project['good_module'].classes))
-        assert_equal(["amethod"], get_names(project['good_module'].classes[0].methods))
-        assert_equal(["afunction"], get_names(project['good_module'].functions))
-        assert_equal(["Syntax error"], project['bad_module'].errors)
-
     def test_can_be_queried_for_modules_by_their_path(self):
         paths = ["module.py", P("sub/dir/module.py"), P("package/__init__.py")]
         project = ProjectWithModules(paths)
@@ -77,6 +58,24 @@ class TestProject:
         assert_length(test_class.associated_modules, 1)
         assert test_class.associated_modules[0] is new_module
 
+
+class TestProjectOnTheFilesystem(TempDirectory):
+    def test_can_be_saved_and_restored_from_file(self):
+        project = ProjectInDirectory(self.tmpdir).with_modules(["good_module.py", "bad_module.py"])
+        project['good_module'].add_objects([Class("AClass", [Method("amethod")]),
+                                            Function("afunction")])
+        project['bad_module'].errors = ["Syntax error"]
+        project.save()
+
+        project = Project.from_directory(project.path)
+
+        assert_equal(2, len(project.get_modules()))
+        assert_equal(2, len(project['good_module'].objects))
+        assert_equal(["AClass"], get_names(project['good_module'].classes))
+        assert_equal(["amethod"], get_names(project['good_module'].classes[0].methods))
+        assert_equal(["afunction"], get_names(project['good_module'].functions))
+        assert_equal(["Syntax error"], project['bad_module'].errors)
+
     def test_finds_new_tests_directory(self):
         test_module_dirs = ["test", "functional_test", "unit_test",
                             "tests", "functional_tests", "unit_tests",
@@ -91,7 +90,7 @@ class TestProject:
             assert_equal(test_module_dir, project.new_tests_directory)
 
     def test_removes_definitions_of_modules_that_dont_exist_anymore(self):
-        project = ProjectWithRealModules(["module.py", "other_module.py", "test_module.py"])
+        project = ProjectInDirectory(self.tmpdir).with_modules(["module.py", "other_module.py", "test_module.py"])
         test_class = TestClass("TestSomething", associated_modules=[project["module"]])
         project["test_module.py"].add_test_case(test_class)
         project.save()
@@ -105,7 +104,7 @@ class TestProject:
         assert_not_raises(ModuleNotFound, lambda: project["test_module"])
 
     def test_doesnt_save_uncomplete_pickle_files(self):
-        project = ProjectInDirectory()
+        project = ProjectInDirectory(self.tmpdir)
         project.save()
         original_pickle = read_file_contents(project._get_pickle_path())
 
