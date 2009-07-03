@@ -778,8 +778,7 @@ class TestGeneratorWithTestDirectoryAsFile(TempDirectory):
 
     def test_doesnt_save_pickle_file_if_module_save_error_is_raised(self):
         mtime = get_last_modification_time(self.project._get_pickle_path())
-        try: self.add_and_save()
-        except ModuleSaveError: pass
+        assert_raises(ModuleSaveError, self.add_and_save)
         assert_equal(mtime, get_last_modification_time(self.project._get_pickle_path()))
 
 class TestGeneratorWithSingleModule:
