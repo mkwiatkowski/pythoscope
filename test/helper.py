@@ -234,7 +234,17 @@ rmtree = shutil.rmtree
 # Test superclasses
 #   Subclass one of those to get a desired test fixture.
 
-class TempDirectory(unittest.TestCase):
+class Test(object):
+    """Common ancestor for all test classes to make super on setUp and tearDown
+    work properly. We can't use unittest.TestCase, because it doesn't allow
+    nose generator methods.
+    """
+    def setUp(self):
+        pass
+    def tearDown(self):
+        pass
+
+class TempDirectory(Test):
     def setUp(self):
         self.tmpdir = tmpdir()
         super(TempDirectory, self).setUp()
@@ -243,7 +253,7 @@ class TempDirectory(unittest.TestCase):
         rmtree(self.tmpdir)
         super(TempDirectory, self).tearDown()
 
-class CustomSeparator(unittest.TestCase):
+class CustomSeparator(Test):
     """Subclass CustomSeparator to test your code with alternative os.path.sep.
     """
     def setUp(self):
@@ -255,7 +265,7 @@ class CustomSeparator(unittest.TestCase):
         os.path.sep = self.old_sep
         super(CustomSeparator, self).tearDown()
 
-class CapturedLogger(unittest.TestCase):
+class CapturedLogger(Test):
     """Capture all log output and make it available to test via
     _get_log_output() method.
     """
@@ -280,7 +290,7 @@ class CapturedLogger(unittest.TestCase):
 class CapturedDebugLogger(CapturedLogger):
     log_level = DEBUG
 
-class IgnoredWarnings(unittest.TestCase):
+class IgnoredWarnings(Test):
     def setUp(self):
         warnings.filterwarnings('ignore')
         super(IgnoredWarnings, self).setUp()

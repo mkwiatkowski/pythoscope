@@ -11,7 +11,7 @@ from pythoscope.util import get_names, read_file_contents
 
 from helper import assert_equal_strings, assert_length, assert_not_raises, \
     EmptyProject, P, ProjectInDirectory, ProjectWithModules, \
-    UNPICKABLE_OBJECT, TempDirectory
+    UNPICKABLE_OBJECT, TempDirectory, putdir
 
 # Let nose know that those aren't test classes.
 TestClass.__test__ = False
@@ -76,18 +76,18 @@ class TestProjectOnTheFilesystem(TempDirectory):
         assert_equal(["afunction"], get_names(project['good_module'].functions))
         assert_equal(["Syntax error"], project['bad_module'].errors)
 
+    def _test_finds_new_test_directory(self, test_module_dir):
+        putdir(self.tmpdir, ".pythoscope")
+        putdir(self.tmpdir, test_module_dir)
+        project = Project(self.tmpdir)
+        assert_equal(test_module_dir, project.new_tests_directory)
+
     def test_finds_new_tests_directory(self):
         test_module_dirs = ["test", "functional_test", "unit_test",
                             "tests", "functional_tests", "unit_tests",
                             "pythoscope-tests", "unit-tests"]
-
         for test_module_dir in test_module_dirs:
-            tmpdir = TempIO()
-            tmpdir.mkdir(".pythoscope")
-            tmpdir.mkdir(test_module_dir)
-            project = Project(tmpdir)
-
-            assert_equal(test_module_dir, project.new_tests_directory)
+            yield '_test_finds_new_test_directory', test_module_dir
 
     def test_removes_definitions_of_modules_that_dont_exist_anymore(self):
         project = ProjectInDirectory(self.tmpdir).with_modules(["module.py", "other_module.py", "test_module.py"])
