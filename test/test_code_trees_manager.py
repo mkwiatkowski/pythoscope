@@ -2,18 +2,18 @@ import gc
 import os.path
 
 from mock import Mock
-from fixture import TempIO
 from nose.tools import assert_equal, assert_raises
 
 from pythoscope.store import CodeTree, CodeTreeNotFound, \
     FilesystemCodeTreesManager, Module
 
-from helper import assert_length
+from helper import assert_length, TempDirectory
 
 
-class TestFilesystemCodeTreesManager:
+class TestFilesystemCodeTreesManager(TempDirectory):
     def setUp(self):
-        self.manager = FilesystemCodeTreesManager(TempIO())
+        super(TestFilesystemCodeTreesManager, self).setUp()
+        self.manager = FilesystemCodeTreesManager(self.tmpdir)
 
     def assert_empty_cache(self):
         assert_equal(None, self.manager._cached_code_tree)
