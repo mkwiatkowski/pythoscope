@@ -1,7 +1,6 @@
 import os
 from cPickle import PicklingError
 
-from fixture import TempIO
 from nose.tools import assert_equal, assert_raises
 
 from pythoscope.store import Project, Class, Function, Method, TestClass, \

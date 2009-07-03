@@ -23,7 +23,7 @@ setup(
     },
 
     test_suite = 'nose.collector',
-    tests_require = ['nose', 'fixture', 'mock'],
+    tests_require = ['nose', 'mock'],
 
     classifiers = [
         'Development Status :: 2 - Pre-Alpha',
