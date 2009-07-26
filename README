@@ -1,5 +1,5 @@
 Installation
-------------
+============
 
 Easiest way to get Pythoscope is via setuptools::
 
@@ -21,7 +21,7 @@ test suite of Pythoscope::
   $ python setup.py test
 
 Usage
------
+=====
 
 You can use the tool through a single **pythoscope** command. To prepare
 your project for use with Pythoscope, type::
@@ -51,8 +51,26 @@ Generator itself is configurable to some extent, see::
 
 for more information on available options.
 
+Editor Integration
+==================
+
+Emacs
+-----
+
+We put out an elisp script that integrates Pythoscope into Emacs. The file is in the the misc/ directory of the source distribution. You can also `look at the file on Launchpad <http://bazaar.launchpad.net/~pythoscope-developers/pythoscope/trunk/annotate/head:/misc/pythoscope.el>`_. Usage and installation instructions are in the comments at the top of the file.
+
+Vim
+---
+
+There is interest in Vim integration and someone is working on it but we have nothing for you right now.
+
+Leo
+---
+
+There was much discussion of Leo on `the mail list editor integration thread <http://groups.google.com/group/pythoscope/browse_thread/thread/ca85a4c506bde99>`_.
+
 License
--------
+=======
 
 All Pythoscope source code is licensed under an MIT license (see LICENSE file).
 All files under lib2to3/ are licensed under PSF license.
