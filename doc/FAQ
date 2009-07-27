@@ -1,3 +1,84 @@
+.. contents::
+
+
+General
+=======
+
+What is Pythoscope?
+-------------------
+
+Pythoscope is a unit test generator for programs written in Python. It means it can produce a test suite that captures current behavior of your application (so called `characterization tests <http://en.wikipedia.org/wiki/Characterization_test>`_). If you have a system written in Python and value testing, Pythoscope can help you achieve a high test coverage.
+
+Why should I use Pythoscope?
+----------------------------
+
+If you want to introduce testing to your project, Pythoscope will be helpful to you, regardless if you're just starting out, or your project is in maintenance mode.
+
+Having a comprehensive set of automated unit tests allows to make changes to the software quicker, by:
+
+* reducing the number of bugs introduced during modification of a system,
+* localizing defects much quicker (and at the same time reducing the need for debugging),
+* helping developers understand the system,
+* making the development process more predictable,
+* and more.
+
+For more comprehensive discussion of unit test benefits see:
+
+* `The benefits of automated unit testing <http://www.codeproject.com/KB/architecture/onunittesting.aspx>`_
+* `Cost benefits of Unit Testing <http://dlsthoughts.blogspot.com/2005/08/cost-benefits-of-unit-testing.html>`_
+* `Goals of Test Automation <http://xunitpatterns.com/Goals%20of%20Test%20Automation.html>`_
+
+Does Pythoscope support iterative development?
+----------------------------------------------
+
+Absolutely!
+
+As you modify your system you can run Pythoscope over and over again to complement the test suite with the newly added behavior. At the same time you are free to remove and/or modify those tests - Pythoscope will leave your changes intact.
+
+How stable Pythoscope is?
+-------------------------
+
+Pythoscope is in an experimentation stage of development, so stability is not our main priority right now. Having said that, it shouldn't overwrite or delete any of your files, so you're free to experiment. The worst thing that can happen is that you'll get a Python stack trace. In that case, please `report a bug <https://bugs.launchpad.net/pythoscope>`_. :-)
+
+If you want to interface with Pythoscope (for example, for editor integration), please let us know, so we could take future API changes into consideration.
+
+What license does Pythoscope use?
+---------------------------------
+
+All Pythoscope code is licensed under `MIT license <http://www.opensource.org/licenses/mit-license.php>`_. Pythoscope releases include a lib2to3 library, which is licensed under `PSF license <http://www.python.org/psf/license/>`_.
+
+
+Installation and usage
+======================
+
+Where can I get Pythoscope?
+---------------------------
+
+After each release we publish packages in the following places:
+
+* `download page at wikidot <http://pythoscope.org/download>`_
+* `PyPI <http://pypi.python.org/pypi/pythoscope/>`_
+* `Launchpad <https://launchpad.net/pythoscope/+download>`_
+
+If you want the latest development version use `bazaar <http://bazaar-vcs.org/>`_::
+
+  $ bzr branch lp:pythoscope
+
+What versions of Python are supported?
+--------------------------------------
+
+Current stable release supports only Python 2.5, but the next release (0.4.2) will support Pythons 2.3 through 2.6. Python 3.0 is not supported yet. `Let us know <developers@pythoscope.org>`_ if you need Python 3.0 support.
+
+What OSes are supported?
+------------------------
+
+Pythoscope works on Linux, Windows and MacOS.
+
+What about Jython, IronPython or PyPy?
+--------------------------------------
+
+Currently Pythoscope is developed on CPython exclusively and we have never tested it on alterive implementations. Eventually we'd like to support all Python implementations, so if you're adventurous please do try Pythoscope on the implementation of your choice and let us know of your findings.
+
 Can I use an existing unit test as a point of entry?
 ----------------------------------------------------
 
@@ -8,3 +89,11 @@ run them though. Use the following snippet to run a test class
 
   suite = unittest.TestLoader().loadTestsFromTestCase(YourTestClass)
   unittest.TextTestRunner(verbosity=2).run(suite)
+
+Communication
+=============
+
+Where do I go for help?
+-----------------------
+
+The best place to get help is `the pythoscope mailing list <http://groups.google.com/group/pythoscope>`_. Both Pythoscope users and developers hang out there, so you're free to ask there all kinds of questions related to Pythoscope. If you'd rather use a private channel, just drop us a line at developers@pythoscope.org.
