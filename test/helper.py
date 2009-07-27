@@ -5,7 +5,6 @@ import shutil
 import sys
 import tempfile
 import types
-import unittest
 import warnings
 
 from StringIO import StringIO
