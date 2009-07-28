@@ -1,15 +1,13 @@
 import os
 from cPickle import PicklingError
 
-from nose.tools import assert_equal, assert_raises
-
 from pythoscope.store import Project, Class, Function, Method, TestClass, \
      TestMethod, ModuleNotFound
 from pythoscope.inspector import remove_deleted_modules
 from pythoscope.util import get_names, read_file_contents
 
-from helper import assert_equal_strings, assert_length, assert_not_raises, \
-    EmptyProject, P, ProjectInDirectory, ProjectWithModules, \
+from assertions import *
+from helper import EmptyProject, P, ProjectInDirectory, ProjectWithModules, \
     UNPICKABLE_OBJECT, TempDirectory, putdir
 
 # Let nose know that those aren't test classes.

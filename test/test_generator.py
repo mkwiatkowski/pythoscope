@@ -6,8 +6,7 @@ import sys
 import time
 import types
 
-from nose.exc import SkipTest
-from nose.tools import assert_equal, assert_not_equal, assert_raises
+from nose import SkipTest
 
 from pythoscope.astvisitor import parse
 from pythoscope.generator import add_tests_to_project, constructor_as_string
@@ -18,11 +17,11 @@ from pythoscope.store import Project, Class, Function, Method, \
 from pythoscope.util import read_file_contents, get_last_modification_time, \
     sorted
 
+from assertions import *
 from helper import CapturedDebugLogger, CapturedLogger, P, \
-    ProjectInDirectory, EmptyProject, TestableProject, assert_contains, \
-    assert_contains_once, assert_doesnt_contain, assert_equal_sets, \
-    assert_length, assert_matches, generate_single_test_module, get_test_cases, \
-    EmptyProjectExecution, assert_equal_strings, putfile, TempDirectory
+    ProjectInDirectory, EmptyProject, TestableProject, \
+    generate_single_test_module, get_test_cases, \
+    EmptyProjectExecution, putfile, TempDirectory
 
 # Let nose know that those aren't test functions/classes.
 add_tests_to_project.__test__ = False

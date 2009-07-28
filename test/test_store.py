@@ -1,5 +1,3 @@
-from nose.tools import assert_equal, assert_raises
-
 from pythoscope.astvisitor import parse
 from pythoscope.store import Class, Function, FunctionCall, Method, Module, \
     CodeTree, CodeTreeNotFound, PointOfEntry, Project, TestClass, TestMethod, \
@@ -7,10 +5,12 @@ from pythoscope.store import Class, Function, FunctionCall, Method, Module, \
 from pythoscope.serializer import ImmutableObject, UnknownObject, \
     SequenceObject, MapObject
 
-from helper import CustomSeparator, EmptyProject, assert_equal_sets
+from assertions import *
+from helper import CustomSeparator, EmptyProject
 
 # Let nose know that those aren't test cases.
 TestClass.__test__ = False
+
 
 class TestModule:
     def setUp(self):

@@ -2,12 +2,12 @@ import gc
 import os.path
 
 from mock import Mock
-from nose.tools import assert_equal, assert_raises
 
 from pythoscope.store import CodeTree, CodeTreeNotFound, \
     FilesystemCodeTreesManager, Module
 
-from helper import assert_length, TempDirectory
+from assertions import *
+from helper import TempDirectory
 
 
 class TestFilesystemCodeTreesManager(TempDirectory):

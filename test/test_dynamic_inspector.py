@@ -1,7 +1,6 @@
 import sys
 
 from nose import SkipTest
-from nose.tools import assert_equal
 
 from pythoscope.inspector.dynamic import inspect_code_in_context, \
     inspect_point_of_entry
@@ -11,9 +10,9 @@ from pythoscope.store import Class, Execution, Function, \
     GeneratorObject, Method, UserObject, Project
 from pythoscope.util import findfirst
 
-from helper import TestableProject, assert_length, PointOfEntryMock, \
-     assert_equal_sets, assert_instance, EmptyProjectExecution, \
-     last_exception_as_string, IgnoredWarnings, putfile, TempDirectory
+from assertions import *
+from helper import TestableProject, PointOfEntryMock, EmptyProjectExecution, \
+    last_exception_as_string, IgnoredWarnings, putfile, TempDirectory
 
 
 ########################################################################

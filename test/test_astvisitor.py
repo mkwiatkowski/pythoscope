@@ -1,6 +1,6 @@
-from nose.tools import assert_equal
-
 from pythoscope.astvisitor import parse, regenerate, ASTVisitor
+
+from assertions import *
 
 
 class TestParser:

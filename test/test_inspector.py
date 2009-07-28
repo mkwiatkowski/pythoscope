@@ -1,7 +1,7 @@
 from pythoscope.inspector import inspect_project
 
-from helper import assert_contains_once, assert_equal_strings, CapturedLogger, \
-    P, ProjectInDirectory, TempDirectory
+from assertions import *
+from helper import CapturedLogger, P, ProjectInDirectory, TempDirectory
 
 
 class TestInspector(CapturedLogger, TempDirectory):

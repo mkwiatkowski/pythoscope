@@ -1,16 +1,14 @@
 import os
 
-from nose.tools import assert_equal
-
 from pythoscope.astvisitor import parse_fragment
 from pythoscope.generator import find_method_code
 from pythoscope.generator.adder import add_test_case_to_project, \
     find_test_module, module_path_to_test_path
 from pythoscope.store import TestClass, TestMethod
 
-from helper import assert_contains_once, assert_equal_sets, \
-    assert_equal_strings, assert_length, get_test_cases, CapturedLogger, \
-    CustomSeparator, EmptyProject, ProjectWithModules
+from assertions import *
+from helper import get_test_cases, CapturedLogger, CustomSeparator, \
+    EmptyProject, ProjectWithModules
 
 # Let nose know that this aren't test classes and functions.
 TestClass.__test__ = False

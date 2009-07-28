@@ -1,9 +1,7 @@
-from nose.tools import assert_equal
-
-from helper import assert_equal_strings, assert_matches, CapturedLogger, \
-    CapturedDebugLogger, P
-
 from pythoscope.logger import log, path2modname
+
+from assertions import *
+from helper import CapturedLogger, CapturedDebugLogger, P
 
 
 class TestLogger(CapturedLogger):

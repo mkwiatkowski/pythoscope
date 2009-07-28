@@ -1,11 +1,10 @@
-from helper import assert_equal_strings, assert_length, read_data
-
 from pythoscope.inspector import inspect_project
 from pythoscope.generator import add_tests_to_project
 from pythoscope.util import read_file_contents, write_content_to_file
 
+from assertions import *
 from helper import get_test_module_contents, CapturedLogger, \
-    ProjectInDirectory, putfile, TempDirectory
+    ProjectInDirectory, putfile, TempDirectory, read_data
 
 add_tests_to_project.__test__ = False
 
