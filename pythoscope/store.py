@@ -1369,4 +1369,11 @@ def module_level_id(obj):
         raise TypeError("Don't know how to generate a module-level id for %r" % obj)
 
 def code_of(obj):
+    """Return an AST for the given object.
+
+    It is "code_of(obj)" instead of "obj.code" mostly for explicitness. Objects
+    have code attribute when they are created, but lose it once they are added
+    to a Module (see docstring for ObjectInModule). Existence of code_of
+    decouples a storage method (including caching) from an interface.
+    """
     return CodeTree.of(obj).get_code_of(obj)
