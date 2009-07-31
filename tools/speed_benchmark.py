@@ -5,7 +5,8 @@ import os.path
 import sys
 import timeit
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+pythoscope_path = os.path.join(os.path.dirname(__file__), os.pardir)
+sys.path.insert(0, os.path.abspath(pythoscope_path))
 
 from pythoscope import init_project
 from pythoscope.store import get_pickle_path
