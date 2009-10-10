@@ -113,7 +113,8 @@ def constructor_as_string(object, assigned_names={}):
         init_call = object.get_init_call()
         if init_call:
             args = init_call.input
-        return call_as_string(object.klass.name, args)
+        return call_as_string(object.klass.name, args,
+                              init_call and init_call.definition)
     elif isinstance(object, ImmutableObject):
         return CallString(object.reconstructor, imports=object.imports)
     elif isinstance(object, CompositeObject):
@@ -158,8 +159,8 @@ def get_contained_objects_info(obj, assigned_names):
     else:
         raise TypeError("Wrong argument to get_contained_objects_info: %r." % obj)
 
-# :: (string, dict, {SerializedObject: str}) -> CallString
-def call_as_string(object_name, args, assigned_names={}):
+# :: (string, dict, Definition, {SerializedObject: str}) -> CallString
+def call_as_string(object_name, args, definition=None, assigned_names={}):
     """Generate code for calling an object with given arguments.
 
     >>> from test.helper import make_fresh_serialize
@@ -188,18 +189,45 @@ def call_as_string(object_name, args, assigned_names={}):
     Uses names already assigned to objects instead of inlining their
     construction code.
         >>> mutable = serialize([])
-        >>> call_as_string('merge', {'seq1': mutable, 'seq2': serialize([1,2,3])}, {mutable: 'alist'})
+        >>> call_as_string('merge', {'seq1': mutable, 'seq2': serialize([1,2,3])},
+        ...     None, {mutable: 'alist'})
         'merge(seq1=alist, seq2=[1, 2, 3])'
+
+    Puts varargs at the end of arguments list.
+        >>> call_as_string('build_url',
+        ...     {'proto': serialize('http'), 'params': serialize(('user', 'session', 'new'))},
+        ...     Function('build_url', ['proto', '*params']))
+        "build_url(proto='http', 'user', 'session', 'new')"
+
+    Works for lone varargs too.
+        >>> call_as_string('concat', {'args': serialize(([1,2,3], [4,5], [6]))},
+        ...     Function('concat', ['*args']))
+        'concat([1, 2, 3], [4, 5], [6])'
+
+    Uses assigned names for varargs as well.
+        >>> args = serialize((1, 2, 3))
+        >>> call_as_string('add', {'args': args}, Function('add', ['*args']), {args: 'atuple'})
+        'add(*atuple)'
     """
     arguments = []
+    varargs = []
     uncomplete = False
     imports = set()
     for arg, value in sorted(args.iteritems()):
-        constructor = constructor_as_string(value, assigned_names)
-        uncomplete = uncomplete or constructor.uncomplete
-        imports.update(constructor.imports)
-        arguments.append("%s=%s" % (arg, constructor))
-    return CallString("%s(%s)" % (object_name, ', '.join(arguments)),
+        if definition and definition.is_vararg(arg):
+            rec, imp, unc = zip(*get_contained_objects_info(value, assigned_names))
+            uncomplete = uncomplete or any(unc)
+            imports.update(union(*imp))
+            if value in assigned_names.keys():
+                varargs = ["*%s" % assigned_names[value]]
+            else:
+                varargs = list(rec)
+        else:
+            constructor = constructor_as_string(value, assigned_names)
+            uncomplete = uncomplete or constructor.uncomplete
+            imports.update(constructor.imports)
+            arguments.append("%s=%s" % (arg, constructor))
+    return CallString("%s(%s)" % (object_name, ', '.join(arguments + varargs)),
                       uncomplete=uncomplete, imports=imports)
 
 # :: SerializedObject | Call | [SerializedObject] -> [SerializedObject]
@@ -801,7 +829,8 @@ class TestGenerator(object):
         Generated assertion will be a stub if input of a call cannot be
         constructed or if stub argument is True.
         """
-        callstring = decorate_call(call, call_as_string(name, call.input, assigned_names))
+        callstring = decorate_call(call, call_as_string(name, call.input,
+            call.definition, assigned_names))
 
         self.ensure_imports(callstring.imports)
 

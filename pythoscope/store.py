@@ -475,6 +475,12 @@ class Definition(ObjectInModule):
         self.args = args
         self.is_generator = is_generator
 
+    def is_vararg(self, name):
+        """Return True if given string names a vararg argument for this
+        definition.
+        """
+        return ("*%s" % name) in self.args
+
 class Callable(object):
     """Dynamic aspect of a callable object. Tracks all calls made to given
     callable.
