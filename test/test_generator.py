@@ -21,7 +21,7 @@ from assertions import *
 from helper import CapturedDebugLogger, CapturedLogger, P, \
     ProjectInDirectory, EmptyProject, TestableProject, \
     generate_single_test_module, get_test_cases, \
-    EmptyProjectExecution, putfile, TempDirectory
+    EmptyProjectExecution, putfile, TempDirectory, make_fresh_serialize
 
 # Let nose know that those aren't test functions/classes.
 add_tests_to_project.__test__ = False
@@ -879,7 +879,7 @@ class TestGeneratorDebugMessages(CapturedDebugLogger):
 
 class TestConstructorAsString:
     def setUp(self):
-        self.serialize = EmptyProjectExecution().serialize
+        self.serialize = make_fresh_serialize()
 
     def test_reconstructs_set_from_sets_module(self):
         call_string = constructor_as_string(self.serialize(sets.Set([1, 2, 3])))

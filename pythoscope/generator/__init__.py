@@ -60,8 +60,8 @@ def constructor_as_string(object, assigned_names={}):
     """For a given object (either a SerializedObject or a list of them) return
     a string representing a code that will construct it.
 
-    >>> from test.helper import EmptyProjectExecution
-    >>> serialize = EmptyProjectExecution().serialize
+    >>> from test.helper import make_fresh_serialize
+    >>> serialize = make_fresh_serialize()
 
     It handles built-in types
         >>> constructor_as_string(serialize(123))
@@ -162,8 +162,8 @@ def get_contained_objects_info(obj, assigned_names):
 def call_as_string(object_name, args, assigned_names={}):
     """Generate code for calling an object with given arguments.
 
-    >>> from test.helper import EmptyProjectExecution
-    >>> serialize = EmptyProjectExecution().serialize
+    >>> from test.helper import make_fresh_serialize
+    >>> serialize = make_fresh_serialize()
 
     >>> call_as_string('fun', {'a': serialize(1), 'b': serialize(2)})
     'fun(a=1, b=2)'
@@ -381,8 +381,8 @@ def arguments_as_string(args, always_use_argnames=False):
 def objcall2testname(object_name, args, output):
     """Generate a test method name that describes given object call.
 
-    >>> from test.helper import EmptyProjectExecution
-    >>> serialize = EmptyProjectExecution().serialize
+    >>> from test.helper import make_fresh_serialize
+    >>> serialize = make_fresh_serialize()
 
     >>> objcall2testname('do_this', {}, serialize(True))
     'test_do_this_returns_true'

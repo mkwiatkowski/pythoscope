@@ -104,6 +104,9 @@ TestableProject.__test__ = False
 def EmptyProjectExecution():
     return Execution(EmptyProject())
 
+def make_fresh_serialize():
+    return EmptyProjectExecution().serialize
+
 def get_test_module_contents(project):
     """Get contents of the first test module of a project.
     """
