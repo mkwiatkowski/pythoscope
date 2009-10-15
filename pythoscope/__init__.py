@@ -10,7 +10,7 @@ from logger import log
 from store import Project, ModuleNotFound, ModuleNeedsAnalysis, \
      ModuleSaveError, get_pythoscope_path, get_points_of_entry_path, \
      get_code_trees_path
-from util import samefile
+from compat import samefile
 
 
 __version__ = '0.4.1'

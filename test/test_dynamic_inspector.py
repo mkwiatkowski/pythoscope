@@ -8,7 +8,8 @@ from pythoscope.serializer import ImmutableObject, MapObject, UnknownObject, \
     SequenceObject, BuiltinException
 from pythoscope.store import Class, Execution, Function, \
     GeneratorObject, Method, UserObject, Project
-from pythoscope.util import all, findfirst, generator_has_ended
+from pythoscope.compat import all
+from pythoscope.util import findfirst, generator_has_ended
 
 from assertions import *
 from helper import TestableProject, PointOfEntryMock, EmptyProjectExecution, \

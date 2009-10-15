@@ -4,9 +4,9 @@ import re
 import sets
 import types
 
-from pythoscope.util import RePatternType, all, class_name, class_of, \
-    frozenset, module_name, regexp_flags_as_string, set, string2id, underscore
-
+from pythoscope.compat import all, set, frozenset
+from pythoscope.util import RePatternType, class_name, class_of, \
+    module_name, regexp_flags_as_string, string2id, underscore
 
 # Filter out private attributes, like __doc__, __name__ and __package__.
 BUILTIN_EXCEPTION_TYPES = set([v for k,v in exceptions.__dict__.items() if not k.startswith('_')])

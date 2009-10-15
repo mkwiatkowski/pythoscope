@@ -3,7 +3,8 @@ import re
 
 from nose.tools import assert_equal, assert_not_equal, assert_raises
 
-from pythoscope.util import quoted_block, set
+from pythoscope.compat import set
+from pythoscope.util import quoted_block
 
 __all__ = [
     # Nose assertions.

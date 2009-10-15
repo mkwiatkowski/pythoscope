@@ -12,7 +12,8 @@ from pythoscope.logger import log
 from pythoscope.serializer import BuiltinException, ImmutableObject, \
     MapObject, UnknownObject, SequenceObject, SerializedObject, is_immutable, \
     is_sequence, is_mapping, is_builtin_exception
-from pythoscope.util import all_of_type, set, module_path_to_name, \
+from pythoscope.compat import set
+from pythoscope.util import all_of_type, module_path_to_name, \
      write_content_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, is_generator_code, \
      extract_subpath, directories_under, findfirst, generator_has_ended, \

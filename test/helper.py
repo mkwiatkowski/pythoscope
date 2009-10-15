@@ -11,7 +11,8 @@ from pythoscope.generator import add_tests_to_project
 from pythoscope.logger import DEBUG, INFO, get_output, log, set_output
 from pythoscope.store import CodeTreesManager, CodeTreeNotFound, Execution, \
     Function, ModuleNotFound, PointOfEntry, Project
-from pythoscope.util import quoted_block, read_file_contents, set, \
+from pythoscope.compat import set
+from pythoscope.util import quoted_block, read_file_contents, \
     write_content_to_file
 
 

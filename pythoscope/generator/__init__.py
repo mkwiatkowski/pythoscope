@@ -8,8 +8,9 @@ from pythoscope.serializer import BuiltinException, CompositeObject, \
 from pythoscope.store import Class, Function, FunctionCall, TestClass, \
     TestMethod, ModuleNotFound, UserObject, MethodCall, Method, Project, \
     GeneratorObject
-from pythoscope.util import any, camelize, compact, counted, flatten, \
-    key_for_value, pluralize, set, sorted, underscore, union
+from pythoscope.compat import any, set, sorted
+from pythoscope.util import camelize, compact, counted, flatten, \
+    key_for_value, pluralize, underscore, union
 
 
 # :: [string] -> string
