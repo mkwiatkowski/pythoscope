@@ -1,12 +1,18 @@
 import os
 
-import docutils.parsers.rst
-import docutils.utils
+from nose import SkipTest
 
 from pythoscope.util import read_file_contents
 
 
 def test_documentation_syntax():
+    # May not be present in all distributions (added to stdlib in Python 2.5).
+    try:
+        import docutils.parsers.rst
+        import docutils.utils
+    except ImportError:
+        raise SkipTest
+
     def test(doc):
         path = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, doc))
 
