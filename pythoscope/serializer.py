@@ -4,12 +4,12 @@ import re
 import sets
 import types
 
-from pythoscope.util import RePatternType, all, class_name, frozenset, \
-    module_name, regexp_flags_as_string, set, string2id, underscore
+from pythoscope.util import RePatternType, all, class_name, class_of, \
+    frozenset, module_name, regexp_flags_as_string, set, string2id, underscore
 
 
 # Filter out private attributes, like __doc__, __name__ and __package__.
-BUILTIN_EXCEPTION_TYPES = set(v for k,v in exceptions.__dict__.items() if not k.startswith('_'))
+BUILTIN_EXCEPTION_TYPES = set([v for k,v in exceptions.__dict__.items() if not k.startswith('_')])
 
 # Exceptions with special semantics for the `args` attribute.
 # See <http://docs.python.org/library/exceptions.html#exceptions.EnvironmentError>
@@ -42,19 +42,19 @@ def get_human_readable_id(obj):
         return 'false'
 
     # ... based on object's type,
-    objtype = type(obj)
+    objclass = class_of(obj)
     mapping = {list: 'list',
                dict: 'dict',
                tuple: 'tuple',
                unicode: 'unicode_string',
                types.GeneratorType: 'generator'}
-    objid = mapping.get(objtype)
+    objid = mapping.get(objclass)
     if objid:
         return objid
 
     # ... or based on its supertype.
     if isinstance(obj, Exception):
-        return underscore(objtype.__name__)
+        return underscore(objclass.__name__)
     elif isinstance(obj, RePatternType):
         return "%s_pattern" % string2id(obj.pattern)
     elif isinstance(obj, types.FunctionType):
@@ -69,7 +69,7 @@ def get_human_readable_id(obj):
             string = "<>"
         # Looks like an instance without a custom __str__ defined.
         if string.startswith("<"):
-            return "%s_instance" % underscore(objtype.__name__)
+            return "%s_instance" % underscore(objclass.__name__)
         else:
             return string2id(string)
 
@@ -160,15 +160,23 @@ class ImmutableObject(SerializedObject):
         return hash(self.reconstructor)
 
     def __repr__(self):
-        return "ImmutableObject(%r, imports=%r)" % (self.reconstructor, self.imports)
+        if self.imports:
+            return "ImmutableObject(%r, imports=%r)" % (self.reconstructor, self.imports)
+        return "ImmutableObject(%r)" % self.reconstructor
 
     # :: object -> (string, set)
     def get_reconstructor_with_imports(obj):
         """
-        >>> ImmutableObject.get_reconstructor_with_imports(re.compile('abcd'))
-        ("re.compile('abcd')", set(['re']))
-        >>> ImmutableObject.get_reconstructor_with_imports(re.compile('abcd', re.I | re.M))
-        ("re.compile('abcd', re.IGNORECASE | re.MULTILINE)", set(['re']))
+        >>> reconstructor, imports = ImmutableObject.get_reconstructor_with_imports(re.compile('abcd'))
+        >>> reconstructor
+        "re.compile('abcd')"
+        >>> imports == set(['re'])
+        True
+        >>> reconstructor, imports = ImmutableObject.get_reconstructor_with_imports(re.compile('abcd', re.I | re.M))
+        >>> reconstructor
+        "re.compile('abcd', re.IGNORECASE | re.MULTILINE)"
+        >>> imports == set(['re'])
+        True
         """
         if isinstance(obj, (int, long, float, str, unicode, types.NoneType)):
             # Bultin types has very convienient representation.
@@ -261,6 +269,9 @@ class SequenceObject(CompositeObject):
             self.constructor_format = self.type_formats_with_imports[type(obj)][0]
             self.imports = self.type_formats_with_imports[type(obj)][1]
 
+    def __repr__(self):
+        return "SequenceObject(%s)" % (self.constructor_format % self.contained_objects)
+
 class MapObject(CompositeObject):
     """A mutable object that contains unordered mapping of key/value pairs.
     """
@@ -289,7 +300,7 @@ class BuiltinException(CompositeObject):
         self.constructor_format = "%s(%%s)" % class_name(obj)
         self.imports = set()
 
-        if type(obj) in BUILTIN_ENVIRONMENT_ERROR_TYPES and obj.filename is not None:
+        if class_of(obj) in BUILTIN_ENVIRONMENT_ERROR_TYPES and obj.filename is not None:
             self.args.append(serialize(obj.filename))
 
 def is_immutable(obj):
@@ -313,7 +324,7 @@ def is_builtin_exception(obj):
     NameError or EOFError. Return False for instances of user-defined
     exceptions.
     """
-    return type(obj) in BUILTIN_EXCEPTION_TYPES
+    return class_of(obj) in BUILTIN_EXCEPTION_TYPES
 
 def is_serialized_string(obj):
     return isinstance(obj, ImmutableObject) and obj.type_name == 'str'

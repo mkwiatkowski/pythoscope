@@ -8,7 +8,7 @@ from pythoscope.serializer import BuiltinException, CompositeObject, \
 from pythoscope.store import Class, Function, FunctionCall, TestClass, \
     TestMethod, ModuleNotFound, UserObject, MethodCall, Method, Project, \
     GeneratorObject
-from pythoscope.util import camelize, compact, counted, flatten, \
+from pythoscope.util import any, camelize, compact, counted, flatten, \
     key_for_value, pluralize, set, sorted, underscore, union
 
 
@@ -120,7 +120,9 @@ def constructor_as_string(object, assigned_names={}):
     elif isinstance(object, CompositeObject):
         try:
             reconstructors, imports, uncomplete = zip(*get_contained_objects_info(object, assigned_names))
-        except ValueError:
+        # In Python <= 2.3 zip can raise TypeError if no arguments are provided.
+        # All Pythons can raise ValueError because of the wrong unpacking.
+        except (ValueError, TypeError):
             reconstructors, imports, uncomplete = [], [], []
         return CallString(object.constructor_format % ', '.join(reconstructors),
                           imports=union(object.imports, *imports),

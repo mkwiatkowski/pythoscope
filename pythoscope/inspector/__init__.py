@@ -1,7 +1,8 @@
 from pythoscope.inspector import static, dynamic
 from pythoscope.logger import log
 from pythoscope.store import ModuleNotFound
-from pythoscope.util import last_traceback, python_modules_below
+from pythoscope.util import generator_has_ended, last_traceback, \
+    python_modules_below
 
 
 def inspect_project(project):
@@ -55,6 +56,11 @@ def inspect_project_statically(project):
         add_and_update_points_of_entry(project)
 
 def inspect_project_dynamically(project):
+    if project.points_of_entry and hasattr(generator_has_ended, 'unreliable'):
+        log.warning("Pure Python implementation of util.generator_has_ended is "
+                    "not reliable on Python 2.4 and lower. Please compile the "
+                    "_util module or use Python 2.5 or higher.")
+
     for poe in project.points_of_entry.values():
         try:
             log.info("Inspecting point of entry %s." % poe.name)

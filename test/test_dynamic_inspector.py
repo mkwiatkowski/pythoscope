@@ -8,7 +8,7 @@ from pythoscope.serializer import ImmutableObject, MapObject, UnknownObject, \
     SequenceObject, BuiltinException
 from pythoscope.store import Class, Execution, Function, \
     GeneratorObject, Method, UserObject, Project
-from pythoscope.util import findfirst
+from pythoscope.util import all, findfirst, generator_has_ended
 
 from assertions import *
 from helper import TestableProject, PointOfEntryMock, EmptyProjectExecution, \
@@ -656,6 +656,9 @@ class TestGenerators:
         assert not gobject.raised_exception()
 
     def test_handles_yielded_nones(self):
+        if hasattr(generator_has_ended, 'unreliable'):
+            raise SkipTest
+
         gobject = inspect_returning_single_call(function_calling_generator_that_yields_none)
 
         assert_generator_object({}, [None], gobject)
@@ -671,6 +674,9 @@ class TestGenerators:
         assert_generator_object({}, [1], gobject)
 
     def test_handles_generator_objects_that_yield_none_and_dont_get_destroyed(self):
+        if hasattr(generator_has_ended, 'unreliable'):
+            raise SkipTest
+
         gobject = inspect_returning_single_call(function_calling_generator_that_yields_none_and_doesnt_get_destroyed)
 
         assert_generator_object({}, [None], gobject)
@@ -789,7 +795,13 @@ class TestRaisedExceptions(IgnoredWarnings):
             def raising_syntax_error(): exec 'a b c'
             try: raising_syntax_error()
             except: pass
-        syntax_error_exc_args = ('invalid syntax', ('<string>', 1, 3, 'a b c'))
+        # Versions of Python up to 2.4 used None for a filename in syntax
+        # errors invoked by exec.
+        if sys.version_info >= (2, 5):
+            filename = '<string>'
+        else:
+            filename = None
+        syntax_error_exc_args = ('invalid syntax', (filename, 1, 3, 'a b c'))
 
         call = inspect_returning_single_call(causes_interpreter_to_raise_syntax_error)
         assert_call_with_exception({}, 'SyntaxError', call)

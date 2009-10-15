@@ -15,8 +15,9 @@ from pythoscope.serializer import BuiltinException, ImmutableObject, \
 from pythoscope.util import all_of_type, set, module_path_to_name, \
      write_content_to_file, ensure_directory, DirectoryException, \
      get_last_modification_time, read_file_contents, is_generator_code, \
-     extract_subpath, directories_under, findfirst, contains_active_generator, \
-     map_values, class_name, module_name, starts_with_path, string2filename
+     extract_subpath, directories_under, findfirst, generator_has_ended, \
+     map_values, class_name, module_name, starts_with_path, string2filename, \
+     get_generator_from_frame
 
 
 CREATIONAL_METHODS = ['__init__', '__new__']
@@ -1048,7 +1049,7 @@ class Module(Localizable, TestSuite):
             try:
                 self.write(self.get_content())
             except DirectoryException, err:
-                raise ModuleSaveError(self.subpath, err.message)
+                raise ModuleSaveError(self.subpath, err.args[0])
             self.changed = False
 
 def object_id(obj):
@@ -1165,11 +1166,11 @@ class Execution(object):
         gobject = GeneratorObject(definition, sargs)
         # Generator objects return None to the tracer when stopped. That
         # extra None we have to filter out manually (see
-        # _fix_generator_objects method). The only way to distinguish
-        # between active and stopped generators is to ask garbage collector
-        # about them. So we temporarily save the generator frame inside the
-        # GeneratorObject, so it can be inspected later.
-        gobject._frame = frame
+        # _fix_generator_objects method). We distinguish between active
+        # and stopped generators using the generator_has_ended() function.
+        # It needs the generator object itself, so we save it for later
+        # inspection inside the GeneratorObject.
+        gobject._generator = get_generator_from_frame(frame)
         return gobject
 
     # :: (type, Definition, Callable, args, code, frame) -> Call
@@ -1239,13 +1240,12 @@ class Execution(object):
         just bogus Nones placed on generator stop.
         """
         for gobject in self.iter_captured_generator_objects():
-            if not contains_active_generator(gobject._frame) \
+            if generator_has_ended(gobject._generator) \
                    and gobject.output \
                    and gobject.output[-1] == ImmutableObject(None):
                 gobject.output.pop()
-            # Once we know if the generator is active or not, we can discard
-            # the frame.
-            del gobject._frame
+            # Once we know if the generator is active or not, we can discard it.
+            del gobject._generator
 
 class PointOfEntry(Localizable):
     """Piece of code provided by the user that allows dynamic analysis.

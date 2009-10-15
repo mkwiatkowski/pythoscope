@@ -1,3 +1,5 @@
 pythoscope.egg-info
 lib2to3/Grammar*.pickle
 lib2to3/PatternGrammar*.pickle
+build/
+dist/

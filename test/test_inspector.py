@@ -1,4 +1,7 @@
+from nose import SkipTest
+
 from pythoscope.inspector import inspect_project
+from pythoscope.util import generator_has_ended
 
 from assertions import *
 from helper import CapturedLogger, P, ProjectInDirectory, TempDirectory
@@ -44,3 +47,18 @@ class TestInspector(CapturedLogger, TempDirectory):
         for path in paths:
             assert_contains_once(self._get_log_output(),
                                  "INFO: Inspecting point of entry %s." % path)
+
+    def test_warns_about_unreliable_implementation_of_util_generator_has_ended(self):
+        if not hasattr(generator_has_ended, 'unreliable'):
+            raise SkipTest
+
+        paths = ["edgar.py", "allan.py"]
+        project = ProjectInDirectory(self.tmpdir).with_points_of_entry(paths)
+
+        inspect_project(project)
+
+        assert_contains_once(self._get_log_output(),
+                             "WARNING: Pure Python implementation of "
+                             "util.generator_has_ended is not reliable on "
+                             "Python 2.4 and lower. Please compile the _util "
+                             "module or use Python 2.5 or higher.")

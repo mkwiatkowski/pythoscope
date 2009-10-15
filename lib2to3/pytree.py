@@ -678,8 +678,7 @@ class WildcardPattern(BasePattern):
                     if self.name:
                         r[self.name] = nodes[:count]
                     yield count, r
-            finally:
-                sys.stderr = save_stderr
+            sys.stderr = save_stderr
 
     def _iterative_matches(self, nodes):
         """Helper to iteratively yield the matches."""

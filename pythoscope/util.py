@@ -22,11 +22,11 @@ except NameError:
 try:
     sorted = sorted
 except NameError:
-    def sorted(iterable, cmp=cmp, key=None):
+    def sorted(iterable, compare=cmp, key=None):
         if key:
-            cmp = lambda x,y: cmp(key(x), key(y))
+            compare = lambda x,y: cmp(key(x), key(y))
         alist = list(iterable)
-        alist.sort(cmp)
+        alist.sort(compare)
         return alist
 
 try:
@@ -37,6 +37,15 @@ except NameError:
             if not element:
                 return False
         return True
+
+try:
+    any = any
+except NameError:
+    def any(iterable):
+        for element in iterable:
+            if element:
+                return True
+        return False
 
 try:
     from itertools import groupby
@@ -318,11 +327,41 @@ def key_for_value(dictionary, value):
         if v == value:
             return k
 
-def contains_active_generator(frame):
-    return bool(all_of_type(gc.get_referrers(frame), types.GeneratorType))
+def get_generator_from_frame(frame):
+    generators = all_of_type(gc.get_referrers(frame), types.GeneratorType)
+    if generators:
+        return generators[0]
 
 def is_generator_code(code):
     return code.co_flags & 0x20 != 0
+
+def generator_has_ended(generator):
+    """Return True if the generator has been exhausted and False otherwise.
+
+    >>> generator_has_ended(1)
+    Traceback (most recent call last):
+      ...
+    TypeError: argument is not a generator
+    """
+    if not isinstance(generator, types.GeneratorType):
+        raise TypeError("argument is not a generator")
+    return _generator_has_ended(generator)
+
+try:
+    from _util import _generator_has_ended
+except ImportError:
+    if sys.version_info < (2, 5):
+        # In Python 2.4 and earlier we can't reliably tell if a generator
+        # is active or not without going to the C level. We assume it
+        # has ended, as it will be true most of the time in our use case.
+        def _generator_has_ended(generator):
+            return True
+        generator_has_ended.unreliable = True
+    else:
+        # This is a hack that uses the fact that in Python 2.5 and higher
+        # generator frame is garbage collected once the generator has ended.
+        def _generator_has_ended(generator):
+            return generator.gi_frame is None
 
 def compile_without_warnings(stmt):
     """Compile single interactive statement with Python interpreter warnings

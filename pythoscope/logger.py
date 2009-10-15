@@ -1,7 +1,7 @@
 """This module defines the logging system.
 
-To change the logging level, assign INFO, DEBUG or ERROR to log.level. Default
-is INFO.
+To change the logging level, assign DEBUG, ERROR, INFO or WARNING to log.level.
+Default is INFO.
 
 To change the output stream, call the set_output() function. Default is
 sys.stderr.
@@ -16,9 +16,10 @@ from time import strftime, localtime
 from pythoscope.util import module_path_to_name
 
 
-INFO  = logging.INFO
 DEBUG = logging.DEBUG
 ERROR = logging.ERROR
+INFO  = logging.INFO
+WARNING = logging.WARNING
 
 def path2modname(path, default=""):
     """Take a path to a pythoscope module and return a module name in dot-style

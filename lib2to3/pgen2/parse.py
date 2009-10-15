@@ -34,8 +34,11 @@ class ParseError(Exception):
         """Implemented so pickle can serialize this object.
 
         >>> import pickle
-        >>> pickle.loads(pickle.dumps(ParseError(1, 2, 3, 4)))
-        ParseError('1: type=2, value=3, context=4',)
+        >>> pe = pickle.loads(pickle.dumps(ParseError(1, 2, 3, 4)))
+        >>> isinstance(pe, ParseError)
+        True
+        >>> (pe.msg, pe.type, pe.value, pe.context) == (1, 2, 3, 4)
+        True
         """
         return (ParseError, (self.msg, self.type, self.value, self.context))
 

@@ -1,6 +1,16 @@
+import sys
+
+# Order is relevant, as setuptools monkeypatches distutils.
 from setuptools import setup
+from distutils.core import Extension
 
 from pythoscope import __version__
+
+# The C module doesn't need to be built for Python 2.5 and higher.
+if sys.version_info < (2, 5):
+    ext_modules = [Extension('pythoscope._util', sources=['pythoscope/_util.c'])]
+else:
+    ext_modules = []
 
 setup(
     name='pythoscope',
@@ -12,6 +22,8 @@ setup(
     long_description = open("README").read() + "\n" + open("Changelog").read(),
     license = 'MIT',
     url = 'http://pythoscope.org',
+
+    ext_modules = ext_modules,
 
     packages = ['pythoscope', 'pythoscope.inspector', 'pythoscope.generator', 'lib2to3', 'lib2to3.pgen2'],
     package_data = {'pythoscope': [],
