@@ -72,7 +72,7 @@ def benchmark_project_load_performance(modules_count=25):
     module = make_module()
     for i in range(modules_count):
         putfile(project_path, "module%s.py" % i, module)
-    init_project(project_path)
+    init_project(project_path, skip_inspection=True)
 
     print "==> Inspecting project.."
     elapsed = run_timer("inspect_project(Project('%s'))" % project_path,

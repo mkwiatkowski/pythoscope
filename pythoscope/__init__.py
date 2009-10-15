@@ -95,7 +95,7 @@ def find_project_directory(path):
     else:
         return find_project_directory(os.path.join(path, os.path.pardir))
 
-def init_project(path):
+def init_project(path, skip_inspection=False):
     pythoscope_path = get_pythoscope_path(path)
 
     try:
@@ -106,9 +106,10 @@ def init_project(path):
     except OSError, err:
         fail("Couldn't initialize Pythoscope directory: %s." % err.strerror)
 
-    log.debug("Performing initial static inspection of the project source code.")
     project = Project.from_directory(path)
-    inspect_project_statically(project)
+    if not skip_inspection:
+        log.debug("Performing initial static inspection of the project source code.")
+        inspect_project_statically(project)
     project.save()
 
 def generate_tests(modules, force, template):
