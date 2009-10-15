@@ -1,4 +1,8 @@
+import os.path
 import sys
+
+pythoscope_path = os.path.join(os.path.dirname(__file__), os.pardir)
+sys.path.insert(0, os.path.abspath(pythoscope_path))
 
 import pythoscope
 from pythoscope import inspect_project_statically
