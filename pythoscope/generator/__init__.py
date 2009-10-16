@@ -121,7 +121,7 @@ def constructor_as_string(object, assigned_names={}):
     elif isinstance(object, CompositeObject):
         try:
             reconstructors, imports, uncomplete = zip(*get_contained_objects_info(object, assigned_names))
-        # In Python <= 2.3 zip can raise TypeError if no arguments are provided.
+        # In Python <= 2.3 zip can raise TypeError if no arguments were provided.
         # All Pythons can raise ValueError because of the wrong unpacking.
         except (ValueError, TypeError):
             reconstructors, imports, uncomplete = [], [], []
@@ -207,31 +207,63 @@ def call_as_string(object_name, args, definition=None, assigned_names={}):
         ...     Function('concat', ['*args']))
         'concat([1, 2, 3], [4, 5], [6])'
 
-    Uses assigned names for varargs as well.
+    Uses assigned name for varargs as well.
         >>> args = serialize((1, 2, 3))
         >>> call_as_string('add', {'args': args}, Function('add', ['*args']), {args: 'atuple'})
         'add(*atuple)'
+
+    Inlines extra keyword arguments in the call...
+        >>> call_as_string('dict', {'kwargs': serialize({'one': 1, 'two': 2})},
+        ...     Function('dict', ['**kwargs']))
+        'dict(one=1, two=2)'
+
+    ...even when they are combined with varargs.
+        >>> call_as_string('wrap', {'a': serialize((1, 2, 3)), 'k': serialize({'x': 4, 'y': 5})},
+        ...     Function('wrap', ['*a', '**k']))
+        'wrap(1, 2, 3, x=4, y=5)'
+
+    Uses assigned name for kwarg if present.
+        >>> kwargs = serialize({'id': 42, 'model': 'user'})
+        >>> call_as_string('filter_params', {'kwargs': kwargs},
+        ...    Function('filter_params', ['**kwargs']), {kwargs: 'params'})
+        'filter_params(**params)'
     """
     arguments = []
     varargs = []
+    kwargs = []
     uncomplete = False
     imports = set()
     for arg, value in sorted(args.iteritems()):
         if definition and definition.is_vararg(arg):
-            rec, imp, unc = zip(*get_contained_objects_info(value, assigned_names))
-            uncomplete = uncomplete or any(unc)
-            imports.update(union(*imp))
             if value in assigned_names.keys():
                 varargs = ["*%s" % assigned_names[value]]
             else:
+                rec, imp, unc = zip(*get_contained_objects_info(value, assigned_names))
+                uncomplete = uncomplete or any(unc)
+                imports.update(union(*imp))
                 varargs = list(rec)
+        elif definition and definition.is_kwarg(arg):
+            if value in assigned_names.keys():
+                kwargs = ["**%s" % assigned_names[value]]
+            else:
+                for karg, kvalue in map_as_kwargs(value):
+                    valuecs = constructor_as_string(kvalue, assigned_names)
+                    uncomplete = uncomplete or valuecs.uncomplete
+                    imports.update(valuecs.imports)
+                    kwargs.append("%s=%s" % (karg, valuecs))
         else:
             constructor = constructor_as_string(value, assigned_names)
             uncomplete = uncomplete or constructor.uncomplete
             imports.update(constructor.imports)
             arguments.append("%s=%s" % (arg, constructor))
-    return CallString("%s(%s)" % (object_name, ', '.join(arguments + varargs)),
+    return CallString("%s(%s)" % (object_name, ', '.join(arguments + varargs + kwargs)),
                       uncomplete=uncomplete, imports=imports)
+
+# :: MapObject -> {str: SerializedObject}
+def map_as_kwargs(mapobject):
+    # Keys of kwargs argument must be strings - assertion is checked by
+    # the interpreter on runtime.
+    return sorted([(eval(k.reconstructor), v) for k,v in mapobject.mapping])
 
 # :: SerializedObject | Call | [SerializedObject] -> [SerializedObject]
 def get_contained_objects(obj):

@@ -483,6 +483,12 @@ class Definition(ObjectInModule):
         """
         return ("*%s" % name) in self.args
 
+    def is_kwarg(self, name):
+        """Return True if given string names a kwarg argument for this
+        definition.
+        """
+        return ("**%s" % name) in self.args
+
 class Callable(object):
     """Dynamic aspect of a callable object. Tracks all calls made to given
     callable.
