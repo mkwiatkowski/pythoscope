@@ -1,7 +1,7 @@
 import os
 
 from pythoscope.astvisitor import parse_fragment
-from pythoscope.generator import find_method_code
+from pythoscope.generator import TestMethodDescription, TestGenerator
 from pythoscope.generator.adder import add_test_case_to_project, \
     find_test_module, module_path_to_test_path
 from pythoscope.store import TestClass, TestMethod
@@ -13,6 +13,8 @@ from helper import get_test_cases, CapturedLogger, CustomSeparator, \
 # Let nose know that this aren't test classes and functions.
 TestClass.__test__ = False
 TestMethod.__test__ = False
+TestMethodDescription.__test__ = False
+TestGenerator.__test__ = False
 module_path_to_test_path.__test__ = False
 add_test_case_to_project.__test__ = False
 find_test_module.__test__ = False
@@ -177,33 +179,23 @@ class TestGeneratorMergerForProjectWithTestModule(CapturedLogger):
             "class NewTestClass(unittest.TestCase):\n"\
             "    def test_some_method(self):\n"\
             "        assert False # c'mon, implement me\n",
-            "NewTestClass",
-            ["test_some_method"],
-            [self.associated_module])
+            "NewTestClass", "test_some_method")
         another_klass = self._test_class_from_code(
             "class NewTestClass(unittest.TestCase):\n"\
             "    def test_new_method(self):\n"\
             "        assert True # ha!\n",
-            "NewTestClass",
-            ["test_new_method"],
-            [self.associated_module])
+            "NewTestClass", "test_new_method")
         expected_output = "class NewTestClass(unittest.TestCase):\n"\
-                          "    def test_some_method(self):\n"\
-                          "        assert False # c'mon, implement me\n\n"\
-                          "    def test_new_method(self):\n"\
-                          "        assert True # ha!\n"
+            "    def test_some_method(self):\n"\
+            "        assert False # c'mon, implement me\n\n"\
+            "    def test_new_method(self):\n"\
+            "        assert True # ha!\n"
 
         add_test_case_to_project(self.project, klass)
         add_test_case_to_project(self.project, another_klass)
 
         assert_equal_strings(expected_output, self.test_module.get_content())
 
-    def _test_class_from_code(self, code, name, method_names, associated_modules):
-        # TODO: this may too easily get out of sync with the code in
-        # generator:TestGenerator._generate_test_case, so refactor common things out.
-        parsed_code = parse_fragment(code)
-        def name2method(name):
-            return TestMethod(name=name, code=find_method_code(parsed_code, name))
-        return TestClass(name=name, code=parsed_code,
-                         test_cases=map(name2method, method_names),
-                         associated_modules=associated_modules)
+    def _test_class_from_code(self, code, name, method):
+        return TestGenerator()._generate_test_class(name,
+            [TestMethodDescription(method)], self.associated_module, code)

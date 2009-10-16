@@ -676,21 +676,6 @@ class TestGenerator(object):
             module = project.find_module_by_full_path(modname)
             self._add_tests_for_module(module, project, force)
 
-    def create_test_class(self, class_name, method_descriptions):
-        result = "%s\n" % (self.test_class_header(class_name))
-        for method_description in method_descriptions:
-            result += "    def %s(self):\n" % method_description.name
-            if method_description.setup:
-                result += method_description.indented_setup("        ")
-            for assertion in method_description.assertions:
-                apply_template = getattr(self, "%s_assertion" % assertion[0])
-                result += "        %s\n" % apply_template(*assertion[1:])
-            # We need at least one statement in a method to be syntatically correct.
-            if not method_description.contains_code():
-                result += "        pass\n"
-            result += "\n"
-        return result
-
     def comment_assertion(self, comment):
         return comment
 
@@ -717,17 +702,35 @@ class TestGenerator(object):
 
         # Don't generate empty test classes.
         if method_descriptions:
-            test_body = self.create_test_class(class_name, method_descriptions)
-            test_code = parse_fragment(test_body)
-            def methoddesc2testmethod(method_description):
-                name = method_description.name
-                return TestMethod(name=name, code=find_method_code(test_code, name))
-            return TestClass(name=class_name,
-                             code=test_code,
-                             test_cases=map(methoddesc2testmethod, method_descriptions),
-                             imports=self.imports,
-                             main_snippet=self.main_snippet,
-                             associated_modules=[module])
+            body = self._generate_test_class_code(class_name, method_descriptions)
+            return self._generate_test_class(class_name, method_descriptions, module, body)
+
+    def _generate_test_class_code(self, class_name, method_descriptions):
+        result = "%s\n" % (self.test_class_header(class_name))
+        for method_description in method_descriptions:
+            result += "    def %s(self):\n" % method_description.name
+            if method_description.setup:
+                result += method_description.indented_setup("        ")
+            for assertion in method_description.assertions:
+                apply_template = getattr(self, "%s_assertion" % assertion[0])
+                result += "        %s\n" % apply_template(*assertion[1:])
+            # We need at least one statement in a method to be syntatically correct.
+            if not method_description.contains_code():
+                result += "        pass\n"
+            result += "\n"
+        return result
+
+    def _generate_test_class(self, class_name, method_descriptions, module, body):
+        code = parse_fragment(body)
+        def methoddesc2testmethod(method_description):
+            name = method_description.name
+            return TestMethod(name=name, code=find_method_code(code, name))
+        return TestClass(name=class_name,
+                         code=code,
+                         test_cases=map(methoddesc2testmethod, method_descriptions),
+                         imports=self.imports,
+                         main_snippet=self.main_snippet,
+                         associated_modules=[module])
 
     def _generate_test_method_descriptions(self, object, module):
         if isinstance(object, Function):
