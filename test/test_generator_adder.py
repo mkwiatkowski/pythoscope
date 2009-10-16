@@ -33,7 +33,7 @@ class TestModulePathToTestPathWithCustomSeparator(CustomSeparator):
         assert_equal("test_pythoscope.py",
                      module_path_to_test_path("pythoscope#__init__.py"))
 
-class TestGeneratorMerger:
+class TestGeneratorAdder:
     def test_finds_associated_test_modules_that_use_different_name_conventions(self):
         test_module_names = ["test_module.py", "testModule.py", "TestModule.py",
                              "tests_module.py", "testsModule.py", "TestsModule.py",
@@ -71,7 +71,7 @@ class TestGeneratorMerger:
         assert_equal_sets([new_test_method], test_class.test_cases)
         assert new_test_method.parent is test_class
 
-class TestGeneratorMergerForProjectWithTestModule(CapturedLogger):
+class TestGeneratorAdderForProjectWithTestModule(CapturedLogger):
     def setUp(self):
         CapturedLogger.setUp(self)
         self.project = EmptyProject()
