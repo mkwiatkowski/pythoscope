@@ -3,6 +3,7 @@ import os
 from pythoscope.generator import TestMethodDescription, TestGenerator
 from pythoscope.generator.adder import add_test_case_to_project, \
     find_test_module, module_path_to_test_path
+from pythoscope.inspector.static import inspect_code
 from pythoscope.store import TestClass, TestMethod
 
 from assertions import *
@@ -177,16 +178,18 @@ class TestGeneratorAdderOnCode:
         self.module = self.project.create_module("module.py")
         self.test_module = self.project.create_module("test_module.py")
 
+    def _test_module_from_code(self, code):
+        return inspect_code(self.project, "test_module.py", code)
+
     def _test_class_from_code(self, code, name, method):
         return TestGenerator()._generate_test_class(name,
             [TestMethodDescription(method)], self.module, code)
 
     def test_appends_new_test_methods_to_test_classes_with_proper_indentation(self):
-        klass = self._test_class_from_code(
+        module = self._test_module_from_code(
             "class NewTestClass(unittest.TestCase):\n"\
             "    def test_some_method(self):\n"\
-            "        assert False # c'mon, implement me\n",
-            "NewTestClass", "test_some_method")
+            "        assert False # c'mon, implement me\n")
         another_klass = self._test_class_from_code(
             "class NewTestClass(unittest.TestCase):\n"\
             "    def test_new_method(self):\n"\
@@ -198,7 +201,6 @@ class TestGeneratorAdderOnCode:
             "    def test_new_method(self):\n"\
             "        assert True # ha!\n"
 
-        add_test_case_to_project(self.project, klass)
         add_test_case_to_project(self.project, another_klass)
 
-        assert_equal_strings(expected_output, self.test_module.get_content())
+        assert_equal_strings(expected_output, module.get_content())
