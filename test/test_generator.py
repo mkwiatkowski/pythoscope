@@ -201,7 +201,7 @@ class TestGenerator:
     def test_generates_content_in_right_order(self):
         result = generate_single_test_module(objects=[Function('function')])
 
-        assert re.match(r"import unittest.*?class TestFunction.*?if __name__ == '__main__'", result, re.DOTALL)
+        assert_matches(r"import unittest.*?class TestFunction.*?if __name__ == '__main__'", result)
 
     def test_ignores_test_modules(self):
         result = generate_single_test_module()

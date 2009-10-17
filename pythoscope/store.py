@@ -1030,8 +1030,11 @@ class Module(Localizable, TestSuite):
 
     def _add_import(self, import_desc):
         self.imports.append(import_desc)
-        code_of(self).insert_child(0, create_import(import_desc))
+        self._insert_after_future_imports(create_import(import_desc))
         self.mark_as_changed()
+
+    def _insert_after_future_imports(self, code):
+        code_of(self).insert_child(0, code) # XXX
 
     def _append_test_case_code(self, code):
         # If the main_snippet exists we have to put the new test case

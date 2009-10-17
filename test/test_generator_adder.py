@@ -174,6 +174,7 @@ class TestGeneratorAdderForProjectWithTestModule(CapturedLogger):
 
 class TestGeneratorAdderOnCode:
     def setUp(self):
+        self.generator = TestGenerator()
         self.project = EmptyProject()
         self.module = self.project.create_module("module.py")
         self.test_module = self.project.create_module("test_module.py")
@@ -182,7 +183,7 @@ class TestGeneratorAdderOnCode:
         return inspect_code(self.project, "test_module.py", code)
 
     def _test_class_from_code(self, code, name, method):
-        return TestGenerator()._generate_test_class(name,
+        return self.generator._generate_test_class(name,
             [TestMethodDescription(method)], self.module, code)
 
     def test_appends_new_test_methods_to_test_classes_with_proper_indentation(self):
@@ -190,7 +191,7 @@ class TestGeneratorAdderOnCode:
             "class NewTestClass(unittest.TestCase):\n"\
             "    def test_some_method(self):\n"\
             "        assert False # c'mon, implement me\n")
-        another_klass = self._test_class_from_code(
+        klass = self._test_class_from_code(
             "class NewTestClass(unittest.TestCase):\n"\
             "    def test_new_method(self):\n"\
             "        assert True # ha!\n",
@@ -201,6 +202,16 @@ class TestGeneratorAdderOnCode:
             "    def test_new_method(self):\n"\
             "        assert True # ha!\n"
 
-        add_test_case_to_project(self.project, another_klass)
+        add_test_case_to_project(self.project, klass)
 
         assert_equal_strings(expected_output, module.get_content())
+
+    def test_keeps_future_imports_first(self):
+        module = self._test_module_from_code("from __future__ import division\n")
+        self.generator.ensure_import(('nose', 'SkipTest'))
+        klass = self._test_class_from_code("", "TestClass", "test_method")
+
+        add_test_case_to_project(self.project, klass)
+
+        assert_matches(r"from __future__ import division.*from nose import SkipTest",
+            module.get_content())

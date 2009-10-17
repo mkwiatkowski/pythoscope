@@ -71,7 +71,7 @@ def assert_matches(regexp, string, anywhere=False):
         match = re.search
     else:
         match = re.match
-    assert match(regexp, string), \
+    assert match(regexp, string, re.DOTALL), \
         "Expected\n%s\nto match r'%s', but it didn't." % (quoted_block(string), regexp)
 
 def assert_not_raises(exception, function):
