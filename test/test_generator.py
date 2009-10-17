@@ -1,7 +1,6 @@
 import array
 import os
 import re
-import sets
 import sys
 import time
 import types
@@ -14,7 +13,7 @@ from pythoscope.serializer import ImmutableObject
 from pythoscope.store import Project, Class, Function, Method, \
      ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod, \
      MethodCall, FunctionCall, UserObject, GeneratorObject, CodeTree
-from pythoscope.compat import sorted
+from pythoscope.compat import sets, sorted
 from pythoscope.util import read_file_contents, get_last_modification_time
 
 from assertions import *

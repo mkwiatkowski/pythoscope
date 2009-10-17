@@ -1,10 +1,9 @@
 import array
 import exceptions
 import re
-import sets
 import types
 
-from pythoscope.compat import all, set, frozenset
+from pythoscope.compat import all, frozenset, set, sets
 from pythoscope.util import RePatternType, class_name, class_of, \
     module_name, regexp_flags_as_string, string2id, underscore
 

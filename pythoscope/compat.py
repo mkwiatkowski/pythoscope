@@ -2,6 +2,7 @@
 """
 
 import os
+import warnings
 
 
 try:
@@ -72,3 +73,8 @@ try:
 except ImportError:
     def samefile(file1, file2):
         return os.path.realpath(file1) == os.path.realpath(file2)
+
+# Ignore Python's 2.6 deprecation warning for sets module.
+warnings.simplefilter('ignore')
+import sets
+warnings.resetwarnings()

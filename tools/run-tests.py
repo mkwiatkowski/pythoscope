@@ -13,9 +13,10 @@ def cp(src, dst):
 def main():
     VERSIONS = [('2.3', ['tests', 'build']),
                 ('2.4', ['tests', 'build']),
-                ('2.5', ['tests'])]
+                ('2.5', ['tests']),
+                ('2.6', ['tests'])]
     results = {}
- 
+
     for ver, types in VERSIONS:
         if 'tests' in types:
             version = "%s-tests" % ver
