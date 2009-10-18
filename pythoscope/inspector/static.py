@@ -77,6 +77,8 @@ class ModuleVisitor(ASTVisitor):
         self.imports = []
         self.objects = []
         self.main_snippet = None
+        self.last_import = None
+        self.past_imports = False
 
     def visit_class(self, name, bases, body):
         visitor = descend(body.children, ClassVisitor)
@@ -87,22 +89,28 @@ class ModuleVisitor(ASTVisitor):
             methods = [create_definition(n, a, c, Method) for (n, a, c) in visitor.methods]
             klass = Class(name=name, methods=methods, bases=bases)
         self.objects.append(klass)
+        self.past_imports = True
 
     def visit_function(self, name, args, body):
         self.objects.append(create_definition(name, args, body, Function))
+        self.past_imports = True
 
     def visit_lambda_assign(self, name, args):
         self.objects.append(Function(name, args=args))
+        self.past_imports = True
 
-    def visit_import(self, names, import_from):
+    def visit_import(self, names, import_from, body):
         if import_from:
             for name in names:
                 self.imports.append((import_from, name))
         else:
             self.imports.extend(names)
+        if not self.past_imports:
+            self.last_import = body
 
     def visit_main_snippet(self, body):
         self.main_snippet = body
+        self.past_imports = True
 
 class ClassVisitor(ASTVisitor):
     def __init__(self):
@@ -137,5 +145,5 @@ def inspect_code(project, path, code):
         test_class.main_snippet = visitor.main_snippet
 
     return project.create_module(path, code=tree, objects=visitor.objects,
-                                 imports=visitor.imports,
-                                 main_snippet=visitor.main_snippet)
+        imports=visitor.imports, main_snippet=visitor.main_snippet,
+        last_import=visitor.last_import)

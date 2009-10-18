@@ -7,12 +7,12 @@ import types
 
 from nose import SkipTest
 
-from pythoscope.astvisitor import parse
 from pythoscope.generator import add_tests_to_project, constructor_as_string
+from pythoscope.inspector.static import inspect_code
 from pythoscope.serializer import ImmutableObject
-from pythoscope.store import Project, Class, Function, Method, \
-     ModuleNeedsAnalysis, ModuleSaveError, TestClass, TestMethod, \
-     MethodCall, FunctionCall, UserObject, GeneratorObject, CodeTree
+from pythoscope.store import Class, Function, Method, ModuleNeedsAnalysis, \
+    ModuleSaveError, TestClass, TestMethod, MethodCall, FunctionCall, \
+    UserObject, GeneratorObject
 from pythoscope.compat import sets, sorted
 from pythoscope.util import read_file_contents, get_last_modification_time
 
@@ -795,10 +795,8 @@ class TestGeneratorWithSingleModule:
         assert_equal_sets(['unittest', ('nose', 'SkipTest')], self.project["test_module"].imports)
 
     def test_appends_new_test_classes_to_existing_test_files(self):
-        module = self.project["test_module"]
         TEST_CONTENTS = "class TestSomething: pass\n\n"
-        code_tree = CodeTree(parse(TEST_CONTENTS))
-        self.project.remember_code_tree(code_tree, module)
+        module = inspect_code(self.project, "test_module.py", TEST_CONTENTS)
 
         add_tests_to_project(self.project, [self.module_path], 'unittest')
 

@@ -84,7 +84,7 @@ class TestASTVisitorImports:
     def _test_import(self, code, method):
         method_called = [False]
         class TestVisitor(ASTVisitor):
-            def visit_import(self, names, import_from):
+            def visit_import(self, names, import_from, body):
                 method(names, import_from)
                 method_called[0] = True
 

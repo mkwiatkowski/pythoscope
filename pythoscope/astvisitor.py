@@ -11,8 +11,8 @@ from lib2to3.pygram import python_symbols as syms
 from lib2to3.pytree import Node, Leaf
 
 
-__all__ = ["EmptyCode", "Newline", "clone", "create_import", "parse",
-           "regenerate", "ASTError", "ASTVisitor"]
+__all__ = ["EmptyCode", "Newline", "clone", "create_import", "insert_after",
+           "insert_before", "parse", "regenerate", "ASTError", "ASTVisitor"]
 
 EmptyCode = lambda: Node(syms.file_input, [])
 Newline = lambda: Leaf(token.NEWLINE, "\n")
@@ -49,6 +49,21 @@ def create_import(import_desc):
                     [Leaf(token.NAME, 'import'),
                      Leaf(token.NAME, import_desc, prefix=" "),
                      Newline()])
+
+def index(node):
+    """Return index this node is at in parent's children list.
+    """
+    return node.parent.children.index(node)
+
+def insert_after(node, code):
+    if not node.parent:
+        raise TypeError("Can't insert after node that doesn't have a parent.")
+    node.parent.insert_child(index(node)+1, code)
+
+def insert_before(node, code):
+    if not node.parent:
+        raise TypeError("Can't insert before node that doesn't have a parent.")
+    node.parent.insert_child(index(node), code)
 
 def descend(tree, visitor_type):
     """Walk over the AST using a visitor of a given type and return the visitor
@@ -222,7 +237,7 @@ class ASTVisitor(object):
         ('_visit_all', "suite< nodes=any* >"),
         ('_visit_class', "body=classdef< 'class' name=NAME ['(' bases=any ')'] ':' any >"),
         ('_visit_function', "body=funcdef< 'def' name=NAME parameters< '(' [args=any] ')' > ':' any >"),
-        ('_visit_import', "import_name< 'import' names=any > | import_from< 'from' import_from=any 'import' names=any >"),
+        ('_visit_import', "body=import_name< 'import' names=any > | body=import_from< 'from' import_from=any 'import' names=any >"),
         ('_visit_lambda_assign', "expr_stmt< name=NAME '=' lambdef< 'lambda' [args=any] ':' any > >"),
         ('_visit_main_snippet', "body=if_stmt< 'if' comparison< '__name__' '==' (\"'__main__'\" | '\"__main__\"' ) > ':' any >"),
     ]
@@ -269,7 +284,7 @@ class ASTVisitor(object):
     def visit_function(self, name, args, body):
         self.visit(body.children)
 
-    def visit_import(self, names, import_from):
+    def visit_import(self, names, import_from, body):
         pass
 
     def visit_lambda_assign(self, name, args):
@@ -293,7 +308,8 @@ class ASTVisitor(object):
 
     def _visit_import(self, results):
         self.visit_import(names=derive_import_names(results['names']),
-                          import_from=derive_import_name(results.get('import_from')))
+                          import_from=derive_import_name(results.get('import_from')),
+                          body=results['body'])
 
     def _visit_lambda_assign(self, results):
         self.visit_lambda_assign(name=results['name'].value,

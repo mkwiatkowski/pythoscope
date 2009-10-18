@@ -7,7 +7,7 @@ import types
 
 from pythoscope.astvisitor import EmptyCode, Newline, create_import, \
     find_last_leaf, get_starting_whitespace, is_node_of_type, regenerate, \
-    remove_trailing_whitespace
+    remove_trailing_whitespace, insert_after
 from pythoscope.logger import log
 from pythoscope.serializer import BuiltinException, ImmutableObject, \
     MapObject, UnknownObject, SequenceObject, SerializedObject, is_immutable, \
@@ -902,7 +902,7 @@ class Module(Localizable, TestSuite):
     allowed_test_case_classes = [TestClass]
 
     def __init__(self, project, subpath, code=None, objects=None, imports=None,
-                 main_snippet=None, errors=[]):
+                 main_snippet=None, last_import=None, errors=[]):
         if objects is None:
             objects = []
 
@@ -919,6 +919,8 @@ class Module(Localizable, TestSuite):
         self.objects = []
         self.main_snippet = main_snippet
         self.errors = errors
+
+        self._store_reference('last_import', last_import)
 
         self.add_objects(objects)
 
@@ -949,6 +951,9 @@ class Module(Localizable, TestSuite):
     def _get_test_classes(self):
         return all_of_type(self.objects, TestClass)
     test_classes = property(_get_test_classes)
+
+    def _store_reference(self, name, code):
+        CodeTree.of(self).add_object(name, code)
 
     def add_objects(self, objects):
         """Add objects to this module.
@@ -1030,11 +1035,17 @@ class Module(Localizable, TestSuite):
 
     def _add_import(self, import_desc):
         self.imports.append(import_desc)
-        self._insert_after_future_imports(create_import(import_desc))
+        self._insert_after_other_imports(create_import(import_desc))
         self.mark_as_changed()
 
-    def _insert_after_future_imports(self, code):
-        code_of(self).insert_child(0, code) # XXX
+    def _insert_after_other_imports(self, code):
+        last_import = code_of(self, 'last_import')
+        if last_import:
+            insert_after(last_import, code)
+        else:
+            code_of(self).insert_child(0, code)
+        # Just inserted import becomes the last one.
+        self._store_reference('last_import', code)
 
     def _append_test_case_code(self, code):
         # If the main_snippet exists we have to put the new test case
@@ -1366,7 +1377,7 @@ def module_of(obj):
     else:
         raise TypeError("Don't know how to find the module of %r" % obj)
 
-# :: ObjectInModule -> hashable
+# :: ObjectInModule | str -> hashable
 def module_level_id(obj):
     """Take an object and return something that unambiguously identifies
     it in the scope of its module.
@@ -1381,10 +1392,12 @@ def module_level_id(obj):
         return ('TestClass', obj.name)
     elif isinstance(obj, TestMethod):
         return ('TestMethod', (obj.parent.name, obj.name))
+    elif isinstance(obj, str):
+        return obj
     else:
         raise TypeError("Don't know how to generate a module-level id for %r" % obj)
 
-def code_of(obj):
+def code_of(obj, reference=None):
     """Return an AST for the given object.
 
     It is "code_of(obj)" instead of "obj.code" mostly for explicitness. Objects
@@ -1392,4 +1405,8 @@ def code_of(obj):
     to a Module (see docstring for ObjectInModule). Existence of code_of
     decouples a storage method (including caching) from an interface.
     """
-    return CodeTree.of(obj).get_code_of(obj)
+    if reference is not None:
+        assert isinstance(obj, Module)
+    else:
+        reference = obj
+    return CodeTree.of(obj).get_code_of(reference)
