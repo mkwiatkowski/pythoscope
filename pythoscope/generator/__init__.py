@@ -1,5 +1,5 @@
-from pythoscope.astvisitor import descend, parse_fragment, ASTVisitor, \
-    EmptyCode
+from pythoscope.astvisitor import descend, ASTVisitor
+from pythoscope.astbuilder import parse_fragment, EmptyCode
 from pythoscope.logger import log
 from pythoscope.generator.adder import add_test_case_to_project
 from pythoscope.serializer import BuiltinException, CompositeObject, \

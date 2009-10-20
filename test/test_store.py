@@ -1,4 +1,4 @@
-from pythoscope.astvisitor import parse
+from pythoscope.astbuilder import parse
 from pythoscope.store import Class, Function, FunctionCall, Method, Module, \
     CodeTree, CodeTreeNotFound, PointOfEntry, Project, TestClass, TestMethod, \
     UserObject, code_of, module_of

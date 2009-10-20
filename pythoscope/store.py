@@ -5,9 +5,10 @@ import re
 import time
 import types
 
-from pythoscope.astvisitor import EmptyCode, Newline, create_import, \
-    find_last_leaf, get_starting_whitespace, is_node_of_type, regenerate, \
-    remove_trailing_whitespace, insert_after
+from pythoscope.astvisitor import find_last_leaf, get_starting_whitespace, \
+    is_node_of_type, remove_trailing_whitespace
+from pythoscope.astbuilder import EmptyCode, Newline, create_import, \
+    insert_after, regenerate
 from pythoscope.logger import log
 from pythoscope.serializer import BuiltinException, ImmutableObject, \
     MapObject, UnknownObject, SequenceObject, SerializedObject, is_immutable, \

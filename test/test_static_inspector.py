@@ -3,7 +3,7 @@ import sys
 from nose import SkipTest
 
 from pythoscope.inspector.static import inspect_code
-from pythoscope.astvisitor import regenerate
+from pythoscope.astbuilder import regenerate
 from pythoscope.util import get_names
 
 from assertions import *
