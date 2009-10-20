@@ -924,10 +924,6 @@ class Module(Localizable, TestSuite):
 
         self.add_objects(objects)
 
-    def _get_code(self):
-        return code_of(self)
-    code = property(_get_code)
-
     def _set_module_for_object(self, obj):
         if isinstance(obj, (Class, Function)):
             if obj.module is not None:
