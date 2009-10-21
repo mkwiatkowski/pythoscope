@@ -4,6 +4,7 @@ from nose import SkipTest
 
 from pythoscope.inspector.static import inspect_code
 from pythoscope.astbuilder import regenerate
+from pythoscope.store import code_of
 from pythoscope.util import get_names
 
 from assertions import *
@@ -339,14 +340,14 @@ class TestStaticInspector:
 
         assert_equal(["nose"], module.imports)
         assert_equal(nose_style_test_functions, module.get_content())
-        assert_equal(None, module.main_snippet)
+        assert_equal(None, code_of(module, 'main_snippet'))
 
     def test_inspects_test_classes_inside_application_modules(self):
         module = self._inspect_code(application_module_with_test_class)
 
         assert_equal_sets(["os", "unittest"], module.imports)
         assert_equal(application_module_with_test_class, module.get_content())
-        assert module.main_snippet is not None
+        assert code_of(module, 'main_snippet') is not None
         assert_equal(["TestFib"], get_names(module.test_classes))
         assert_equal(["fib"], get_names(module.functions))
 

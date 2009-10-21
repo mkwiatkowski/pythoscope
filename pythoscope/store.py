@@ -8,7 +8,7 @@ import types
 from pythoscope.astvisitor import find_last_leaf, get_starting_whitespace, \
     is_node_of_type, remove_trailing_whitespace
 from pythoscope.astbuilder import EmptyCode, Newline, create_import, \
-    insert_after, regenerate
+    insert_after, insert_before, regenerate
 from pythoscope.logger import log
 from pythoscope.serializer import BuiltinException, ImmutableObject, \
     MapObject, UnknownObject, SequenceObject, SerializedObject, is_immutable, \
@@ -918,9 +918,9 @@ class Module(Localizable, TestSuite):
         project.remember_code_tree(code_tree, self)
 
         self.objects = []
-        self.main_snippet = main_snippet
         self.errors = errors
 
+        self._store_reference('main_snippet', main_snippet)
         self._store_reference('last_import', last_import)
 
         self.add_objects(objects)
@@ -989,6 +989,7 @@ class Module(Localizable, TestSuite):
 
         self.ensure_imports(test_case.imports)
         self._ensure_main_snippet(test_case.main_snippet)
+        del test_case.main_snippet
 
     def _remove_test_case(self, test_case):
         TestSuite._remove_test_case(self, test_case)
@@ -1012,14 +1013,15 @@ class Module(Localizable, TestSuite):
         """
         if not main_snippet:
             return
+        current_main_snippet = code_of(self, 'main_snippet')
 
-        if not self.main_snippet:
-            self.main_snippet = main_snippet
+        if not current_main_snippet:
             code_of(self).append_child(main_snippet)
+            self._store_reference('main_snippet', main_snippet)
             self.mark_as_changed()
         elif force:
-            self.main_snippet.replace(main_snippet)
-            self.main_snippet = main_snippet
+            current_main_snippet.replace(main_snippet)
+            self._store_reference('main_snippet', main_snippet)
             self.mark_as_changed()
 
     def _ensure_import(self, import_desc):
@@ -1047,17 +1049,12 @@ class Module(Localizable, TestSuite):
     def _append_test_case_code(self, code):
         # If the main_snippet exists we have to put the new test case
         # before it. If it doesn't we put the test case at the end.
-        if self.main_snippet:
-            self._insert_before_main_snippet(code)
+        main_snippet = code_of(self, 'main_snippet')
+        if main_snippet:
+            insert_before(main_snippet, code)
         else:
             code_of(self).append_child(code)
         self.mark_as_changed()
-
-    def _insert_before_main_snippet(self, code):
-        for i, child in enumerate(code_of(self).children):
-            if child == self.main_snippet:
-                code_of(self).insert_child(i, code)
-                break
 
     def save(self):
         # Don't save the test file unless it has been changed.
