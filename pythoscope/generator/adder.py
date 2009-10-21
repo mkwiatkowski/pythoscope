@@ -9,14 +9,16 @@ from pythoscope.logger import log
 from pythoscope.util import max_by_not_zero, module_path_to_name
 
 
-def add_test_case_to_project(project, test_class, force=False):
+def add_test_case_to_project(project, test_class, main_snippet=None, force=False):
     existing_test_class = find_test_class_by_name(project, test_class.name)
     if not existing_test_class:
         place = find_place_for_test_class(project, test_class)
         log.info("Adding generated %s to %s." % (test_class.name, place.subpath))
         place.add_test_case(test_class)
+        place.ensure_main_snippet(main_snippet)
     else:
         merge_test_classes(existing_test_class, test_class, force)
+        existing_test_class.parent.ensure_main_snippet(main_snippet)
 
 def find_test_class_by_name(project, name):
     for tcase in project.iter_test_cases():

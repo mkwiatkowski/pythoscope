@@ -688,7 +688,7 @@ class TestGenerator(object):
     def _add_tests_for_module(self, module, project, force):
         log.info("Generating tests for module %s." % module.subpath)
         for test_case in self._generate_test_cases(module):
-            add_test_case_to_project(project, test_case, force)
+            add_test_case_to_project(project, test_case, self.main_snippet, force)
 
     def _generate_test_cases(self, module):
         for object in module.testable_objects:
@@ -729,7 +729,6 @@ class TestGenerator(object):
                          code=code,
                          test_cases=map(methoddesc2testmethod, method_descriptions),
                          imports=self.imports,
-                         main_snippet=self.main_snippet,
                          associated_modules=[module])
 
     def _generate_test_method_descriptions(self, object, module):
