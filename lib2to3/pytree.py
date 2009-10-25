@@ -667,17 +667,23 @@ class WildcardPattern(BasePattern):
             save_stderr = sys.stderr
             sys.stderr = StringIO()
             try:
-                for count, r in self._recursive_matches(nodes, 0):
-                    if self.name:
-                        r[self.name] = nodes[:count]
-                    yield count, r
-            except RuntimeError:
-                # We fall back to the iterative pattern matching scheme if the recursive
-                # scheme hits the recursion limit.
-                for count, r in self._iterative_matches(nodes):
-                    if self.name:
-                        r[self.name] = nodes[:count]
-                    yield count, r
+                try:
+                    for count, r in self._recursive_matches(nodes, 0):
+                        if self.name:
+                            r[self.name] = nodes[:count]
+                        yield count, r
+                except RuntimeError:
+                    # We fall back to the iterative pattern matching scheme if the recursive
+                    # scheme hits the recursion limit.
+                    for count, r in self._iterative_matches(nodes):
+                        if self.name:
+                            r[self.name] = nodes[:count]
+                        yield count, r
+            # Would use finally here, but it fails in Pythons < 2.5 with
+            # "SyntaxError: 'yield' not allowed in a 'try' block with a 'finally' clause".
+            except:
+                sys.stderr = save_stderr
+                raise
             sys.stderr = save_stderr
 
     def _iterative_matches(self, nodes):
