@@ -191,5 +191,5 @@ def main():
     except KeyboardInterrupt:
         log.info("Interrupted by the user.")
     except Exception: # SystemExit gets through
-        log.error("Oops, it seems internal Pythoscope error occured. Please file a bug report at %s\n" % BUGTRACKER_URL)
+        log.error("Oops, it seems that an internal Pythoscope error occurred. Please file a bug report at %s\n" % BUGTRACKER_URL)
         raise
