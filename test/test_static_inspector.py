@@ -312,6 +312,14 @@ class TestStaticInspector:
         assert_length(module.objects, 1)
         assert_equal(["othermodule.Class"], module.objects[0].bases)
 
+    def test_correctly_inspects_calculated_bases(self):
+        class_with_namedtuple = "import collections\n\n" +\
+        "class ClassWithNamedtuple(collections.namedtuple('Point', 'x y')):\n" +\
+        "    pass\n"
+        module = self._inspect_code(class_with_namedtuple)
+        assert_single_class(module, "ClassWithNamedtuple")
+        assert_equal(["collections.namedtuple('Point', 'x y')"], module.objects[0].bases)
+
     def test_ignores_existance_of_any_inner_class_methods(self):
         module = self._inspect_code(class_with_inner_class)
 

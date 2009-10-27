@@ -68,12 +68,7 @@ def remove_defaults(nodes):
         yield node
 
 def derive_class_name(node):
-    if is_leaf_of_type(node, token.NAME, token.DOT):
-        return node.value
-    elif is_node_of_type(node, 'power', 'trailer'):
-        return "".join(map(derive_class_name, node.children))
-    else:
-        raise ASTError("Unknown node type: %r." % node)
+    return str(node).strip()
 
 def derive_class_names(node):
     if node is None:
