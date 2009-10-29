@@ -15,8 +15,10 @@ To install the package from the source directory do::
 
   $ python setup.py install
 
-Since you have source code available, you may also consider running the whole
-test suite of Pythoscope::
+You don't need setuptools for this to work, a bare Python will do just fine.
+
+However, if you *do* have setuptools installed, you may also consider running
+the whole test suite of Pythoscope::
 
   $ python setup.py test
 
