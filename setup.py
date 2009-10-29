@@ -38,7 +38,7 @@ setup(
                     'lib2to3': ['*.txt']},
 
     classifiers = [
-        'Development Status :: 2 - Pre-Alpha',
+        'Development Status :: 3 - Alpha',
         'Environment :: Console',
         'Intended Audience :: Developers',
         'Programming Language :: Python',
