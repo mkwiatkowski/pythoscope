@@ -1,6 +1,18 @@
 Changelog
 =========
 
+0.4.2
+-----
+
+* Removed `dependency on fixture module <https://blueprints.launchpad.net/pythoscope/+spec/stop-using-fixture>`_.
+* Fixed test generation bug related to function definitions with varargs (`#440773 <https://bugs.launchpad.net/bugs/440773>`_).
+* Dynamic inspector can now `handle all types of exceptions <https://blueprints.launchpad.net/pythoscope/+spec/better-exception-handling>`_ (including string exceptions).
+* Frequently Asked Questions document has been created, also `available online <http://pythoscope.org/faq>`_.
+* Added `support for Pythons 2.3 <https://blueprints.launchpad.net/pythoscope/+spec/support-python2.3>`_ `through 2.6 <https://blueprints.launchpad.net/pythoscope/+spec/support-python2.6>`_.
+* New imports added by Pythoscope are now placed after existing ones, so they don't cause a syntax error when __future__ imports were used (`#373978 <https://bugs.launchpad.net/bugs/373978>`_).
+* Fixed inspection bug related to classes deriving from namedtuple instances (`#460715 <https://bugs.launchpad.net/pythoscope/+bug/460715>`_).
+* `Setuptools is no longer required for installation <https://blueprints.launchpad.net/pythoscope/+spec/dont-require-setuptools-for-installation>`_.
+
 0.4.1
 -----
 
