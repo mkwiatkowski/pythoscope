@@ -67,7 +67,7 @@ If you want the latest development version use `bazaar <http://bazaar-vcs.org/>`
 What versions of Python are supported?
 --------------------------------------
 
-Current stable release supports only Python 2.5, but the next release (0.4.2) will support Pythons 2.3 through 2.6. Python 3.0 is not supported yet. `Let us know <developers@pythoscope.org>`_ if you need Python 3.0 support.
+Since release 0.4.2 Pythoscope supports Pythons 2.3 through 2.6. Python 3.0 is not supported yet. `Let us know <developers@pythoscope.org>`_ if you need Python 3.0 support.
 
 What OSes are supported?
 ------------------------
