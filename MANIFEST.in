@@ -5,3 +5,5 @@ include test/__init__.py
 include test/data/*.py
 include lib2to3/Grammar.txt
 include lib2to3/PatternGrammar.txt
+include scripts/pythoscope
+include pythoscope/_util.c
