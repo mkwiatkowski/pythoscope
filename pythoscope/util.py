@@ -1,3 +1,4 @@
+import cPickle
 import gc
 import itertools
 import operator
@@ -348,3 +349,9 @@ def regexp_flags_as_string(flags):
     if flags & re.UNICODE:
         strings.append('re.UNICODE')
     return " | ".join(strings)
+
+def load_pickle_from(path):
+    fd = open(path, 'rb')
+    obj = cPickle.load(fd)
+    fd.close()
+    return obj

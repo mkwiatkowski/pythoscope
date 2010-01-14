@@ -3,8 +3,9 @@ import os.path
 
 from mock import Mock
 
-from pythoscope.store import CodeTree, CodeTreeNotFound, \
-    FilesystemCodeTreesManager, Module
+from pythoscope.code_trees_manager import CodeTreeNotFound, \
+    FilesystemCodeTreesManager
+from pythoscope.store import CodeTree, Module
 
 from assertions import *
 from helper import TempDirectory

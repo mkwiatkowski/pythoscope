@@ -1,15 +1,14 @@
-from pythoscope.astbuilder import parse
+from pythoscope.astbuilder import parse, EmptyCode
+from pythoscope.code_trees_manager import CodeTreeNotFound
 from pythoscope.store import Class, Function, FunctionCall, Method, Module, \
-    CodeTree, CodeTreeNotFound, PointOfEntry, Project, TestClass, TestMethod, \
+    CodeTree, PointOfEntry, Project, TestClass, TestMethod, \
     UserObject, code_of, module_of
 from pythoscope.serializer import ImmutableObject, UnknownObject, \
     SequenceObject, MapObject
+from pythoscope.generator.adder import add_test_case
 
 from assertions import *
 from helper import CustomSeparator, EmptyProject
-
-# Let nose know that those aren't test cases.
-TestClass.__test__ = False
 
 
 class TestModule:
@@ -19,22 +18,13 @@ class TestModule:
         self.test_class = TestClass(name="TestSomething", code=parse("# some test code"))
 
     def test_can_add_test_cases_to_empty_modules(self):
-        self.module.add_test_case(self.test_class)
+        add_test_case(self.module, self.test_class)
         # Make sure it doesn't raise any exceptions.
 
     def test_adding_a_test_case_adds_it_to_list_of_objects(self):
-        self.module.add_test_case(self.test_class)
+        add_test_case(self.module, self.test_class)
 
         assert_equal([self.test_class], self.module.objects)
-
-    def test_replacing_a_test_case_removes_it_from_the_list_of_objects_and_list_of_test_cases(self):
-        new_test_class = TestClass(name="TestSomethingElse")
-        self.module.add_test_case(self.test_class)
-
-        self.module.replace_test_case(self.test_class, new_test_class)
-
-        assert_equal([new_test_class], self.module.objects)
-        assert_equal([new_test_class], self.module.test_cases)
 
     def test_test_cases_can_be_added_using_add_objects_method(self):
         test_class_1 = TestClass(name="TestSomethingElse")
@@ -43,6 +33,10 @@ class TestModule:
 
         assert_equal([test_class_1, test_class_2], self.module.objects)
         assert_equal([test_class_1, test_class_2], self.module.test_cases)
+
+    def test_module_with_errors_doesnt_get_a_code_tree(self):
+        module = self.project.create_module("module_with_errors.py", errors=[Exception()])
+        assert_raises(CodeTreeNotFound, lambda: CodeTree.of(module))
 
 class TestStoreWithCustomSeparator(CustomSeparator):
     def test_uses_system_specific_path_separator(self):
@@ -67,7 +61,7 @@ def inject_function_call(poe, function, args={}):
 class TestPointOfEntry:
     def _create_project_with_two_points_of_entry(self, obj):
         project = EmptyProject()
-        project.create_module("module.py", objects=[obj])
+        project.create_module("module.py", code=EmptyCode(), objects=[obj])
         self.first = PointOfEntry(project, 'first')
         self.second = PointOfEntry(project, 'second')
 

@@ -1,7 +1,9 @@
+import os.path
 import sys
 
 from nose import SkipTest
 
+from pythoscope.inspector.static import inspect_code
 from pythoscope.inspector.dynamic import inspect_code_in_context, \
     inspect_point_of_entry
 from pythoscope.serializer import ImmutableObject, MapObject, UnknownObject, \
@@ -12,8 +14,8 @@ from pythoscope.compat import all
 from pythoscope.util import findfirst, generator_has_ended
 
 from assertions import *
-from helper import TestableProject, PointOfEntryMock, EmptyProjectExecution, \
-    last_exception_as_string, IgnoredWarnings, putfile, TempDirectory
+from helper import ProjectInDirectory, PointOfEntryMock, EmptyProjectExecution, \
+    last_exception_as_string, IgnoredWarnings, putfile, TempDirectory, P
 
 
 ########################################################################
@@ -901,8 +903,9 @@ class TestTraceExec:
 
 class TestInspectPointOfEntry(TempDirectory):
     def _init_project(self, module_code="", poe_content=""):
-        self.project = TestableProject(self.tmpdir)
+        self.project = ProjectInDirectory(self.tmpdir)
         putfile(self.project.path, "module.py", module_code)
+        inspect_code(self.project, os.path.join(self.project.path, "module.py"), module_code)
         self.poe = PointOfEntryMock(self.project, content=poe_content)
 
     def test_properly_gathers_all_input_and_output_values_of_a_function_call(self):

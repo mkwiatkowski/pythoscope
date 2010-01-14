@@ -22,10 +22,6 @@ from helper import CapturedDebugLogger, CapturedLogger, P, \
     generate_single_test_module, get_test_cases, \
     EmptyProjectExecution, putfile, TempDirectory, make_fresh_serialize
 
-# Let nose know that those aren't test functions/classes.
-add_tests_to_project.__test__ = False
-TestClass.__test__ = False
-TestMethod.__test__ = False
 
 def stable_serialize_call_arguments(execution, args):
     """Work just like execution.serialize_call_arguments, but serialize
@@ -864,8 +860,7 @@ class TestGeneratorMessages(CapturedLogger):
 
 class TestGeneratorDebugMessages(CapturedDebugLogger):
     def test_debug_output_includes_packages_and_module_names(self):
-        project = EmptyProject().with_modules(["module.py"], create_files=False)
-        project["module"].add_object(Function('some_function'))
+        project = EmptyProject().with_module("module.py", [Function('some_function')])
 
         add_tests_to_project(project, ["module"], 'unittest')
 

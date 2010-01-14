@@ -6,7 +6,6 @@ from assertions import *
 from helper import get_test_module_contents, CapturedLogger, \
     ProjectInDirectory, putfile, TempDirectory, read_data
 
-add_tests_to_project.__test__ = False
 
 class TestStaticAnalysis(CapturedLogger, TempDirectory):
     def test_generates_test_stubs(self):

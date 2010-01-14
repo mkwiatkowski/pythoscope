@@ -7,13 +7,13 @@ import warnings
 
 from StringIO import StringIO
 
+from pythoscope.astbuilder import EmptyCode
 from pythoscope.generator import add_tests_to_project
 from pythoscope.logger import DEBUG, INFO, get_output, log, set_output
-from pythoscope.store import CodeTreesManager, CodeTreeNotFound, Execution, \
-    Function, ModuleNotFound, PointOfEntry, Project
-from pythoscope.compat import set
-from pythoscope.util import quoted_block, read_file_contents, \
-    write_content_to_file
+from pythoscope.code_trees_manager import CodeTreesManager, CodeTreeNotFound
+from pythoscope.store import Execution, Function, ModuleNotFound, \
+    PointOfEntry, Project
+from pythoscope.util import read_file_contents, write_content_to_file
 
 
 UNPICKABLE_OBJECT = types.ClassType('class', (), {})
@@ -77,11 +77,17 @@ def ProjectInDirectory(project_path):
 
 def with_modules(project, paths, create_files=True):
     for path in paths:
-        project.create_module(os.path.join(project.path, path))
+        project.create_module(os.path.join(project.path, path), code=EmptyCode())
         if create_files:
             putfile(project.path, path, "")
     return project
 Project.with_modules = with_modules
+
+def with_module(project, path, objects=[]):
+    project.create_module(os.path.join(project.path, path),
+      objects=objects, code=EmptyCode())
+    return project
+Project.with_module = with_module
 
 def with_points_of_entry(project, paths):
     poe_path = putdir(project.path, P(".pythoscope/points-of-entry"))
@@ -93,7 +99,7 @@ Project.with_points_of_entry = with_points_of_entry
 def ProjectWithModules(paths, project_type=EmptyProject):
     project = project_type()
     for path in paths:
-        project.create_module(os.path.join(project.path, path))
+        project.create_module(os.path.join(project.path, path), code=EmptyCode())
     return project
 
 def TestableProject(path, more_modules=[]):
@@ -121,7 +127,7 @@ def generate_single_test_module(template='unittest', **module_kwds):
     """Return test module contents generated for given module.
     """
     project = EmptyProject()
-    project.create_module("module.py", **module_kwds)
+    project.create_module("module.py", code=EmptyCode(), **module_kwds)
     add_tests_to_project(project, ["module.py"], template, False)
     return get_test_module_contents(project)
 generate_single_test_module.__test__ = False

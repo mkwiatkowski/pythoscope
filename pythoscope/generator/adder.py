@@ -7,18 +7,101 @@ import os.path
 
 from pythoscope.logger import log
 from pythoscope.util import max_by_not_zero, module_path_to_name
+from pythoscope.store import Module, TestClass, code_of, CodeTree
+from pythoscope.astvisitor import find_last_leaf, get_starting_whitespace, \
+    is_node_of_type, remove_trailing_whitespace
+from pythoscope.astbuilder import EmptyCode, Newline, create_import, \
+    insert_after, insert_before
 
 
 def add_test_case_to_project(project, test_class, main_snippet=None, force=False):
     existing_test_class = find_test_class_by_name(project, test_class.name)
     if not existing_test_class:
-        place = find_place_for_test_class(project, test_class)
-        log.info("Adding generated %s to %s." % (test_class.name, place.subpath))
-        place.add_test_case(test_class)
-        place.ensure_main_snippet(main_snippet)
+        module = find_module_for_test_class(project, test_class)
+        log.info("Adding generated %s to %s." % (test_class.name, module.subpath))
+        ensure_imports(module, test_class.imports)
+        add_test_case(module, test_class)
+        ensure_main_snippet(module, main_snippet, force)
     else:
+        ensure_imports(existing_test_class, test_class.imports)
         merge_test_classes(existing_test_class, test_class, force)
-        existing_test_class.parent.ensure_main_snippet(main_snippet)
+        ensure_main_snippet(existing_test_class.parent, main_snippet, force)
+
+def add_test_case_without_append(test_suite, test_case):
+    test_suite.add_test_case_without_append(test_case)
+
+def add_test_case(test_suite, test_case):
+    if isinstance(test_suite, Module):
+        # If the main_snippet exists we have to put the new test case
+        # before it. If it doesn't we put the test case at the end.
+        main_snippet = code_of(test_suite, 'main_snippet')
+        if main_snippet:
+            insert_before(main_snippet, test_case.code)
+        else:
+            code_of(test_suite).append_child(test_case.code)
+    elif isinstance(test_suite, TestClass):
+        # Append to the right node, so that indentation level of the
+        # new method is good.
+        if code_of(test_suite).children and is_node_of_type(code_of(test_suite).children[-1], 'suite'):
+            remove_trailing_whitespace(test_case.code)
+            suite = code_of(test_suite).children[-1]
+            # Prefix the definition with the right amount of whitespace.
+            node = find_last_leaf(suite.children[-2])
+            ident = get_starting_whitespace(suite)
+            # There's no need to have extra newlines.
+            if node.prefix.endswith("\n"):
+                node.prefix += ident.lstrip("\n")
+            else:
+                node.prefix += ident
+            # Insert before the class contents dedent.
+            suite.insert_child(-1, test_case.code)
+        else:
+            code_of(test_suite).append_child(test_case.code)
+    else:
+        raise TypeError("Tried to add a test case to %r." % test_suite)
+    add_test_case_without_append(test_suite, test_case)
+    test_suite.mark_as_changed()
+
+def ensure_main_snippet(module, main_snippet, force=False):
+    """Make sure the main_snippet is present. Won't overwrite the snippet
+    unless force flag is set.
+    """
+    if not main_snippet:
+        return
+    current_main_snippet = code_of(module, 'main_snippet')
+
+    if not current_main_snippet:
+        code_of(module).append_child(main_snippet)
+        module.store_reference('main_snippet', main_snippet)
+        module.mark_as_changed()
+    elif force:
+        current_main_snippet.replace(main_snippet)
+        module.store_reference('main_snippet', main_snippet)
+        module.mark_as_changed()
+
+def ensure_imports(test_suite, imports):
+    if isinstance(test_suite, TestClass):
+        module = test_suite.parent
+    elif isinstance(test_suite, Module):
+        module = test_suite
+    else:
+        raise TypeError("Tried to ensure imports on %r." % test_suite)
+    for imp in imports:
+        if not module.contains_import(imp):
+            insert_after_other_imports(module, create_import(imp))
+            module.mark_as_changed()
+    test_suite.ensure_imports(imports)
+
+def insert_after_other_imports(module, code):
+    last_import = code_of(module, 'last_import')
+    if last_import:
+        insert_after(last_import, code)
+    else:
+        # Add an extra newline separating imports from the code.
+        code_of(module).insert_child(0, Newline())
+        code_of(module).insert_child(0, code)
+    # Just inserted import becomes the last one.
+    module.store_reference('last_import', code)
 
 def find_test_class_by_name(project, name):
     for tcase in project.iter_test_cases():
@@ -33,17 +116,34 @@ def merge_test_classes(test_class, other_test_class, force):
         if not existing_test_method:
             log.info("Adding generated %s to %s in %s." % \
                          (method.name, test_class.name, test_class.parent.subpath))
-            test_class.add_test_case(method)
+            add_test_case(test_class, method)
         elif force:
             log.info("Replacing %s.%s from %s with generated version." % \
                          (test_class.name, existing_test_method.name, test_class.parent.subpath))
-            test_class.replace_test_case(existing_test_method, method)
+            replace_test_case(test_class, existing_test_method, method)
         else:
             log.info("Test case %s.%s already exists in %s, skipping." % \
                          (test_class.name, existing_test_method.name, test_class.parent.subpath))
-    test_class.ensure_imports(other_test_class.imports)
 
-def find_place_for_test_class(project, test_class):
+def replace_test_case(test_suite, old_test_case, new_test_case):
+    """Replace one test case object with another.
+
+    As a side effect, AST of the new test case will replace part of the AST
+    in the old test case parent.
+
+    `Code` attribute of the new test case object will be removed.
+    """
+    # The easiest way to get the new code inside the AST is to call
+    # replace() on the old test case code.
+    # It is destructive, but since we're discarding the old test case
+    # anyway, it doesn't matter.
+    code_of(old_test_case).replace(new_test_case.code)
+
+    test_suite.remove_test_case(old_test_case)
+    add_test_case_without_append(test_suite, new_test_case)
+    test_suite.mark_as_changed()
+
+def find_module_for_test_class(project, test_class):
     """Find the best place for the new test case to be added. If there is
     no such place in existing test modules, a new one will be created.
     """
@@ -89,7 +189,7 @@ def create_test_module(project, test_case):
     """Create a new test module for a given test case.
     """
     test_name = test_module_name_for_test_case(test_case)
-    return project.create_test_module_from_name(test_name)
+    return project.create_test_module_from_name(test_name, code=EmptyCode())
 
 def module_path_to_test_path(module):
     """Convert a module locator to a proper test filename.

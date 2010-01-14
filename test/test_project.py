@@ -4,15 +4,13 @@ from cPickle import PicklingError
 from pythoscope.store import Project, Class, Function, Method, TestClass, \
      TestMethod, ModuleNotFound
 from pythoscope.inspector import remove_deleted_modules
+from pythoscope.generator.adder import add_test_case
 from pythoscope.util import get_names, read_file_contents
 
 from assertions import *
+from factories import create
 from helper import EmptyProject, P, ProjectInDirectory, ProjectWithModules, \
     UNPICKABLE_OBJECT, TempDirectory, putdir
-
-# Let nose know that those aren't test classes.
-TestClass.__test__ = False
-TestMethod.__test__ = False
 
 
 class TestProject:
@@ -47,8 +45,8 @@ class TestProject:
     def test_replaces_module_instance_in_test_cases_associated_modules_during_module_replacement(self):
         paths = ["module.py", P("sub/dir/module.py"), P("other/module.py")]
         project = ProjectWithModules(paths)
-        test_class = TestClass(name='TestAnything', associated_modules=[project[P("other/module.py")]])
-        project[P("other/module.py")].add_test_case(test_class)
+        test_class = create(TestClass, name='TestAnything', associated_modules=[project[P("other/module.py")]])
+        add_test_case(project[P("other/module.py")], test_class)
 
         new_module = project.create_module(P("other/module.py"))
 
@@ -88,8 +86,8 @@ class TestProjectOnTheFilesystem(TempDirectory):
 
     def test_removes_definitions_of_modules_that_dont_exist_anymore(self):
         project = ProjectInDirectory(self.tmpdir).with_modules(["module.py", "other_module.py", "test_module.py"])
-        test_class = TestClass("TestSomething", associated_modules=[project["module"]])
-        project["test_module.py"].add_test_case(test_class)
+        test_class = create(TestClass, associated_modules=[project["module"]])
+        add_test_case(project["test_module.py"], test_class)
         project.save()
 
         os.remove(os.path.join(project.path, "other_module.py"))
