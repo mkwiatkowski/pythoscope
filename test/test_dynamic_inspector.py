@@ -11,11 +11,12 @@ from pythoscope.serializer import ImmutableObject, MapObject, UnknownObject, \
 from pythoscope.store import Class, Execution, Function, \
     GeneratorObject, Method, UserObject, Project
 from pythoscope.compat import all
-from pythoscope.util import findfirst, generator_has_ended
+from pythoscope.util import findfirst, generator_has_ended, \
+    last_exception_as_string
 
 from assertions import *
 from helper import ProjectInDirectory, PointOfEntryMock, EmptyProjectExecution, \
-    last_exception_as_string, IgnoredWarnings, putfile, TempDirectory, P
+    IgnoredWarnings, putfile, TempDirectory, P
 
 
 ########################################################################

@@ -96,6 +96,12 @@ def with_points_of_entry(project, paths):
     return project
 Project.with_points_of_entry = with_points_of_entry
 
+def with_point_of_entry(project, path, content):
+    poe_path = putdir(project.path, P(".pythoscope/points-of-entry"))
+    putfile(poe_path, path, content)
+    return project
+Project.with_point_of_entry = with_point_of_entry
+
 def ProjectWithModules(paths, project_type=EmptyProject):
     project = project_type()
     for path in paths:
@@ -135,14 +141,6 @@ generate_single_test_module.__test__ = False
 def get_test_cases(project):
     return list(project.iter_test_cases())
 get_test_cases.__test__ = False
-
-def last_exception_as_string():
-    exc_type, exc_value = sys.exc_info()[:2]
-    # Special case for string exceptions.
-    if isinstance(exc_type, str):
-        return exc_type
-    else:
-        return repr(exc_value)
 
 ###############################################################################
 # Temporary directories/files helpers

@@ -327,6 +327,14 @@ def module_path_to_name(module_path, newsep="_"):
 def last_traceback():
     return "".join(traceback.format_tb(sys.exc_info()[2]))
 
+def last_exception_as_string():
+    exc_type, exc_value = sys.exc_info()[:2]
+    # Special case for string exceptions.
+    if isinstance(exc_type, str):
+        return exc_type
+    else:
+        return repr(exc_value)
+
 # Regular expressions helpers.
 
 RePatternType = type(re.compile(''))

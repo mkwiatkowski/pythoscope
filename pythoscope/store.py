@@ -7,6 +7,7 @@ import types
 
 from pythoscope.astbuilder import regenerate
 from pythoscope.code_trees_manager import FilesystemCodeTreesManager
+from pythoscope.compat import set
 from pythoscope.localizable import Localizable
 from pythoscope.logger import log
 from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\

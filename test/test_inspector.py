@@ -1,6 +1,8 @@
+import sys
+
 from nose import SkipTest
 
-from pythoscope.inspector import inspect_project
+from pythoscope.inspector import inspect_project, inspect_project_dynamically
 from pythoscope.util import generator_has_ended
 
 from assertions import *
@@ -62,3 +64,24 @@ class TestInspector(CapturedLogger, TempDirectory):
                              "util.generator_has_ended is not reliable on "
                              "Python 2.4 and lower. Please compile the _util "
                              "module or use Python 2.5 or higher.")
+
+    def test_catches_exceptions_raised_by_entry_points(self):
+        project = ProjectInDirectory(self.tmpdir).with_point_of_entry("exc.py", "raise Exception")
+        inspect_project(project)
+        if sys.version_info < (2, 5):
+            assert_contains_once(self._get_log_output(),
+                                 "WARNING: Point of entry exited with error: <exceptions.Exception instance at")
+        else:
+            assert_contains_once(self._get_log_output(),
+                                 "WARNING: Point of entry exited with error: Exception()")
+
+    def test_catches_string_exceptions_raised_by_entry_points(self):
+        project = ProjectInDirectory(self.tmpdir).with_point_of_entry("exc.py", "raise 'bad string'")
+        inspect_project(project)
+        if sys.version_info < (2, 6):
+            assert_contains_once(self._get_log_output(),
+                                 "WARNING: Point of entry exited with error: bad string")
+        else:
+            assert_contains_once(self._get_log_output(),
+                                 "WARNING: Point of entry exited with error: "
+                                 "TypeError('exceptions must be classes or instances, not str',)")
