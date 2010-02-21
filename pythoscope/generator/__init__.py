@@ -6,8 +6,7 @@ from pythoscope.serializer import BuiltinException, CompositeObject, \
     ImmutableObject, MapObject, UnknownObject, SequenceObject, \
     SerializedObject, can_be_constructed, is_serialized_string
 from pythoscope.store import Class, Function, FunctionCall, TestClass, \
-    TestMethod, ModuleNotFound, UserObject, MethodCall, Method, Project, \
-    GeneratorObject
+    TestMethod, ModuleNotFound, UserObject, MethodCall, Method, GeneratorObject
 from pythoscope.compat import any, set, sorted
 from pythoscope.util import camelize, compact, counted, flatten, \
     key_for_value, pluralize, underscore, union

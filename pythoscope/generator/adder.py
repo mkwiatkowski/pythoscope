@@ -7,7 +7,7 @@ import os.path
 
 from pythoscope.logger import log
 from pythoscope.util import max_by_not_zero, module_path_to_name
-from pythoscope.store import Module, TestClass, code_of, CodeTree
+from pythoscope.store import Module, TestClass, code_of
 from pythoscope.astvisitor import find_last_leaf, get_starting_whitespace, \
     is_node_of_type, remove_trailing_whitespace
 from pythoscope.astbuilder import EmptyCode, Newline, create_import, \
