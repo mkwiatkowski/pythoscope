@@ -7,12 +7,13 @@ import types
 
 from nose import SkipTest
 
-from pythoscope.generator import add_tests_to_project, constructor_as_string
+from pythoscope.generator import add_tests_to_project, constructor_as_string, \
+    TestGenerator
 from pythoscope.inspector.static import inspect_code
 from pythoscope.serializer import ImmutableObject
 from pythoscope.store import Class, Function, Method, ModuleNeedsAnalysis, \
     ModuleSaveError, TestClass, TestMethod, MethodCall, FunctionCall, \
-    UserObject, GeneratorObject
+    UserObject, GeneratorObject, ModuleNotFound
 from pythoscope.compat import sets, sorted
 from pythoscope.util import read_file_contents, get_last_modification_time
 
@@ -109,7 +110,7 @@ def GeneratorWithSingleException(genname, input, exception):
     generator.calls = [gobject]
     return generator
 
-class TestGenerator:
+class TestGeneratorClass:
     def test_generates_unittest_boilerplate(self):
         result = generate_single_test_module(objects=[Function('function')])
         assert_contains(result, "import unittest")
@@ -676,6 +677,30 @@ class TestRaisedExceptions:
 
         assert_contains(result, "def test_throw_raises_type_error_for_dict(self):")
         assert_contains(result, "self.assertRaises(TypeError, lambda: list(islice(throw(string={}), 1)))")
+
+class TestGeneratorAddTestsToProjectMethod(CapturedLogger):
+    class ProjectWithoutModules:
+        def find_module_by_full_path(self, modname):
+            raise ModuleNotFound(modname)
+
+    def test_ignores_uninspected_modules(self):
+        tg = TestGenerator()
+        assert_not_raises(ModuleNotFound,
+            lambda: tg.add_tests_to_project(self.ProjectWithoutModules(), ["im_not_here.py"]))
+
+    def test_logs_warning_about_uninspected_modules(self):
+        tg = TestGenerator()
+        tg.add_tests_to_project(self.ProjectWithoutModules(), ["me_here_neither.py"])
+        assert_contains_once(self._get_log_output(),
+            "WARNING: Failed to inspect module me_here_neither.py, skipping test generation.")
+
+    def test_ignores_modules_with_inspection_errors(self):
+        project = EmptyProject()
+        project.create_module("ugly.py", errors=[Exception()])
+        tg = TestGenerator()
+        tg.add_tests_to_project(project, ["ugly.py"])
+        assert_doesnt_contain(self._get_log_output(),
+            "Generating tests for module ugly.py.")
 
 class TestExceptionsPassedAsValues:
     def test_generates_assert_equal_for_exception_returned_as_value(self):

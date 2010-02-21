@@ -872,6 +872,9 @@ class Module(Localizable, TestSuite):
         return all_of_type(self.objects, TestClass)
     test_classes = property(_get_test_classes)
 
+    def has_errors(self):
+        return self.errors != []
+
     def store_reference(self, name, code):
         CodeTree.of(self).add_object(name, code)
 

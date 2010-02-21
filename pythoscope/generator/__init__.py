@@ -673,8 +673,12 @@ class TestGenerator(object):
 
     def add_tests_to_project(self, project, modnames, force=False):
         for modname in modnames:
-            module = project.find_module_by_full_path(modname)
-            self._add_tests_for_module(module, project, force)
+            try:
+                module = project.find_module_by_full_path(modname)
+                if not module.has_errors():
+                    self._add_tests_for_module(module, project, force)
+            except ModuleNotFound:
+                log.warning("Failed to inspect module %s, skipping test generation." % modname)
 
     def comment_assertion(self, comment):
         return comment
