@@ -181,6 +181,25 @@ class TestGeneratorAdderForProjectWithTestModule(CapturedLogger):
         assert_contains_once(self._get_log_output(),
                              "Replacing TestSomething.test_method from test_module.py with generated version.")
 
+    def test_should_not_touch_modules_with_errors(self):
+        project = EmptyProject()
+        module = project.create_module("module.py")
+        test_module = project.create_module("test_module.py",
+            errors=[Exception()])
+        add_test_case_to_project(project,
+            create(TestClass, associated_modules=[module]))
+        assert test_module.changed is False
+
+    def test_should_emit_warning_when_trying_to_add_test_to_module_with_errors(self):
+        project = EmptyProject()
+        module = project.create_module("module.py")
+        project.create_module("test_module.py", errors=[Exception()])
+        add_test_case_to_project(project,
+            create(TestClass, name="FooTest", associated_modules=[module]))
+        assert_contains_once(self._get_log_output(),
+            "WARNING: Not adding FooTest to test_module.py, because "
+            "of a failed inspection.")
+
 class TestGeneratorAdderOnCode:
     def setUp(self):
         self.generator = TestGenerator()

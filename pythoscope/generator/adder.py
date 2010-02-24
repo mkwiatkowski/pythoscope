@@ -8,6 +8,7 @@ import os.path
 from pythoscope.logger import log
 from pythoscope.util import max_by_not_zero, module_path_to_name
 from pythoscope.store import Module, TestClass, code_of
+from pythoscope.code_trees_manager import CodeTreeNotFound
 from pythoscope.astvisitor import find_last_leaf, get_starting_whitespace, \
     is_node_of_type, remove_trailing_whitespace
 from pythoscope.astbuilder import EmptyCode, Newline, create_import, \
@@ -16,16 +17,20 @@ from pythoscope.astbuilder import EmptyCode, Newline, create_import, \
 
 def add_test_case_to_project(project, test_class, main_snippet=None, force=False):
     existing_test_class = find_test_class_by_name(project, test_class.name)
-    if not existing_test_class:
-        module = find_module_for_test_class(project, test_class)
-        log.info("Adding generated %s to %s." % (test_class.name, module.subpath))
-        ensure_imports(module, test_class.imports)
-        add_test_case(module, test_class)
-        ensure_main_snippet(module, main_snippet, force)
-    else:
-        ensure_imports(existing_test_class, test_class.imports)
-        merge_test_classes(existing_test_class, test_class, force)
-        ensure_main_snippet(existing_test_class.parent, main_snippet, force)
+    try:
+        if not existing_test_class:
+            module = find_module_for_test_class(project, test_class)
+            log.info("Adding generated %s to %s." % (test_class.name, module.subpath))
+            ensure_imports(module, test_class.imports)
+            add_test_case(module, test_class)
+            ensure_main_snippet(module, main_snippet, force)
+        else:
+            ensure_imports(existing_test_class, test_class.imports)
+            merge_test_classes(existing_test_class, test_class, force)
+            ensure_main_snippet(existing_test_class.parent, main_snippet, force)
+    except CodeTreeNotFound, ex:
+        log.warning("Not adding %s to %s, because of a failed inspection." %\
+            (test_class.name, ex.module_subpath))
 
 def add_test_case_without_append(test_suite, test_case):
     test_suite.add_test_case_without_append(test_case)
