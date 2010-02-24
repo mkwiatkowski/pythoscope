@@ -16,7 +16,7 @@ from pythoscope.util import findfirst, generator_has_ended, \
 
 from assertions import *
 from helper import ProjectInDirectory, PointOfEntryMock, EmptyProjectExecution, \
-    IgnoredWarnings, putfile, TempDirectory, P
+    IgnoredWarnings, putfile, TempDirectory, P, CapturedLogger
 
 
 ########################################################################
@@ -938,3 +938,11 @@ class TestInspectPointOfEntry(TempDirectory):
         inspect_point_of_entry(self.poe)
 
         assert 'module' not in sys.modules
+
+class TestInspectPointOfEntryWithCapturedLog(TempDirectory, CapturedLogger):
+    def test_changes_current_directory_to_the_projects_root(self):
+        project = ProjectInDirectory(self.tmpdir)
+        poe = PointOfEntryMock(project,
+            content="import os; assert os.getcwd() == '%s'" % project.path)
+        assert_not_raises(AssertionError, lambda: inspect_point_of_entry(poe))
+

@@ -1,3 +1,4 @@
+import os
 import sys
 
 from pythoscope.tracer import ICallback, Tracer
@@ -66,16 +67,22 @@ class Inspector(ICallback):
             return True
 
 def inspect_point_of_entry(point_of_entry):
+    projects_root = point_of_entry.project.path
     point_of_entry.clear_previous_run()
 
     # Put project's path into PYTHONPATH, so point of entry's imports work.
-    sys.path.insert(0, point_of_entry.project.path)
+    sys.path.insert(0, projects_root)
+    # Change current directory to the project's root, so the POE code can use
+    # relative paths for reading project data files.
+    old_cwd = os.getcwd()
+    os.chdir(projects_root)
 
     try:
         inspect_code_in_context(point_of_entry.get_content(),
                                 point_of_entry.execution)
     finally:
-        sys.path.remove(point_of_entry.project.path)
+        sys.path.remove(projects_root)
+        os.chdir(old_cwd)
 
 # :: (str, Execution) -> None
 def inspect_code_in_context(code, execution):
