@@ -29,7 +29,7 @@ def add_and_update_modules(project):
         try:
             module = project.find_module_by_full_path(modpath)
             if module.is_up_to_date():
-                log.info("%s hasn't changed since last inspection, skipping." % module.subpath)
+                log.debug("%s hasn't changed since last inspection, skipping." % module.subpath)
                 continue
         except ModuleNotFound:
             pass

@@ -2,11 +2,12 @@ import sys
 
 from nose import SkipTest
 
-from pythoscope.inspector import inspect_project, inspect_project_dynamically
+from pythoscope.inspector import inspect_project
 from pythoscope.util import generator_has_ended
 
 from assertions import *
-from helper import CapturedLogger, P, ProjectInDirectory, TempDirectory
+from helper import CapturedLogger, CapturedDebugLogger, P, ProjectInDirectory,\
+    TempDirectory
 
 
 class TestInspector(CapturedLogger, TempDirectory):
@@ -15,16 +16,6 @@ class TestInspector(CapturedLogger, TempDirectory):
         inspect_project(project)
         assert_equal_strings("INFO: No changes discovered in the source code, skipping dynamic inspection.\n",
                              self._get_log_output())
-
-    def test_skips_inspection_of_up_to_date_modules(self):
-        paths = ["module.py", "something_else.py", P("module/in/directory.py")]
-        project = ProjectInDirectory(self.tmpdir).with_modules(paths)
-
-        inspect_project(project)
-
-        for path in paths:
-            assert_contains_once(self._get_log_output(),
-                                 "INFO: %s hasn't changed since last inspection, skipping." % path)
 
     def test_reports_each_inspected_module(self):
         paths = ["module.py", "something_else.py", P("module/in/directory.py")]
@@ -85,3 +76,14 @@ class TestInspector(CapturedLogger, TempDirectory):
             assert_contains_once(self._get_log_output(),
                                  "WARNING: Point of entry exited with error: "
                                  "TypeError('exceptions must be classes or instances, not str',)")
+
+class TestInspectorWithDebugOutput(CapturedDebugLogger, TempDirectory):
+    def test_skips_inspection_of_up_to_date_modules(self):
+        paths = ["module.py", "something_else.py", P("module/in/directory.py")]
+        project = ProjectInDirectory(self.tmpdir).with_modules(paths)
+
+        inspect_project(project)
+
+        for path in paths:
+            assert_contains_once(self._get_log_output(),
+                "DEBUG: %s hasn't changed since last inspection, skipping." % path)

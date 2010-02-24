@@ -3,6 +3,7 @@ import types
 
 from pythoscope.astvisitor import descend, ASTVisitor
 from pythoscope.astbuilder import parse, ParseError
+from pythoscope.logger import log
 from pythoscope.store import Class, Function, Method, TestClass,TestMethod
 from pythoscope.util import all_of_type, is_generator_code, \
     read_file_contents, compile_without_warnings
@@ -133,6 +134,7 @@ def inspect_code(project, path, code):
     try:
         tree = parse(code)
     except ParseError, e:
+        log.warning("Inspection of module %s failed." % path)
         return project.create_module(path, errors=[e])
     visitor = descend(tree, ModuleVisitor)
 
