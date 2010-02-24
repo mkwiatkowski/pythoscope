@@ -1,4 +1,6 @@
 include Changelog
+include doc/*
+include test/assertions.py
 include test/factories.py
 include test/helper.py
 include test/__init__.py
