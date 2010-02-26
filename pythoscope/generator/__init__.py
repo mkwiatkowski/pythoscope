@@ -77,13 +77,13 @@ def constructor_as_string(object, assigned_names={}):
         'SomeClass()'
 
     interpreting their arguments correctly
-        >>> obj.add_call(MethodCall(Method('__init__'), {'arg': serialize('whatever')}, serialize(None)))
+        >>> obj.add_call(MethodCall(Method('__init__', ['arg']), {'arg': serialize('whatever')}, serialize(None)))
         >>> constructor_as_string(obj)
         "SomeClass(arg='whatever')"
 
     even if they're user objects themselves:
         >>> otherobj = UserObject(None, Class('SomeOtherClass'))
-        >>> otherobj.add_call(MethodCall(Method('__init__'), {'object': obj}, serialize(None)))
+        >>> otherobj.add_call(MethodCall(Method('__init__', ['object']), {'object': obj}, serialize(None)))
         >>> constructor_as_string(otherobj)
         "SomeOtherClass(object=SomeClass(arg='whatever'))"
 
@@ -108,13 +108,13 @@ def constructor_as_string(object, assigned_names={}):
     elif assigned_names.has_key(object):
         return CallString(assigned_names[object])
     elif isinstance(object, UserObject):
-        args = {}
         # Look for __init__ call and base the constructor on that.
         init_call = object.get_init_call()
         if init_call:
-            args = init_call.input
-        return call_as_string(object.klass.name, args,
-                              init_call and init_call.definition)
+            return call_as_string_for(object.klass.name, init_call.input,
+                init_call.definition)
+        else:
+            return call_as_string(object.klass.name, {})
     elif isinstance(object, ImmutableObject):
         return CallString(object.reconstructor, imports=object.imports)
     elif isinstance(object, CompositeObject):
@@ -161,17 +161,109 @@ def get_contained_objects_info(obj, assigned_names):
     else:
         raise TypeError("Wrong argument to get_contained_objects_info: %r." % obj)
 
+
 # :: (string, dict, Definition, {SerializedObject: str}) -> CallString
-def call_as_string(object_name, args, definition=None, assigned_names={}):
+def call_as_string_for(object_name, args, definition, assigned_names={}):
     """Generate code for calling an object with given arguments.
 
     >>> from test.helper import make_fresh_serialize
     >>> serialize = make_fresh_serialize()
 
-    >>> call_as_string('fun', {'a': serialize(1), 'b': serialize(2)})
-    'fun(a=1, b=2)'
-    >>> call_as_string('capitalize', {'str': serialize('string')})
-    "capitalize(str='string')"
+    Puts varargs at the end of arguments list.
+        >>> call_as_string_for('build_url',
+        ...     {'proto': serialize('http'), 'params': serialize(('user', 'session', 'new'))},
+        ...     Function('build_url', ['proto', '*params']))
+        "build_url(proto='http', 'user', 'session', 'new')"
+
+    Works for lone varargs too.
+        >>> call_as_string_for('concat', {'args': serialize(([1,2,3], [4,5], [6]))},
+        ...     Function('concat', ['*args']))
+        'concat([1, 2, 3], [4, 5], [6])'
+
+    Uses assigned name for varargs as well.
+        >>> args = serialize((1, 2, 3))
+        >>> call_as_string_for('add', {'args': args}, Function('add', ['*args']), {args: 'atuple'})
+        'add(*atuple)'
+
+    Inlines extra keyword arguments in the call...
+        >>> call_as_string_for('dict', {'kwargs': serialize({'one': 1, 'two': 2})},
+        ...     Function('dict', ['**kwargs']))
+        'dict(one=1, two=2)'
+
+    ...even when they are combined with varargs.
+        >>> call_as_string_for('wrap', {'a': serialize((1, 2, 3)), 'k': serialize({'x': 4, 'y': 5})},
+        ...     Function('wrap', ['*a', '**k']))
+        'wrap(1, 2, 3, x=4, y=5)'
+
+    Uses assigned name for kwarg if present.
+        >>> kwargs = serialize({'id': 42, 'model': 'user'})
+        >>> call_as_string_for('filter_params', {'kwargs': kwargs},
+        ...    Function('filter_params', ['**kwargs']), {kwargs: 'params'})
+        'filter_params(**params)'
+
+    Generates valid code when vararg has been named and kwarg wasn't.
+        >>> args = serialize((1, 2, 3))
+        >>> call_as_string_for('wrap', {'args': args, 'kwargs': serialize({'a': 6, 'b': 7})},
+        ...     Function('wrap', ['*args', '**kwargs']), {args: 'atuple'})
+        'wrap(a=6, b=7, *atuple)'
+    """
+    positional_args = []
+    keyword_args = []
+    vararg = None
+    kwarg = None
+    uncomplete = False
+    imports = set()
+
+    def getvalue(argname):
+        return args[argname.lstrip("*")]
+
+    skipped_an_arg = False
+    for argname in definition.args:
+        try:
+            value = getvalue(argname)
+            if argname.startswith("**"):
+                if value in assigned_names.keys():
+                    kwarg = "**%s" % assigned_names[value]
+                else:
+                    for karg, kvalue in map_as_kwargs(value):
+                        valuecs = constructor_as_string(kvalue, assigned_names)
+                        uncomplete = uncomplete or valuecs.uncomplete
+                        imports.update(valuecs.imports)
+                        keyword_args.append("%s=%s" % (karg, valuecs))
+            elif argname.startswith("*"):
+                if value in assigned_names.keys():
+                    vararg = "*%s" % assigned_names[value]
+                else:
+                    rec, imp, unc = zip(*get_contained_objects_info(value, assigned_names))
+                    uncomplete = uncomplete or any(unc)
+                    imports.update(union(*imp))
+                    positional_args.extend(rec)
+            else:
+                constructor = constructor_as_string(value, assigned_names)
+                uncomplete = uncomplete or constructor.uncomplete
+                imports.update(constructor.imports)
+                positional_args.append("%s=%s" % (argname, constructor)) # TODO: don't include name
+        except KeyError:
+            skipped_an_arg = True
+
+    return CallString("%s(%s)" % (object_name,
+                      ', '.join(filter(None, (positional_args + keyword_args + [vararg] + [kwarg])))),
+                      uncomplete=uncomplete, imports=imports)
+
+# :: (string, dict, {SerializedObject: str}) -> CallString
+def call_as_string(object_name, args, assigned_names={}):
+    """Generate code for calling an arbitrary object with given arguments.
+    Use `call_as_string_for` when you have a definition to base the call on.
+
+    >>> from test.helper import make_fresh_serialize
+    >>> serialize = make_fresh_serialize()
+
+    Since we don't have a definition to base the generated call on, we use
+    keywords to name all arguments:
+        >>> call_as_string('fun', {'a': serialize(1), 'b': serialize(2)})
+        'fun(a=1, b=2)'
+        >>> call_as_string('capitalize', {'str': serialize('string')})
+        "capitalize(str='string')"
 
     Uses references to existing objects where possible...
         >>> result = call_as_string('call', {'f': serialize(call_as_string)})
@@ -192,70 +284,18 @@ def call_as_string(object_name, args, definition=None, assigned_names={}):
     construction code.
         >>> mutable = serialize([])
         >>> call_as_string('merge', {'seq1': mutable, 'seq2': serialize([1,2,3])},
-        ...     None, {mutable: 'alist'})
+        ...     {mutable: 'alist'})
         'merge(seq1=alist, seq2=[1, 2, 3])'
-
-    Puts varargs at the end of arguments list.
-        >>> call_as_string('build_url',
-        ...     {'proto': serialize('http'), 'params': serialize(('user', 'session', 'new'))},
-        ...     Function('build_url', ['proto', '*params']))
-        "build_url(proto='http', 'user', 'session', 'new')"
-
-    Works for lone varargs too.
-        >>> call_as_string('concat', {'args': serialize(([1,2,3], [4,5], [6]))},
-        ...     Function('concat', ['*args']))
-        'concat([1, 2, 3], [4, 5], [6])'
-
-    Uses assigned name for varargs as well.
-        >>> args = serialize((1, 2, 3))
-        >>> call_as_string('add', {'args': args}, Function('add', ['*args']), {args: 'atuple'})
-        'add(*atuple)'
-
-    Inlines extra keyword arguments in the call...
-        >>> call_as_string('dict', {'kwargs': serialize({'one': 1, 'two': 2})},
-        ...     Function('dict', ['**kwargs']))
-        'dict(one=1, two=2)'
-
-    ...even when they are combined with varargs.
-        >>> call_as_string('wrap', {'a': serialize((1, 2, 3)), 'k': serialize({'x': 4, 'y': 5})},
-        ...     Function('wrap', ['*a', '**k']))
-        'wrap(1, 2, 3, x=4, y=5)'
-
-    Uses assigned name for kwarg if present.
-        >>> kwargs = serialize({'id': 42, 'model': 'user'})
-        >>> call_as_string('filter_params', {'kwargs': kwargs},
-        ...    Function('filter_params', ['**kwargs']), {kwargs: 'params'})
-        'filter_params(**params)'
     """
-    arguments = []
-    varargs = []
-    kwargs = []
     uncomplete = False
     imports = set()
+    arguments = []
     for arg, value in sorted(args.iteritems()):
-        if definition and definition.is_vararg(arg):
-            if value in assigned_names.keys():
-                varargs = ["*%s" % assigned_names[value]]
-            else:
-                rec, imp, unc = zip(*get_contained_objects_info(value, assigned_names))
-                uncomplete = uncomplete or any(unc)
-                imports.update(union(*imp))
-                varargs = list(rec)
-        elif definition and definition.is_kwarg(arg):
-            if value in assigned_names.keys():
-                kwargs = ["**%s" % assigned_names[value]]
-            else:
-                for karg, kvalue in map_as_kwargs(value):
-                    valuecs = constructor_as_string(kvalue, assigned_names)
-                    uncomplete = uncomplete or valuecs.uncomplete
-                    imports.update(valuecs.imports)
-                    kwargs.append("%s=%s" % (karg, valuecs))
-        else:
-            constructor = constructor_as_string(value, assigned_names)
-            uncomplete = uncomplete or constructor.uncomplete
-            imports.update(constructor.imports)
-            arguments.append("%s=%s" % (arg, constructor))
-    return CallString("%s(%s)" % (object_name, ', '.join(arguments + varargs + kwargs)),
+        constructor = constructor_as_string(value, assigned_names)
+        uncomplete = uncomplete or constructor.uncomplete
+        imports.update(constructor.imports)
+        arguments.append("%s=%s" % (arg, constructor))
+    return CallString("%s(%s)" % (object_name, ', '.join(arguments)),
                       uncomplete=uncomplete, imports=imports)
 
 # :: MapObject -> {str: SerializedObject}
@@ -869,7 +909,7 @@ class TestGenerator(object):
         Generated assertion will be a stub if input of a call cannot be
         constructed or if stub argument is True.
         """
-        callstring = decorate_call(call, call_as_string(name, call.input,
+        callstring = decorate_call(call, call_as_string_for(name, call.input,
             call.definition, assigned_names))
 
         self.ensure_imports(callstring.imports)

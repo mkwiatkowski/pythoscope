@@ -15,7 +15,8 @@ from pythoscope.store import Class, Function, Method, ModuleNeedsAnalysis, \
     ModuleSaveError, TestClass, TestMethod, MethodCall, FunctionCall, \
     UserObject, GeneratorObject, ModuleNotFound
 from pythoscope.compat import sets, sorted
-from pythoscope.util import read_file_contents, get_last_modification_time
+from pythoscope.util import read_file_contents, get_last_modification_time, \
+    flatten
 
 from assertions import *
 from helper import CapturedDebugLogger, CapturedLogger, P, \
@@ -53,7 +54,7 @@ def ClassWithMethods(classname, methods, call_type='output'):
     method_calls = []
 
     for name, calls in methods:
-        method = Method(name)
+        method = Method(name, flatten([a.keys() for a,_ in calls]))
         method_objects.append(method)
         for args, output in calls:
             method_calls.append(create_method_call(method, args, output, call_type, execution))
@@ -72,7 +73,7 @@ def ClassWithInstanceWithoutReconstruction(name):
 
 def FunctionWithCalls(funcname, calls):
     execution = EmptyProjectExecution()
-    function = Function(funcname)
+    function = Function(funcname, sorted(calls[0][0].keys()))
     function.calls = [FunctionCall(function,
                                    stable_serialize_call_arguments(execution, i),
                                    execution.serialize(o)) for (i,o) in calls]
@@ -83,7 +84,7 @@ def FunctionWithSingleCall(funcname, input, output):
 
 def FunctionWithExceptions(funcname, calls):
     execution = EmptyProjectExecution()
-    function = Function(funcname)
+    function = Function(funcname, sorted(calls[0][0].keys()))
     function.calls = [FunctionCall(function,
                                    stable_serialize_call_arguments(execution, i),
                                    exception=execution.serialize(e)) for (i,e) in calls]
@@ -94,7 +95,7 @@ def FunctionWithSingleException(funcname, input, exception):
 
 def GeneratorWithYields(genname, input, yields):
     execution = EmptyProjectExecution()
-    generator = Function(genname, is_generator=True)
+    generator = Function(genname, input.keys(), is_generator=True)
     gobject = GeneratorObject(generator,
                               stable_serialize_call_arguments(execution, input),
                               map(execution.serialize, yields))
@@ -103,7 +104,7 @@ def GeneratorWithYields(genname, input, yields):
 
 def GeneratorWithSingleException(genname, input, exception):
     execution = EmptyProjectExecution()
-    generator = Function(genname, is_generator=True)
+    generator = Function(genname, input.keys(), is_generator=True)
     gobject = GeneratorObject(generator,
                               stable_serialize_call_arguments(execution, input),
                               exception=execution.serialize(exception))
