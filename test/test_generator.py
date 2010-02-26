@@ -54,7 +54,7 @@ def ClassWithMethods(classname, methods, call_type='output'):
     method_calls = []
 
     for name, calls in methods:
-        method = Method(name, flatten([a.keys() for a,_ in calls]))
+        method = Method(name, ['self'] + flatten([a.keys() for a,_ in calls]))
         method_objects.append(method)
         for args, output in calls:
             method_calls.append(create_method_call(method, args, output, call_type, execution))
@@ -211,7 +211,7 @@ class TestGeneratorClass:
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "def test_square_returns_16_for_4(self):")
-        assert_contains(result, "self.assertEqual(16, square(x=4))")
+        assert_contains(result, "self.assertEqual(16, square(4))")
 
     def test_generates_test_case_for_each_function_call_with_strings(self):
         objects = [FunctionWithSingleCall('underscore', {'name': 'John Smith'}, 'john_smith')]
@@ -219,7 +219,7 @@ class TestGeneratorClass:
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "def test_underscore_returns_john_smith_for_John_Smith(self):")
-        assert_contains(result, "self.assertEqual('john_smith', underscore(name='John Smith'))")
+        assert_contains(result, "self.assertEqual('john_smith', underscore('John Smith'))")
 
     def test_generates_test_case_for_each_method_call(self):
         klass = ClassWithMethods('Something', [('method', [({'arg': 111}, 'one one one')])])
@@ -228,7 +228,7 @@ class TestGeneratorClass:
 
         assert_contains(result, "def test_method_returns_one_one_one_for_111(self):")
         assert_contains(result, "something = Something()")
-        assert_contains(result, "self.assertEqual('one one one', something.method(arg=111))")
+        assert_contains(result, "self.assertEqual('one one one', something.method(111))")
 
     def test_generates_imports_needed_for_function_calls(self):
         objects = [FunctionWithSingleCall('square', {}, 42)]
@@ -272,7 +272,7 @@ class TestGeneratorClass:
         result = generate_single_test_module(objects=[klass])
 
         assert_contains(result, "def test_sum_returns_3_after_creation_with_arg1_equal_1_and_arg2_equal_2(self):")
-        assert_contains(result, "something = Something(arg1=1, arg2=2)")
+        assert_contains(result, "something = Something(1, 2)")
         assert_contains(result, "self.assertEqual(3, something.sum())")
 
     def test_generates_nice_name_for_tests_with_init_that_takes_no_arguments(self):
@@ -302,9 +302,9 @@ class TestGeneratorClass:
         result = generate_single_test_module(objects=[klass])
 
         assert_contains(result, "def test_method_returns_result_for_1(self):")
-        assert_contains(result, "self.assertEqual('result', something.method(argument=1))")
+        assert_contains(result, "self.assertEqual('result', something.method(1))")
         assert_doesnt_contain(result, "def test_private_returns_false_for_2(self):")
-        assert_doesnt_contain(result, "self.assertEqual(False, something.private(argument=2))")
+        assert_doesnt_contain(result, "self.assertEqual(False, something.private(2))")
 
     def test_generates_nice_names_for_test_cases_that_test_init_only(self):
         klass = ClassWithMethods('Something', [('__init__', [({'param': 1}, None)])])
@@ -321,7 +321,7 @@ class TestGeneratorClass:
         result = generate_single_test_module(objects=[klass])
 
         assert_contains(result, "def test_creation_with_function(self):")
-        assert_contains(result, "# something = Something(param=<TODO: function>)")
+        assert_contains(result, "# something = Something(<TODO: function>)")
         assert_contains(result, "# Make sure it doesn't raise any exceptions.")
 
     def test_comments_all_assertions_if_the_object_creation_is_uncomplete(self):
@@ -331,7 +331,7 @@ class TestGeneratorClass:
         result = generate_single_test_module(objects=[klass])
 
         assert_contains(result, "def test_method_returns_1_after_creation_with_function(self):")
-        assert_contains(result, "# something = Something(param=<TODO: function>)")
+        assert_contains(result, "# something = Something(<TODO: function>)")
         assert_contains(result, "# self.assertEqual(1, something.method()")
 
     def test_generates_assert_equal_type_for_functions_returning_functions(self):
@@ -349,7 +349,7 @@ class TestGeneratorClass:
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "def test_higher_returns_true_for_function(self):")
-        assert_contains(result, "# self.assertEqual(True, higher(f=<TODO: function>))")
+        assert_contains(result, "# self.assertEqual(True, higher(<TODO: function>))")
 
     def test_generates_assert_equal_type_for_functions_returning_generator_objects(self):
         def generator():
@@ -370,7 +370,7 @@ class TestGeneratorClass:
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "def test_ungen_returns_true_for_generator(self):")
-        assert_contains(result, "# self.assertEqual(True, ungen(g=<TODO: generator>))")
+        assert_contains(result, "# self.assertEqual(True, ungen(<TODO: generator>))")
 
     def test_generates_assert_equal_type_test_stub_for_functions_which_take_and_return_functions(self):
         objects = [FunctionWithSingleCall('highest', {'f': lambda: 42}, lambda: 43)]
@@ -378,7 +378,7 @@ class TestGeneratorClass:
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "def test_highest_returns_function_for_function(self):")
-        assert_contains(result, "# self.assertEqual(types.FunctionType, type(highest(f=<TODO: function>)))")
+        assert_contains(result, "# self.assertEqual(types.FunctionType, type(highest(<TODO: function>)))")
 
     def test_handles_regular_expression_pattern_objects(self):
         objects = [FunctionWithSingleCall('matches', {'x': re.compile('abcd')}, True)]
@@ -387,7 +387,7 @@ class TestGeneratorClass:
 
         assert_contains(result, "import re")
         assert_contains(result, "def test_matches_returns_true_for_abcd_pattern(self):")
-        assert_contains(result, "self.assertEqual(True, matches(x=re.compile('abcd')))")
+        assert_contains(result, "self.assertEqual(True, matches(re.compile('abcd')))")
 
     def test_lists_names_of_tested_methods_in_longer_test_cases(self):
         klass = ClassWithMethods('Something', [('__init__', [({'arg1': 1, 'arg2': 2}, None)]),
@@ -413,7 +413,7 @@ class TestGeneratorClass:
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "def test_random_yields_1_then_8_then_7_then_2_for_1(self):")
-        assert_contains(result, "self.assertEqual([1, 8, 7, 2], list(islice(random(seed=1), 4)))")
+        assert_contains(result, "self.assertEqual([1, 8, 7, 2], list(islice(random(1), 4)))")
 
     def test_generates_assert_equal_for_generator_methods(self):
         klass = ClassWithMethods('SuperGenerator', [('degenerate', [({'what': 'strings'}, ['one', 'two'])])], call_type='generator')
@@ -422,7 +422,7 @@ class TestGeneratorClass:
 
         assert_contains(result, "def test_degenerate_yields_one_then_two_for_strings(self):")
         assert_contains(result, "super_generator = SuperGenerator()")
-        assert_contains(result, "self.assertEqual(['one', 'two'], list(islice(super_generator.degenerate(what='strings'), 2)))")
+        assert_contains(result, "self.assertEqual(['one', 'two'], list(islice(super_generator.degenerate('strings'), 2)))")
 
     def test_generates_assert_equal_stub_for_generator_functions_with_unpickable_inputs(self):
         objects = [GeneratorWithYields('call_twice', {'x': lambda: 1}, [1, 1])]
@@ -430,7 +430,7 @@ class TestGeneratorClass:
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "def test_call_twice_yields_1_then_1_for_function(self):")
-        assert_contains(result, "# self.assertEqual([1, 1], list(islice(call_twice(x=<TODO: function>), 2)))")
+        assert_contains(result, "# self.assertEqual([1, 1], list(islice(call_twice(<TODO: function>), 2)))")
 
     def test_generates_assert_equal_types_for_generator_functions_with_unpickable_outputs(self):
         objects = [GeneratorWithYields('lambdify', {'x': 1}, [lambda: 1, lambda: 2])]
@@ -438,7 +438,7 @@ class TestGeneratorClass:
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "def test_lambdify_yields_function_then_function_for_1(self):")
-        assert_contains(result, "self.assertEqual([types.FunctionType, types.FunctionType], map(type, list(islice(lambdify(x=1), 2))))")
+        assert_contains(result, "self.assertEqual([types.FunctionType, types.FunctionType], map(type, list(islice(lambdify(1), 2))))")
 
     def test_takes_slice_of_generated_values_list_to_work_around_infinite_generators(self):
         objects = [GeneratorWithYields('nats', {'start': 1}, [1, 2, 3])]
@@ -447,7 +447,7 @@ class TestGeneratorClass:
 
         assert_contains(result, "from itertools import islice")
         assert_contains(result, "def test_nats_yields_1_then_2_then_3_for_1(self):")
-        assert_contains(result, "self.assertEqual([1, 2, 3], list(islice(nats(start=1), 3)))")
+        assert_contains(result, "self.assertEqual([1, 2, 3], list(islice(nats(1), 3)))")
 
     def test_doesnt_test_unused_generators(self):
         objects = [GeneratorWithYields('useless', {'anything': 123}, [])]
@@ -464,7 +464,7 @@ class TestGeneratorClass:
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "def test_characterize_returns_oacute_for_unicode_string(self):")
-        assert_contains(result, "self.assertEqual('o-acute', characterize(x=u'\\xf3'))")
+        assert_contains(result, "self.assertEqual('o-acute', characterize(u'\\xf3'))")
 
     def test_handles_localizable_function_objects(self):
         objects = [FunctionWithSingleCall('store', {'fun': read_file_contents}, None)]
@@ -473,7 +473,7 @@ class TestGeneratorClass:
 
         assert_contains(result, "from pythoscope.util import read_file_contents")
         assert_contains(result, "def test_store_returns_None_for_read_file_contents_function(self):")
-        assert_contains(result, "self.assertEqual(None, store(fun=read_file_contents))")
+        assert_contains(result, "self.assertEqual(None, store(read_file_contents))")
 
     def test_handles_the_same_object_used_twice(self):
         obj = []
@@ -483,7 +483,7 @@ class TestGeneratorClass:
 
         assert_contains(result, "def test_compare_returns_true_for_x_equal_list_and_y_equal_list(self):")
         assert_contains(result, "alist = []")
-        assert_contains(result, "self.assertEqual(True, compare(x=alist, y=alist))")
+        assert_contains(result, "self.assertEqual(True, compare(alist, alist))")
 
     def test_handles_two_objects_used_many_times(self):
         obj1, obj2 = [], []
@@ -495,7 +495,7 @@ class TestGeneratorClass:
         assert_contains(result, "def test_four_returns_false_for_w_equal_list_and_x_equal_list_and_y_equal_list_and_z_equal_list(self):")
         assert_contains(result, "alist1 = []")
         assert_contains(result, "alist2 = []")
-        assert_contains(result, "self.assertEqual(False, four(w=alist1, x=alist2, y=alist1, z=alist2))")
+        assert_contains(result, "self.assertEqual(False, four(alist1, alist2, alist1, alist2))")
 
     def test_handles_many_objects_used_many_times(self):
         obj1, obj2, obj3 = {}, {}, {}
@@ -509,7 +509,7 @@ class TestGeneratorClass:
         assert_contains(result, "adict1 = {}")
         assert_contains(result, "adict2 = {}")
         assert_contains(result, "adict3 = {}")
-        assert_contains(result, "self.assertEqual(False, six(a=adict1, b=adict2, c=adict3, d=adict1, e=adict2, f=adict3))")
+        assert_contains(result, "self.assertEqual(False, six(adict1, adict2, adict3, adict1, adict2, adict3))")
 
     def test_uses_argument_name_when_argument_is_used_as_return_value(self):
         obj = []
@@ -519,7 +519,7 @@ class TestGeneratorClass:
 
         assert_contains(result, "def test_identity_returns_x_for_x_equal_list(self):")
         assert_contains(result, "alist = []")
-        assert_contains(result, "self.assertEqual(alist, identity(x=alist))")
+        assert_contains(result, "self.assertEqual(alist, identity(alist))")
 
     def test_handles_objects_that_depend_on_each_other(self):
         inner = {}
@@ -530,7 +530,7 @@ class TestGeneratorClass:
 
         assert_contains(result, "def test_contains_returns_true_for_inner_equal_dict_and_outer_equal_list(self):")
         assert_contains(result, "adict = {}")
-        assert_contains(result, "self.assertEqual(True, contains(inner=adict, outer=[adict]))")
+        assert_contains(result, "self.assertEqual(True, contains(adict, [adict]))")
 
     def test_handles_objects_which_setups_depend_on_each_other(self):
         inner = []
@@ -542,7 +542,7 @@ class TestGeneratorClass:
         assert_contains(result, "def test_mangle_returns_false_for_a1_equal_list_and_a2_equal_list_and_a3_equal_list(self):")
         assert_contains(result, "alist1 = []")
         assert_contains(result, "alist2 = [alist1]")
-        assert_contains(result, "self.assertEqual(False, mangle(a1=alist1, a2=alist2, a3=alist2))")
+        assert_contains(result, "self.assertEqual(False, mangle(alist1, alist2, alist2))")
 
     def test_handles_reused_objects_in_method_calls(self):
         alist = []
@@ -553,7 +553,7 @@ class TestGeneratorClass:
         assert_contains(result, "def test_double_returns_tuple_for_list(self):")
         assert_contains(result, "alist = []")
         assert_contains(result, "doubler = Doubler()")
-        assert_contains(result, "self.assertEqual((alist, alist), doubler.double(lst=alist))")
+        assert_contains(result, "self.assertEqual((alist, alist), doubler.double(alist))")
 
     def test_generates_sample_assertions_in_test_stubs_for_functions(self):
         objects = [Function('something', args=['arg1', 'arg2', '*rest'])]
@@ -612,7 +612,7 @@ class TestRaisedExceptions:
         result = generate_single_test_module(objects=[function])
 
         assert_contains(result, "def test_square_raises_type_error_for_hello(self):")
-        assert_contains(result, "self.assertRaises(TypeError, lambda: square(x='hello'))")
+        assert_contains(result, "self.assertRaises(TypeError, lambda: square('hello'))")
 
     def test_generates_assert_raises_stub_for_functions_with_string_exceptions(self):
         function = FunctionWithSingleException('bad_function', {}, "bad error")
@@ -628,7 +628,7 @@ class TestRaisedExceptions:
         result = generate_single_test_module(objects=[klass])
 
         assert_contains(result, "def test_creation_with_123_raises_value_error(self):")
-        assert_contains(result, "self.assertRaises(ValueError, lambda: Something(x=123))")
+        assert_contains(result, "self.assertRaises(ValueError, lambda: Something(123))")
 
     def test_generates_assert_raises_stub_for_init_methods_with_exceptions(self):
         klass = ClassWithMethods('Something', [('__init__', [({'x': lambda: 42}, ValueError())])], 'exception')
@@ -636,7 +636,7 @@ class TestRaisedExceptions:
         result = generate_single_test_module(objects=[klass])
 
         assert_contains(result, "def test_creation_with_function_raises_value_error(self):")
-        assert_contains(result, "# self.assertRaises(ValueError, lambda: Something(x=<TODO: function>))")
+        assert_contains(result, "# self.assertRaises(ValueError, lambda: Something(<TODO: function>))")
 
     def test_generates_assert_raises_for_normal_methods_with_exceptions(self):
         klass = ClassWithMethods('Something', [('method', [({}, KeyError())])], 'exception')
@@ -669,7 +669,7 @@ class TestRaisedExceptions:
         result = generate_single_test_module(objects=[function])
 
         assert_contains(result, "def test_high_raises_not_implemented_error_for_function(self):")
-        assert_contains(result, "# self.assertRaises(NotImplementedError, lambda: high(f=<TODO: function>))")
+        assert_contains(result, "# self.assertRaises(NotImplementedError, lambda: high(<TODO: function>))")
 
     def test_generates_assert_raises_for_generator_functions_with_exceptions(self):
         objects = [GeneratorWithSingleException('throw', {'string': {}}, TypeError())]
@@ -677,7 +677,7 @@ class TestRaisedExceptions:
         result = generate_single_test_module(objects=objects)
 
         assert_contains(result, "def test_throw_raises_type_error_for_dict(self):")
-        assert_contains(result, "self.assertRaises(TypeError, lambda: list(islice(throw(string={}), 1)))")
+        assert_contains(result, "self.assertRaises(TypeError, lambda: list(islice(throw({}), 1)))")
 
 class TestGeneratorAddTestsToProjectMethod(CapturedLogger):
     class ProjectWithoutModules:
@@ -850,7 +850,7 @@ class TestGeneratorWithSingleModule:
         result = self.project["test_module"].get_content()
 
         assert_contains(result, "def test_nofun_returns_something_else_for_something_instance(self):")
-        assert_contains(result, "# self.assertEqual('something else', nofun(x=<TODO: test.test_generator.Something>))")
+        assert_contains(result, "# self.assertEqual('something else', nofun(<TODO: test.test_generator.Something>))")
 
     def test_generates_type_assertions_for_calls_with_composite_objects_which_elements_cannot_be_constructed(self):
         klass, instance = ClassWithInstanceWithoutReconstruction("Unspeakable")

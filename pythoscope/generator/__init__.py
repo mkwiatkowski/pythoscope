@@ -77,15 +77,15 @@ def constructor_as_string(object, assigned_names={}):
         'SomeClass()'
 
     interpreting their arguments correctly
-        >>> obj.add_call(MethodCall(Method('__init__', ['arg']), {'arg': serialize('whatever')}, serialize(None)))
+        >>> obj.add_call(MethodCall(Method('__init__', ['self', 'arg']), {'arg': serialize('whatever')}, serialize(None)))
         >>> constructor_as_string(obj)
-        "SomeClass(arg='whatever')"
+        "SomeClass('whatever')"
 
     even if they're user objects themselves:
         >>> otherobj = UserObject(None, Class('SomeOtherClass'))
-        >>> otherobj.add_call(MethodCall(Method('__init__', ['object']), {'object': obj}, serialize(None)))
+        >>> otherobj.add_call(MethodCall(Method('__init__', ['self', 'object']), {'object': obj}, serialize(None)))
         >>> constructor_as_string(otherobj)
-        "SomeOtherClass(object=SomeClass(arg='whatever'))"
+        "SomeOtherClass(SomeClass('whatever'))"
 
     Handles composite objects:
         >>> constructor_as_string(serialize([1, "a", None]))
@@ -93,7 +93,7 @@ def constructor_as_string(object, assigned_names={}):
 
     even when they contain instances of user-defined classes:
         >>> constructor_as_string(SequenceObject([obj], lambda x:x))
-        "[SomeClass(arg='whatever')]"
+        "[SomeClass('whatever')]"
 
     or other composite objects:
         >>> constructor_as_string(serialize((23, [4, [5]], {'a': 'b'})))
@@ -161,6 +161,11 @@ def get_contained_objects_info(obj, assigned_names):
     else:
         raise TypeError("Wrong argument to get_contained_objects_info: %r." % obj)
 
+# :: Definition -> [str]
+def arguments_of(definition):
+    if isinstance(definition, Method):
+        return definition.args[1:] # Skip "self".
+    return definition.args
 
 # :: (string, dict, Definition, {SerializedObject: str}) -> CallString
 def call_as_string_for(object_name, args, definition, assigned_names={}):
@@ -173,7 +178,7 @@ def call_as_string_for(object_name, args, definition, assigned_names={}):
         >>> call_as_string_for('build_url',
         ...     {'proto': serialize('http'), 'params': serialize(('user', 'session', 'new'))},
         ...     Function('build_url', ['proto', '*params']))
-        "build_url(proto='http', 'user', 'session', 'new')"
+        "build_url('http', 'user', 'session', 'new')"
 
     Works for lone varargs too.
         >>> call_as_string_for('concat', {'args': serialize(([1,2,3], [4,5], [6]))},
@@ -206,6 +211,11 @@ def call_as_string_for(object_name, args, definition, assigned_names={}):
         >>> call_as_string_for('wrap', {'args': args, 'kwargs': serialize({'a': 6, 'b': 7})},
         ...     Function('wrap', ['*args', '**kwargs']), {args: 'atuple'})
         'wrap(a=6, b=7, *atuple)'
+
+    When varargs are present all preceding arguments are positioned, not named.
+        >>> call_as_string_for('sum', {'x': serialize(1), 'rest': serialize((2, 3))},
+        ...     Function('sum', ['x', '*rest']))
+        'sum(1, 2, 3)'
     """
     positional_args = []
     keyword_args = []
@@ -218,7 +228,7 @@ def call_as_string_for(object_name, args, definition, assigned_names={}):
         return args[argname.lstrip("*")]
 
     skipped_an_arg = False
-    for argname in definition.args:
+    for argname in arguments_of(definition):
         try:
             value = getvalue(argname)
             if argname.startswith("**"):
@@ -242,7 +252,10 @@ def call_as_string_for(object_name, args, definition, assigned_names={}):
                 constructor = constructor_as_string(value, assigned_names)
                 uncomplete = uncomplete or constructor.uncomplete
                 imports.update(constructor.imports)
-                positional_args.append("%s=%s" % (argname, constructor)) # TODO: don't include name
+                if skipped_an_arg:
+                    keyword_args.append("%s=%s" % (argname, constructor))
+                else:
+                    positional_args.append("%s" % constructor)
         except KeyError:
             skipped_an_arg = True
 
