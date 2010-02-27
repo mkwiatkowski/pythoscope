@@ -2,6 +2,8 @@ from pythoscope.astvisitor import descend, ASTVisitor
 from pythoscope.astbuilder import parse_fragment, EmptyCode
 from pythoscope.logger import log
 from pythoscope.generator.adder import add_test_case_to_project
+from pythoscope.generator.selector import testable_objects, is_testable, \
+    testable_calls
 from pythoscope.serializer import BuiltinException, CompositeObject, \
     ImmutableObject, MapObject, UnknownObject, SequenceObject, \
     SerializedObject, can_be_constructed, is_serialized_string
@@ -646,9 +648,6 @@ def decorate_call(call, string):
 def should_ignore_method(method):
     return method.is_private()
 
-def testable_calls(calls):
-    return [c for c in calls if c.is_testable()]
-
 class UnknownTemplate(Exception):
     def __init__(self, template):
         Exception.__init__(self, "Couldn't find template %r." % template)
@@ -747,7 +746,7 @@ class TestGenerator(object):
             add_test_case_to_project(project, test_case, self.main_snippet, force)
 
     def _generate_test_cases(self, module):
-        for object in module.testable_objects:
+        for object in testable_objects(module):
             test_case = self._generate_test_case(object, module)
             if test_case:
                 yield test_case

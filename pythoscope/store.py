@@ -52,11 +52,6 @@ def get_points_of_entry_path(project_path):
 def get_code_trees_path(project_path):
     return os.path.join(get_pythoscope_path(project_path), "code-trees")
 
-def get_test_objects(objects):
-    def is_test_object(object):
-        return isinstance(object, TestCase)
-    return filter(is_test_object, objects)
-
 class Project(object):
     """Object representing the whole project under Pythoscope wings.
 
@@ -431,13 +426,6 @@ class Class(ObjectInModule):
             self._set_class_for_method(method)
             self.methods.append(method)
 
-    def is_testable(self):
-        ignored_superclasses = ['Exception', 'unittest.TestCase']
-        for klass in ignored_superclasses:
-            if klass in self.bases:
-                return False
-        return True
-
     def add_user_object(self, user_object):
         self.user_objects.append(user_object)
 
@@ -638,9 +626,6 @@ class Call(object):
     def clear_exception(self):
         self.exception = None
 
-    def is_testable(self):
-        return True
-
     def __eq__(self, other):
         return self.definition == other.definition and \
                self.input == other.input and \
@@ -685,9 +670,6 @@ class Function(Definition, Callable):
         Callable.__init__(self, calls)
         self.module = module
 
-    def is_testable(self):
-        return not self.name.startswith('_')
-
     def get_unique_calls(self):
         return set(self.calls)
 
@@ -709,9 +691,6 @@ class GeneratorObject(Call):
 
     def set_output(self, output):
         self.output.append(output)
-
-    def is_testable(self):
-        return self.raised_exception() or self.output
 
     def __hash__(self):
         return hash((self.definition.name,
@@ -803,9 +782,6 @@ class TestClass(ObjectInModule, TestSuite):
             if method.name == name:
                 return method
 
-    def is_testable(self):
-        return False
-
 ########################################################################
 ## The Module class.
 ##
@@ -843,10 +819,6 @@ class Module(Localizable, TestSuite):
                                 "object is already inside %r." % \
                                     (obj, self.locator, obj.module.locator))
             obj.module = self
-
-    def _get_testable_objects(self):
-        return [o for o in self.objects if o.is_testable()]
-    testable_objects = property(_get_testable_objects)
 
     def _get_classes(self):
         return all_of_type(self.objects, Class)
