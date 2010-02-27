@@ -2,7 +2,7 @@ from pythoscope.astvisitor import descend, ASTVisitor
 from pythoscope.astbuilder import parse_fragment, EmptyCode
 from pythoscope.logger import log
 from pythoscope.generator.adder import add_test_case_to_project
-from pythoscope.generator.code_string import CodeString, combine
+from pythoscope.generator.code_string import CodeString, combine, join
 from pythoscope.generator.selector import testable_objects, is_testable, \
     testable_calls
 from pythoscope.serializer import BuiltinException, CompositeObject, \
@@ -100,45 +100,37 @@ def constructor_as_string(object, assigned_names={}):
     elif isinstance(object, ImmutableObject):
         return CodeString(object.reconstructor, imports=object.imports)
     elif isinstance(object, CompositeObject):
-        try:
-            reconstructors, imports, uncomplete = zip(*get_contained_objects_info(object, assigned_names))
-        # In Python <= 2.3 zip can raise TypeError if no arguments were provided.
-        # All Pythons can raise ValueError because of the wrong unpacking.
-        except (ValueError, TypeError):
-            reconstructors, imports, uncomplete = [], [], []
-        return CodeString(object.constructor_format % ', '.join(reconstructors),
-                          imports=union(object.imports, *imports),
-                          uncomplete=any(uncomplete))
+        code_strings = get_contained_objects_info(object, assigned_names)
+        arguments = join(', ', code_strings)
+        return arguments.extend(object.constructor_format % arguments, imports=object.imports)
     elif isinstance(object, UnknownObject):
         return CodeString(todo_value(object.partial_reconstructor), uncomplete=True)
     else:
         raise TypeError("constructor_as_string expected SerializedObject at input, not %s" % object)
 
-# :: ([SerializedObject], {SerializedObject: str}) -> [(str, set, bool)]
+# :: ([SerializedObject], {SerializedObject: str}) -> [CodeString]
 def get_objects_collection_info(objs, assigned_names):
     for obj in objs:
-        cs = constructor_as_string(obj, assigned_names)
-        yield (cs, cs.imports, cs.uncomplete)
+        yield constructor_as_string(obj, assigned_names)
 
-# :: ({SerializedObject: SerializedObject}, {SerializedObject: str}) -> [(str, set, bool)]
+# :: ({SerializedObject: SerializedObject}, {SerializedObject: str}) -> [CodeString]
 def get_objects_mapping_info(mapping, assigned_names):
     for key, value in mapping:
         keycs = constructor_as_string(key, assigned_names)
         valuecs = constructor_as_string(value, assigned_names)
-        cs = combine("%s: %s", keycs, valuecs)
-        yield (cs, cs.imports, cs.uncomplete)
+        yield combine("%s: %s", keycs, valuecs)
 
-# :: (CompositeObject, {SerializedObject: str}) -> [(str, set, bool)]
+# :: (CompositeObject, {SerializedObject: str}) -> [CodeString]
 def get_contained_objects_info(obj, assigned_names):
-    """Return a list of tuples (reconstructor, imports, uncomplete) describing
-    each object contained within a composite object.
+    """Return a list of CodeStrings describing each object contained within
+    a composite object.
     """
     if isinstance(obj, SequenceObject):
-        return get_objects_collection_info(obj.contained_objects, assigned_names)
+        return list(get_objects_collection_info(obj.contained_objects, assigned_names))
     elif isinstance(obj, MapObject):
-        return get_objects_mapping_info(obj.mapping, assigned_names)
+        return list(get_objects_mapping_info(obj.mapping, assigned_names))
     elif isinstance(obj, BuiltinException):
-        return get_objects_collection_info(obj.args, assigned_names)
+        return list(get_objects_collection_info(obj.args, assigned_names))
     else:
         raise TypeError("Wrong argument to get_contained_objects_info: %r." % obj)
 
@@ -202,8 +194,6 @@ def call_as_string_for(object_name, args, definition, assigned_names={}):
     keyword_args = []
     vararg = None
     kwarg = None
-    uncomplete = False
-    imports = set()
 
     def getvalue(argname):
         return args[argname.lstrip("*")]
@@ -214,35 +204,28 @@ def call_as_string_for(object_name, args, definition, assigned_names={}):
             value = getvalue(argname)
             if argname.startswith("**"):
                 if value in assigned_names.keys():
-                    kwarg = "**%s" % assigned_names[value]
+                    kwarg = CodeString("**%s" % assigned_names[value])
                 else:
                     for karg, kvalue in map_as_kwargs(value):
                         valuecs = constructor_as_string(kvalue, assigned_names)
-                        uncomplete = uncomplete or valuecs.uncomplete
-                        imports.update(valuecs.imports)
-                        keyword_args.append("%s=%s" % (karg, valuecs))
+                        keyword_args.append(valuecs.extend("%s=%s" % (karg, valuecs)))
             elif argname.startswith("*"):
                 if value in assigned_names.keys():
-                    vararg = "*%s" % assigned_names[value]
+                    vararg = CodeString("*%s" % assigned_names[value])
                 else:
-                    rec, imp, unc = zip(*get_contained_objects_info(value, assigned_names))
-                    uncomplete = uncomplete or any(unc)
-                    imports.update(union(*imp))
-                    positional_args.extend(rec)
+                    code_strings = get_contained_objects_info(value, assigned_names)
+                    positional_args.extend(code_strings)
             else:
                 constructor = constructor_as_string(value, assigned_names)
-                uncomplete = uncomplete or constructor.uncomplete
-                imports.update(constructor.imports)
                 if skipped_an_arg:
-                    keyword_args.append("%s=%s" % (argname, constructor))
+                    keyword_args.append(constructor.extend("%s=%s" % (argname, constructor)))
                 else:
-                    positional_args.append("%s" % constructor)
+                    positional_args.append(constructor)
         except KeyError:
             skipped_an_arg = True
 
-    return CodeString("%s(%s)" % (object_name,
-                      ', '.join(filter(None, (positional_args + keyword_args + [vararg] + [kwarg])))),
-                      uncomplete=uncomplete, imports=imports)
+    arguments = join(', ', filter(None, (positional_args + keyword_args + [vararg] + [kwarg])))
+    return arguments.extend("%s(%s)" % (object_name, arguments))
 
 # :: (string, dict, {SerializedObject: str}) -> CodeString
 def call_as_string(object_name, args, assigned_names={}):

@@ -243,6 +243,8 @@ def flatten(lst):
 def union(*sets):
     """Return a union of all the given sets.
     """
+    if len(sets) == 0:
+        return set()
     # Since 2.6 set.union accepts multiple input iterables.
     if sys.version_info >= (2, 6):
         return set.union(*sets)

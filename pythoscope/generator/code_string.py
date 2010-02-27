@@ -1,4 +1,4 @@
-from pythoscope.compat import set
+from pythoscope.compat import any, set
 from pythoscope.util import union
 
 
@@ -27,3 +27,8 @@ def combine(template, cs1, cs2):
     return CodeString(template % (cs1, cs2),
         cs1.uncomplete or cs2.uncomplete,
         union(cs1.imports, cs2.imports))
+
+def join(char, code_strings):
+    return CodeString(char.join(code_strings),
+        any([cs.uncomplete for cs in code_strings]),
+        union(*[cs.imports for cs in code_strings]))
