@@ -2,7 +2,7 @@ from pythoscope.astvisitor import descend, ASTVisitor
 from pythoscope.astbuilder import parse_fragment, EmptyCode
 from pythoscope.logger import log
 from pythoscope.generator.adder import add_test_case_to_project
-from pythoscope.generator.code_string import CodeString, combine, join
+from pythoscope.generator.code_string import CodeString, combine, join, putinto
 from pythoscope.generator.selector import testable_objects, is_testable, \
     testable_calls
 from pythoscope.serializer import BuiltinException, CompositeObject, \
@@ -100,9 +100,8 @@ def constructor_as_string(object, assigned_names={}):
     elif isinstance(object, ImmutableObject):
         return CodeString(object.reconstructor, imports=object.imports)
     elif isinstance(object, CompositeObject):
-        code_strings = get_contained_objects_info(object, assigned_names)
-        arguments = join(', ', code_strings)
-        return arguments.extend(object.constructor_format % arguments, imports=object.imports)
+        arguments = join(', ', get_contained_objects_info(object, assigned_names))
+        return putinto(arguments, object.constructor_format, object.imports)
     elif isinstance(object, UnknownObject):
         return CodeString(todo_value(object.partial_reconstructor), uncomplete=True)
     else:
@@ -118,7 +117,7 @@ def get_objects_mapping_info(mapping, assigned_names):
     for key, value in mapping:
         keycs = constructor_as_string(key, assigned_names)
         valuecs = constructor_as_string(value, assigned_names)
-        yield combine("%s: %s", keycs, valuecs)
+        yield combine(keycs, valuecs, "%s: %s")
 
 # :: (CompositeObject, {SerializedObject: str}) -> [CodeString]
 def get_contained_objects_info(obj, assigned_names):
@@ -208,7 +207,7 @@ def call_as_string_for(object_name, args, definition, assigned_names={}):
                 else:
                     for karg, kvalue in map_as_kwargs(value):
                         valuecs = constructor_as_string(kvalue, assigned_names)
-                        keyword_args.append(valuecs.extend("%s=%s" % (karg, valuecs)))
+                        keyword_args.append(combine(karg, valuecs, "%s=%s"))
             elif argname.startswith("*"):
                 if value in assigned_names.keys():
                     vararg = CodeString("*%s" % assigned_names[value])
@@ -218,14 +217,14 @@ def call_as_string_for(object_name, args, definition, assigned_names={}):
             else:
                 constructor = constructor_as_string(value, assigned_names)
                 if skipped_an_arg:
-                    keyword_args.append(constructor.extend("%s=%s" % (argname, constructor)))
+                    keyword_args.append(combine(argname, constructor, "%s=%s"))
                 else:
                     positional_args.append(constructor)
         except KeyError:
             skipped_an_arg = True
 
     arguments = join(', ', filter(None, (positional_args + keyword_args + [vararg] + [kwarg])))
-    return arguments.extend("%s(%s)" % (object_name, arguments))
+    return combine(object_name, arguments, "%s(%s)")
 
 # :: (string, dict, {SerializedObject: str}) -> CodeString
 def call_as_string(object_name, args, assigned_names={}):
@@ -411,12 +410,10 @@ def create_setup_for_named_objects(assigned_names):
     # object creation. We've chosen to sort objects by their creation timestamp.
     for obj, name in assigned_names_sorted_by_timestamp(assigned_names.iteritems()):
         constructor = constructor_as_string(obj, already_assigned_names)
-        setup = "%s = %s\n" % (name, constructor)
+        setup = combine(name, constructor, "%s = %s\n")
         if constructor.uncomplete:
-            setup = "# %s" % setup
-        full_setup = full_setup.extend("%s%s" % (full_setup, setup),
-                                       constructor.uncomplete,
-                                       constructor.imports)
+            setup = combine("# ", setup)
+        full_setup = combine(full_setup, setup)
         already_assigned_names[obj] = name
     return full_setup
 
@@ -602,9 +599,9 @@ def decorate_call(call, string):
         if call.raised_exception():
             invocations += 1
         # TODO: generators were added to Python 2.2, while itertools appeared in
-        # release  2.3, so we may generate incompatible tests here.
-        return string.extend("list(islice(%s, %d))" % (string, invocations),
-                             imports=[("itertools", "islice")])
+        # release 2.3, so we may generate incompatible tests here.
+        return putinto(string, "list(islice(%%s, %s))" % invocations,
+            set([("itertools", "islice")]))
     return string
 
 def should_ignore_method(method):
