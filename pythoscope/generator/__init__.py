@@ -541,8 +541,24 @@ def call2testname(call, object_name):
     else:
         return objcall2testname(object_name, call.input, call.output)
 
+# :: [TestMethodDescription] -> [TestMethodDescription]
 def sorted_test_method_descriptions(descriptions):
     return sorted(descriptions, key=lambda md: md.name)
+
+# :: [TestMethodDescription] -> [TestMethodDescription]
+def resolve_name_duplicates(descriptions):
+    # We abuse the fact that descriptions has been sorted by name before being
+    # passed into this function.
+    last_name = ''
+    num = 2
+    for description in descriptions:
+        if last_name != description.name:
+            last_name = description.name
+            num = 2
+        else:
+            description.name = "%s_case_%d" % (description.name, num)
+            num += 1
+    return descriptions
 
 def name2testname(name):
     if name[0].isupper():
@@ -712,7 +728,7 @@ class TestGenerator(object):
 
     def _generate_test_case(self, object, module):
         class_name = name2testname(camelize(object.name))
-        method_descriptions = sorted_test_method_descriptions(self._generate_test_method_descriptions(object, module))
+        method_descriptions = resolve_name_duplicates(sorted_test_method_descriptions(self._generate_test_method_descriptions(object, module)))
 
         # Don't generate empty test classes.
         if method_descriptions:
@@ -766,7 +782,7 @@ class TestGenerator(object):
             # We have at least one call registered, so use it.
             return self._method_descriptions_from_function(function)
         else:
-            # No calls were traced, so we're go for a single test stub.
+            # No calls were traced, so we'll go for a single test stub.
             log.debug("Detected _no_ testable calls in function %s." % function.name)
             name = name2testname(underscore(function.name))
             assertions = [assertion_stub(function.name, function.args), ('missing',)]

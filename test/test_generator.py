@@ -263,7 +263,16 @@ class TestGeneratorClass:
 
         result = generate_single_test_module(objects=objects)
 
-        assert re.search('test_square_returns_4_for_2.*test_square_returns_9_for_3', result, re.DOTALL)
+        assert_contains_one_after_another(result,
+            'test_square_returns_4_for_2', 'test_square_returns_9_for_3')
+
+    def test_comes_up_with_unique_names_for_each_test_method(self):
+        objects = [FunctionWithCalls('opt', [({'x': 3}, True), ({'y': 3}, True)])]
+
+        result = generate_single_test_module(objects=objects)
+
+        assert_contains_one_after_another(result,
+            'test_opt_returns_true_for_3', 'test_opt_returns_true_for_3_case_2')
 
     def test_generates_proper_setup_for_test_objects_with_init(self):
         klass = ClassWithMethods('Something', [('__init__', [({'arg1': 1, 'arg2': 2}, None)]),

@@ -15,6 +15,7 @@ __all__ = [
     # Our assertions.
     "assert_contains",
     "assert_contains_once",
+    "assert_contains_one_after_another",
     "assert_doesnt_contain",
     "assert_equal_sets",
     "assert_equal_strings",
@@ -35,6 +36,11 @@ def assert_contains_once(haystack, needle):
     repeated = len(re.findall(re.escape(needle), haystack))
     assert repeated == 1, "Expected\n%s\nto contain %r once, but it contained it %d times instead." %\
            (quoted_block(haystack), needle, repeated)
+
+def assert_contains_one_after_another(haystack, needle1, needle2):
+    assert re.search(''.join([needle1, '.*', needle2]), haystack, re.DOTALL), \
+        "Expected\n%s\nto contain %r and then %r, but it didn't." %\
+           (quoted_block(haystack), needle1, needle2)
 
 def assert_doesnt_contain(haystack, needle):
     assert needle not in haystack,\
