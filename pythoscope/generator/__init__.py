@@ -2,6 +2,7 @@ from pythoscope.astvisitor import descend, ASTVisitor
 from pythoscope.astbuilder import parse_fragment, EmptyCode
 from pythoscope.logger import log
 from pythoscope.generator.adder import add_test_case_to_project
+from pythoscope.generator.code_string import CodeString
 from pythoscope.generator.selector import testable_objects, is_testable, \
     testable_calls
 from pythoscope.serializer import BuiltinException, CompositeObject, \
@@ -35,27 +36,6 @@ def todo_value(value):
     """Wrap given value in a <TODO: value> block.
     """
     return "<TODO: %s>" % value
-
-class CodeString(str):
-    """A string that holds information on the function/method call it
-    represents.
-
-    `uncomplete` attribute denotes whether it is a complete call
-    or just a template.
-
-    `imports` is a list of imports that this call requires.
-    """
-    def __new__(cls, string, uncomplete=False, imports=None):
-        if imports is None:
-            imports = set()
-        code_string = str.__new__(cls, string)
-        code_string.uncomplete = uncomplete
-        code_string.imports = imports
-        return code_string
-
-    def extend(self, value, uncomplete=False, imports=set()):
-        return CodeString(value, self.uncomplete or uncomplete,
-                          self.imports.union(imports))
 
 # :: (SerializedObject | [SerializedObject], {SerializedObject: str}) -> CodeString
 def constructor_as_string(object, assigned_names={}):
