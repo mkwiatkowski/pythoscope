@@ -36,7 +36,7 @@ def todo_value(value):
     """
     return "<TODO: %s>" % value
 
-class CallString(str):
+class CodeString(str):
     """A string that holds information on the function/method call it
     represents.
 
@@ -48,16 +48,16 @@ class CallString(str):
     def __new__(cls, string, uncomplete=False, imports=None):
         if imports is None:
             imports = set()
-        call_string = str.__new__(cls, string)
-        call_string.uncomplete = uncomplete
-        call_string.imports = imports
-        return call_string
+        code_string = str.__new__(cls, string)
+        code_string.uncomplete = uncomplete
+        code_string.imports = imports
+        return code_string
 
     def extend(self, value, uncomplete=False, imports=set()):
-        return CallString(value, self.uncomplete or uncomplete,
+        return CodeString(value, self.uncomplete or uncomplete,
                           self.imports.union(imports))
 
-# :: (SerializedObject | [SerializedObject], {SerializedObject: str}) -> CallString
+# :: (SerializedObject | [SerializedObject], {SerializedObject: str}) -> CodeString
 def constructor_as_string(object, assigned_names={}):
     """For a given object (either a SerializedObject or a list of them) return
     a string representing a code that will construct it.
@@ -108,7 +108,7 @@ def constructor_as_string(object, assigned_names={}):
     if isinstance(object, list):
         return list_of(map(constructor_as_string, object))
     elif assigned_names.has_key(object):
-        return CallString(assigned_names[object])
+        return CodeString(assigned_names[object])
     elif isinstance(object, UserObject):
         # Look for __init__ call and base the constructor on that.
         init_call = object.get_init_call()
@@ -118,7 +118,7 @@ def constructor_as_string(object, assigned_names={}):
         else:
             return call_as_string(object.klass.name, {})
     elif isinstance(object, ImmutableObject):
-        return CallString(object.reconstructor, imports=object.imports)
+        return CodeString(object.reconstructor, imports=object.imports)
     elif isinstance(object, CompositeObject):
         try:
             reconstructors, imports, uncomplete = zip(*get_contained_objects_info(object, assigned_names))
@@ -126,11 +126,11 @@ def constructor_as_string(object, assigned_names={}):
         # All Pythons can raise ValueError because of the wrong unpacking.
         except (ValueError, TypeError):
             reconstructors, imports, uncomplete = [], [], []
-        return CallString(object.constructor_format % ', '.join(reconstructors),
+        return CodeString(object.constructor_format % ', '.join(reconstructors),
                           imports=union(object.imports, *imports),
                           uncomplete=any(uncomplete))
     elif isinstance(object, UnknownObject):
-        return CallString(todo_value(object.partial_reconstructor), uncomplete=True)
+        return CodeString(todo_value(object.partial_reconstructor), uncomplete=True)
     else:
         raise TypeError("constructor_as_string expected SerializedObject at input, not %s" % object)
 
@@ -169,7 +169,7 @@ def arguments_of(definition):
         return definition.args[1:] # Skip "self".
     return definition.args
 
-# :: (string, dict, Definition, {SerializedObject: str}) -> CallString
+# :: (string, dict, Definition, {SerializedObject: str}) -> CodeString
 def call_as_string_for(object_name, args, definition, assigned_names={}):
     """Generate code for calling an object with given arguments.
 
@@ -261,11 +261,11 @@ def call_as_string_for(object_name, args, definition, assigned_names={}):
         except KeyError:
             skipped_an_arg = True
 
-    return CallString("%s(%s)" % (object_name,
+    return CodeString("%s(%s)" % (object_name,
                       ', '.join(filter(None, (positional_args + keyword_args + [vararg] + [kwarg])))),
                       uncomplete=uncomplete, imports=imports)
 
-# :: (string, dict, {SerializedObject: str}) -> CallString
+# :: (string, dict, {SerializedObject: str}) -> CodeString
 def call_as_string(object_name, args, assigned_names={}):
     """Generate code for calling an arbitrary object with given arguments.
     Use `call_as_string_for` when you have a definition to base the call on.
@@ -310,7 +310,7 @@ def call_as_string(object_name, args, assigned_names={}):
         uncomplete = uncomplete or constructor.uncomplete
         imports.update(constructor.imports)
         arguments.append("%s=%s" % (arg, constructor))
-    return CallString("%s(%s)" % (object_name, ', '.join(arguments)),
+    return CodeString("%s(%s)" % (object_name, ', '.join(arguments)),
                       uncomplete=uncomplete, imports=imports)
 
 # :: MapObject -> {str: SerializedObject}
@@ -440,9 +440,9 @@ def assign_names_for(context):
 def assigned_names_sorted_by_timestamp(items):
     return sorted(items, key=lambda i: i[0].timestamp)
 
-# :: {SerializedObject: str} -> CallString
+# :: {SerializedObject: str} -> CodeString
 def create_setup_for_named_objects(assigned_names):
-    full_setup = CallString("")
+    full_setup = CodeString("")
     already_assigned_names = {}
     # Note that since data we have was gathered during real execution there is
     # no way setup dependencies are cyclic, i.e. there is a strict order of
@@ -633,7 +633,7 @@ def class_init_stub(klass):
         args = init_method.get_call_args()
     return call_with_args(klass.name, args)
 
-# :: (Call, CallString) -> CallString
+# :: (Call, CodeString) -> CodeString
 def decorate_call(call, string):
     if isinstance(call, GeneratorObject):
         invocations = len(call.output)
