@@ -2,7 +2,7 @@ from pythoscope.astvisitor import descend, ASTVisitor
 from pythoscope.astbuilder import parse_fragment, EmptyCode
 from pythoscope.logger import log
 from pythoscope.generator.adder import add_test_case_to_project
-from pythoscope.generator.code_string import CodeString
+from pythoscope.generator.code_string import CodeString, combine
 from pythoscope.generator.selector import testable_objects, is_testable, \
     testable_calls
 from pythoscope.serializer import BuiltinException, CompositeObject, \
@@ -125,9 +125,8 @@ def get_objects_mapping_info(mapping, assigned_names):
     for key, value in mapping:
         keycs = constructor_as_string(key, assigned_names)
         valuecs = constructor_as_string(value, assigned_names)
-        yield ("%s: %s" % (keycs, valuecs),
-               union(keycs.imports, valuecs.imports),
-               keycs.uncomplete or valuecs.uncomplete)
+        cs = combine("%s: %s", keycs, valuecs)
+        yield (cs, cs.imports, cs.uncomplete)
 
 # :: (CompositeObject, {SerializedObject: str}) -> [(str, set, bool)]
 def get_contained_objects_info(obj, assigned_names):
