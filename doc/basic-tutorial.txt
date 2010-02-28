@@ -90,8 +90,8 @@ information as possible. If you look at your test module now you'll notice
 that a new test case has been added::
 
   # tests/test_old_python.py
-  from old_python import OldPython
   import unittest
+  from old_python import OldPython
 
   class TestOldPython(unittest.TestCase):
       def test___init__(self):
@@ -104,7 +104,7 @@ that a new test case has been added::
           assert False # TODO: implement your test here
 
       def test_hiss_returns_sss_cough_cough_after_creation_with_123(self):
-          old_python = OldPython(age=123)
+          old_python = OldPython(123)
           self.assertEqual('sss... *cough* *cough*', old_python.hiss())
 
   if __name__ == '__main__':
@@ -153,8 +153,8 @@ This new point of entry not only allowed to create a test case for **OldNest**::
   from old_nest import OldNest
 
   class TestOldNest(unittest.TestCase):
-      def test_put_hand_returns_sss_sss_SSss_SSss_sss_cough_cough_after_creation_with_45_55_65_75(self):
-          old_nest = OldNest(ages=[45, 55, 65, 75])
+      def test_put_hand_returns_sss_sss_SSss_SSss_sss_cough_cough_after_creation_with_list(self):
+          old_nest = OldNest([45, 55, 65, 75])
           self.assertEqual('sss sss\nSSss SSss\nsss... *cough* *cough*', old_nest.put_hand())
 
   if __name__ == '__main__':
@@ -163,18 +163,18 @@ This new point of entry not only allowed to create a test case for **OldNest**::
 but also added 4 new test cases for **OldPython**::
 
     def test_creation_with_45_raises_value_error(self):
-        self.assertRaises(ValueError, lambda: OldPython(age=45))
+        self.assertRaises(ValueError, lambda: OldPython(45))
 
     def test_hiss_returns_SSss_SSss_after_creation_with_65(self):
-        old_python = OldPython(age=65)
+        old_python = OldPython(65)
         self.assertEqual('SSss SSss', old_python.hiss())
 
     def test_hiss_returns_sss_cough_cough_after_creation_with_75(self):
-        old_python = OldPython(age=75)
+        old_python = OldPython(75)
         self.assertEqual('sss... *cough* *cough*', old_python.hiss())
 
     def test_hiss_returns_sss_sss_after_creation_with_55(self):
-        old_python = OldPython(age=55)
+        old_python = OldPython(55)
         self.assertEqual('sss sss', old_python.hiss())
 
 You got all of that for mere 2 additional lines of code. What's even better
@@ -184,5 +184,5 @@ system you can run Pythoscope again and it will only append new test cases
 to existing test modules, preserving any modifications you could have made
 to them.
 
-That sums up this basic tutorial. If you have any questions feel free to
+That sums up this basic tutorial. If you have any questions, feel free to
 ask them on the `pythoscope google group <http://groups.google.com/group/pythoscope>`_.
