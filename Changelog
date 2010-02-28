@@ -1,6 +1,16 @@
 Changelog
 =========
 
+0.4.3
+-----
+
+* Pythoscope now ignores application and test modules it could not inspect (`#487138 <https://bugs.launchpad.net/bugs/487138>`_ `#462849 <https://bugs.launchpad.net/bugs/462849>`_).
+* Improved generation of assertions for functions with varargs and kwargs (`#475414 <https://bugs.launchpad.net/bugs/475414>`_ `#475409 <https://bugs.launchpad.net/bugs/475409>`_).
+* Pythoscope will no longer generate two test cases with the same name (`#475504 <https://bugs.launchpad.net/bugs/475504>`_).
+* Installation package now contains all essential files (`#481238 <https://bugs.launchpad.net/bugs/481238>`_).
+* Pythoscope now properly handles string exceptions thrown inside entry points (`#522364 <https://bugs.launchpad.net/bugs/522364>`_).
+* Entry points are now run with the current directory being the project root (`#524352 <https://bugs.launchpad.net/bugs/524352>`_).
+
 0.4.2
 -----
 
