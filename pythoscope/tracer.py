@@ -214,7 +214,8 @@ class StandardTracer(object):
     def is_ignored_code(self, code):
         if code.co_name in IGNORED_NAMES:
             return True
-        if code in [self.top_level_function.func_code]:
+        if self.top_level_function is not None \
+                and code in [self.top_level_function.func_code]:
             return True
         return False
 

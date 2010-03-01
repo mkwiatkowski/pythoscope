@@ -86,6 +86,7 @@ class Project(object):
         self.path = path
         self.new_tests_directory = "tests"
         self.points_of_entry = {}
+        self.snippet_executions = []
         self._modules = {}
         self.code_trees_manager = code_trees_manager_class(get_code_trees_path(path))
 
@@ -190,6 +191,9 @@ class Project(object):
     # :: Module -> CodeTree
     def recall_code_tree(self, module):
         return self.code_trees_manager.recall_code_tree(module.subpath)
+
+    def remember_execution_from_snippet(self, execution):
+        self.snippet_executions.append(execution)
 
     def _replace_references_to_module(self, module):
         """Remove a module with the same subpath as given module from this
