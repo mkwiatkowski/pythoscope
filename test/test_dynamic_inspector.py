@@ -395,64 +395,6 @@ def function_with_ignored_function():
         return ignored(z-1) * 3
     not_ignored_outer(13)
 
-def function_calling_generator():
-    def generator(x):
-        yield x
-        yield x + 1
-        yield x * 2
-        yield x ** 3
-    [x for x in generator(2)]
-
-def function_calling_generator_that_yields_one():
-    def generator():
-        yield 1
-    g = generator()
-    g.next()
-
-def function_calling_generator_that_yields_none():
-    def generator():
-        yield None
-    g = generator()
-    g.next()
-
-def function_calling_empty_generator():
-    def generator(x):
-        if False:
-            yield 'something'
-    [x for x in generator(123)]
-
-def function_calling_generator_that_doesnt_get_destroyed():
-    def generator():
-        yield 1
-    g = generator()
-    g.next()
-    globals()['__generator_yielding_one'] = g
-
-def function_calling_generator_that_yields_none_and_doesnt_get_destroyed():
-    def generator():
-        yield None
-    g = generator()
-    g.next()
-    globals()['__generator_yielding_none'] = g
-
-def function_calling_generator_method():
-    class Class(object):
-        def genmeth(self):
-            yield 0
-            yield 1
-            yield 0
-    [x for x in Class().genmeth()]
-
-def function_calling_function_that_uses_generator():
-    def generator(x):
-        yield x
-        yield x + 1
-        yield x * 2
-        yield x ** 3
-    def function(y):
-        return [x for x in generator(y)]
-    function(2)
-
 def function_calling_functions_that_use_the_same_sequence_object():
     def producer():
         return []
@@ -643,6 +585,13 @@ class TestTraceFunction:
 
 class TestGenerators:
     def test_handles_yielded_values(self):
+        def function_calling_generator():
+            def generator(x):
+                yield x
+                yield x + 1
+                yield x * 2
+                yield x ** 3
+            [x for x in generator(2)]
         generator = inspect_returning_single_callable(function_calling_generator)
 
         assert_instance(generator, Function)
@@ -651,7 +600,12 @@ class TestGenerators:
         assert_generator_object({'x': 2}, [2, 3, 4, 8], gobject)
 
     def test_handles_single_yielded_value(self):
-        generator = inspect_returning_single_callable(function_calling_generator_that_yields_one)
+        def yields_one():
+            def generator():
+                yield 1
+            g = generator()
+            g.next()
+        generator = inspect_returning_single_callable(yields_one)
 
         assert_instance(generator, Function)
         gobject = assert_one_element_and_return(generator.calls)
@@ -663,17 +617,33 @@ class TestGenerators:
         if hasattr(generator_has_ended, 'unreliable'):
             raise SkipTest
 
-        gobject = inspect_returning_single_call(function_calling_generator_that_yields_none)
+        def yields_none():
+            def generator():
+                yield None
+            g = generator()
+            g.next()
+        gobject = inspect_returning_single_call(yields_none)
 
         assert_generator_object({}, [None], gobject)
 
     def test_handles_empty_generators(self):
+        def function_calling_empty_generator():
+            def generator(x):
+                if False:
+                    yield 'something'
+            [x for x in generator(123)]
         gobject = inspect_returning_single_call(function_calling_empty_generator)
 
         assert_generator_object({'x': 123}, [], gobject)
 
     def test_handles_generator_objects_that_werent_destroyed(self):
-        gobject = inspect_returning_single_call(function_calling_generator_that_doesnt_get_destroyed)
+        def function():
+            def generator():
+                yield 1
+            g = generator()
+            g.next()
+            globals()['__generator_yielding_one'] = g
+        gobject = inspect_returning_single_call(function)
 
         assert_generator_object({}, [1], gobject)
 
@@ -681,11 +651,24 @@ class TestGenerators:
         if hasattr(generator_has_ended, 'unreliable'):
             raise SkipTest
 
-        gobject = inspect_returning_single_call(function_calling_generator_that_yields_none_and_doesnt_get_destroyed)
+        def function():
+            def generator():
+                yield None
+            g = generator()
+            g.next()
+            globals()['__generator_yielding_none'] = g
+        gobject = inspect_returning_single_call(function)
 
         assert_generator_object({}, [None], gobject)
 
     def test_handles_generator_methods(self):
+        def function_calling_generator_method():
+            class GenClass(object):
+                def genmeth(self):
+                    yield 0
+                    yield 1
+                    yield 0
+            [x for x in GenClass().genmeth()]
         user_object = inspect_returning_single_callable(function_calling_generator_method)
         assert_instance(user_object, UserObject)
 
@@ -693,6 +676,15 @@ class TestGenerators:
         assert_generator_object({}, [0, 1, 0], gobject)
 
     def test_handles_generators_called_not_from_top_level(self):
+        def function_calling_function_that_uses_generator():
+            def generator(x):
+                yield x
+                yield x + 1
+                yield x * 2
+                yield x ** 3
+            def function(y):
+                return [x for x in generator(y)]
+            function(2)
         callables = inspect_returning_callables(function_calling_function_that_uses_generator)
 
         assert_length(callables, 2)
