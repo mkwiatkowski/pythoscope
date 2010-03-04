@@ -2,18 +2,32 @@ from pythoscope.astvisitor import descend, ASTVisitor
 from pythoscope.astbuilder import parse_fragment, EmptyCode
 from pythoscope.logger import log
 from pythoscope.generator.adder import add_test_case_to_project
-from pythoscope.generator.code_string import CodeString, combine, join, putinto
-from pythoscope.generator.selector import testable_objects, is_testable, \
-    testable_calls
+from pythoscope.generator.code_string import CodeString, combine, join, \
+    putinto, addimport
+from pythoscope.generator.selector import testable_objects, testable_calls
 from pythoscope.serializer import BuiltinException, CompositeObject, \
     ImmutableObject, MapObject, UnknownObject, SequenceObject, \
-    SerializedObject, can_be_constructed, is_serialized_string
+    SerializedObject, is_serialized_string
 from pythoscope.store import Class, Function, FunctionCall, TestClass, \
     TestMethod, ModuleNotFound, UserObject, MethodCall, Method, GeneratorObject
-from pythoscope.compat import any, set, sorted
+from pythoscope.compat import all, set, sorted
 from pythoscope.util import camelize, compact, counted, flatten, \
-    key_for_value, pluralize, underscore, union
+    key_for_value, pluralize, underscore
 
+
+# :: SerializedObject | [SerializedObject] -> bool
+def can_be_constructed(obj):
+    if isinstance(obj, list):
+        return all(map(can_be_constructed, obj))
+    elif isinstance(obj, SequenceObject):
+        return all(map(can_be_constructed, obj.contained_objects))
+    elif isinstance(obj, GeneratorObject):
+        return obj.activated
+    return not isinstance(obj, UnknownObject)
+
+# :: Definition -> (str, str)
+def import_for(definition):
+    return (definition.module.locator, definition.name)
 
 # :: [string] -> string
 def list_of(strings):
@@ -102,6 +116,13 @@ def constructor_as_string(object, assigned_names={}):
     elif isinstance(object, CompositeObject):
         arguments = join(', ', get_contained_objects_info(object, assigned_names))
         return putinto(arguments, object.constructor_format, object.imports)
+    elif isinstance(object, GeneratorObject):
+        if object.activated:
+            cs = call_as_string_for(object.definition.name, object.input,
+                object.definition)
+            return addimport(cs, import_for(object.definition))
+        else:
+            return CodeString(todo_value('generator'), uncomplete=True)
     elif isinstance(object, UnknownObject):
         return CodeString(todo_value(object.partial_reconstructor), uncomplete=True)
     else:
@@ -310,7 +331,10 @@ def get_contained_objects(obj):
             output = obj.output
         return get_those_and_contained_objects(obj.input.values() + [output])
     elif isinstance(obj, GeneratorObject):
-        return get_those_and_contained_objects(obj.input.values() + obj.output)
+        if obj.activated:
+            return get_those_and_contained_objects(obj.input.values() + obj.output)
+        else:
+            return []
     else:
         raise TypeError("Wrong argument to get_contained_objects: %r." % obj)
 
@@ -418,12 +442,28 @@ def create_setup_for_named_objects(assigned_names):
     return full_setup
 
 # :: SerializedObject -> string
-def object2id(object):
+def object2id(obj):
     """Convert object to string that can be used as an identifier.
+
+    Generator objects that were never activated get a generic name...
+        >>> def producer():
+        ...     yield 1
+        >>> gobject = GeneratorObject(producer())
+        >>> object2id(gobject)
+        'generator'
+
+    ...but if we have a matching definition, the name is based on it.
+        >>> definition = Function('producer')
+        >>> gobject.activate(definition, {})
+        >>> object2id(gobject)
+        'producer_instance'
     """
-    if not isinstance(object, SerializedObject):
-        raise TypeError("object2id() should be called with a SerializedObject argument, not %s" % object)
-    return object.human_readable_id
+    if not isinstance(obj, SerializedObject):
+        raise TypeError("object2id() should be called with a SerializedObject argument, not %s" % obj)
+    if isinstance(obj, GeneratorObject) and obj.activated:
+        return "%s_instance" % obj.definition.name
+    else:
+        return obj.human_readable_id
 
 def objects_list_to_id(objects):
     """Convert given list of objects into string that can be used as an

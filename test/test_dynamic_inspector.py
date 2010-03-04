@@ -12,7 +12,7 @@ from pythoscope.store import Class, Execution, Function, \
     GeneratorObject, Method, UserObject, Project
 from pythoscope.compat import all
 from pythoscope.util import findfirst, generator_has_ended, \
-    last_exception_as_string
+    last_exception_as_string, last_traceback
 
 from assertions import *
 from helper import ProjectInDirectory, PointOfEntryMock, EmptyProjectExecution, \
@@ -178,6 +178,7 @@ def inspect_returning_callables_and_execution(fun, ignored_functions):
     # Catch both string and normal exceptions.
     except:
         print "Caught exception inside point of entry:", last_exception_as_string()
+        print last_traceback()
 
     return project.get_callables(), execution
 
@@ -695,6 +696,25 @@ class TestGenerators:
 
         gobject = assert_one_element_and_return(fcall.subcalls)
         assert_generator_object({'x': 2}, [2, 3, 4, 8], gobject)
+
+    def test_serializes_generator_objects_passed_as_values(self):
+        def function():
+            def invoke(g):
+                return [x for x in g]
+            def generator():
+                yield 1
+                yield 2
+            invoke(generator())
+        callables = inspect_returning_callables(function)
+
+        assert_length(callables, 2)
+        function = find_first_with_name("invoke", callables)
+        fcall = assert_one_element_and_return(function.calls)
+
+        assert_instance(fcall.input['g'], GeneratorObject)
+        gobject = assert_one_element_and_return(fcall.subcalls)
+        assert fcall.input['g'] is gobject
+        assert_generator_object({}, [1, 2], gobject)
 
 class TestObjectsIdentityPreservation:
     def test_handles_passing_sequence_objects_around(self):

@@ -631,6 +631,8 @@ class Call(object):
         self.exception = None
 
     def __eq__(self, other):
+        if type(self) != type(other):
+            return False
         return self.definition == other.definition and \
                self.input == other.input and \
                self.output == other.output and \
@@ -680,7 +682,7 @@ class Function(Definition, Callable):
     def __repr__(self):
         return "Function(name=%s, args=%r, calls=%r)" % (self.name, self.args, self.calls)
 
-class GeneratorObject(Call):
+class GeneratorObject(Call, SerializedObject):
     """Representation of a generator object - a callable with an input and many
     outputs (here called "yields").
 
@@ -688,23 +690,40 @@ class GeneratorObject(Call):
     a series of suspensions and resumes, we make it conform to the Call interface
     for simplicity.
     """
-    def __init__(self, generator, args, yields=None, exception=None):
+    def __init__(self, obj, generator=None, args=None, yields=None, exception=None):
+        SerializedObject.__init__(self, obj)
+        self.activated = False
+        if generator is not None and args is not None:
+            self.activate(generator, args, yields, exception)
+
+    def activate(self, generator, args, yields=None, exception=None):
+        if self.activated:
+            raise ValueError("This generator has already been activated.")
         if yields is None:
             yields = []
         Call.__init__(self, generator, args, yields, exception)
+        self.activated = True
 
     def set_output(self, output):
         self.output.append(output)
 
+    def __eq__(self, other):
+        if self.activated:
+            return Call.__eq__(self, other)
+        else:
+            return isinstance(other, GeneratorObject) \
+                and hash(self) == hash(other)
+
     def __hash__(self):
-        return hash((self.definition.name,
-                     tuple(self.input.iteritems()),
-                     tuple(self.output),
-                     self.exception))
+        return hash((self.timestamp, self.human_readable_id,
+                     self.module_name, self.type_name))
 
     def __repr__(self):
-        return "GeneratorObject(generator=%r, yields=%r)" % \
-               (self.definition.name, self.output)
+        if self.activated:
+            return "GeneratorObject(generator=%r, yields=%r)" % \
+                (self.definition.name, self.output)
+        else:
+            return "GeneratorObject()"
 
 class UserObject(Callable, SerializedObject):
     """Serialized instance of a user-defined type.
@@ -988,6 +1007,11 @@ class Execution(object):
 
     # :: object -> SerializedObject
     def create_serialized_object(self, obj):
+        # Generator object has been passed as a value. We don't have enough
+        # information to create a GeneratorObject instance here, so create
+        # a stub to be activated later.
+        if isinstance(obj, types.GeneratorType):
+            return GeneratorObject(obj)
         klass = self.project.find_object(Class, class_name(obj), module_name(obj))
         if klass:
             serialized = UserObject(obj, klass)
@@ -1004,18 +1028,6 @@ class Execution(object):
         else:
             return UnknownObject(obj)
 
-    # :: (Definition, dict, frame) -> GeneratorObject
-    def create_generator_object(self, definition, sargs, frame):
-        gobject = GeneratorObject(definition, sargs)
-        # Generator objects return None to the tracer when stopped. That
-        # extra None we have to filter out manually (see
-        # _fix_generator_objects method). We distinguish between active
-        # and stopped generators using the generator_has_ended() function.
-        # It needs the generator object itself, so we save it for later
-        # inspection inside the GeneratorObject.
-        gobject._generator = get_generator_from_frame(frame)
-        return gobject
-
     # :: (type, Definition, Callable, args, code, frame) -> Call
     def create_call(self, call_type, definition, callable, args, code, frame):
         sargs = self.serialize_call_arguments(args)
@@ -1023,8 +1035,16 @@ class Execution(object):
             # Each generator invocation is related to some generator object,
             # so we have to create one if it wasn't captured yet.
             def create_generator_object():
-                return self.create_generator_object(definition, sargs, frame)
+                generator = get_generator_from_frame(frame)
+                gobject = GeneratorObject(generator, definition, sargs)
+                save_generator_inside(gobject, frame)
+                return gobject
             call = self._retrieve_or_capture(code, create_generator_object)
+            # It may have been captured, but not necessarily invoked yet, so
+            # we activate it if that's the case.
+            if not call.activated:
+                call.activate(definition, sargs)
+                save_generator_inside(call, frame)
         else:
             call = call_type(definition, sargs)
             self.captured_calls.append(call)
@@ -1083,12 +1103,13 @@ class Execution(object):
         just bogus Nones placed on generator stop.
         """
         for gobject in self.iter_captured_generator_objects():
-            if generator_has_ended(gobject._generator) \
+            if is_exhaused_generator_object(gobject) \
                    and gobject.output \
                    and gobject.output[-1] == ImmutableObject(None):
                 gobject.output.pop()
             # Once we know if the generator is active or not, we can discard it.
-            del gobject._generator
+            if hasattr(gobject, '_generator'):
+                del gobject._generator
 
 def object_id(obj):
     # The reason why we index generator by its code id is because at the time
@@ -1098,6 +1119,18 @@ def object_id(obj):
         return id(obj.gi_frame.f_code)
     else:
         return id(obj)
+
+def save_generator_inside(gobject, frame):
+    # Generator objects return None to the tracer when stopped. That
+    # extra None we have to filter out manually (see
+    # Execution_fix_generator_objects method). We distinguish between active
+    # and stopped generators using the generator_has_ended() function.
+    # It needs the generator object itself, so we save it for later
+    # inspection inside the GeneratorObject.
+    gobject._generator = get_generator_from_frame(frame)
+
+def is_exhaused_generator_object(gobject):
+    return hasattr(gobject, '_generator') and generator_has_ended(gobject._generator)
 
 class PointOfEntry(Localizable):
     """Piece of code provided by the user that allows dynamic analysis.

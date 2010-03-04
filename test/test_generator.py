@@ -44,7 +44,7 @@ def create_method_call(method, args, output, call_type, execution):
     elif call_type == 'exception':
         return MethodCall(method, sargs, exception=execution.serialize(output))
     elif call_type == 'generator':
-        return GeneratorObject(method, sargs, map(execution.serialize, output))
+        return GeneratorObject(None, method, sargs, map(execution.serialize, output))
 
 def ClassWithMethods(classname, methods, call_type='output'):
     """call_type has to be one of 'output', 'exception' or 'generator'.
@@ -96,7 +96,7 @@ def FunctionWithSingleException(funcname, input, exception):
 def GeneratorWithYields(genname, input, yields):
     execution = EmptyProjectExecution()
     generator = Function(genname, input.keys(), is_generator=True)
-    gobject = GeneratorObject(generator,
+    gobject = GeneratorObject(None, generator,
                               stable_serialize_call_arguments(execution, input),
                               map(execution.serialize, yields))
     generator.calls = [gobject]
@@ -105,7 +105,7 @@ def GeneratorWithYields(genname, input, yields):
 def GeneratorWithSingleException(genname, input, exception):
     execution = EmptyProjectExecution()
     generator = Function(genname, input.keys(), is_generator=True)
-    gobject = GeneratorObject(generator,
+    gobject = GeneratorObject(None, generator,
                               stable_serialize_call_arguments(execution, input),
                               exception=execution.serialize(exception))
     generator.calls = [gobject]
@@ -380,6 +380,24 @@ class TestGeneratorClass:
 
         assert_contains(result, "def test_ungen_returns_true_for_generator(self):")
         assert_contains(result, "# self.assertEqual(True, ungen(<TODO: generator>))")
+
+    def test_generates_complete_assertion_for_functions_which_take_defined_generator_objects_as_arguments(self):
+        execution = EmptyProjectExecution()
+        def ssca(args):
+            return stable_serialize_call_arguments(execution, args)
+        s = execution.serialize
+
+        mygen = Function('mygen', ['a', 'b'], is_generator=True)
+        gobject = GeneratorObject(None, mygen, ssca({'a': 42, 'b': False}), [s(42)])
+        mygen.calls = [gobject]
+        function = Function('invoke', ['g'])
+        function.calls = [FunctionCall(function, {'g': gobject}, s(True))]
+
+        result = generate_single_test_module(objects=[function, mygen])
+
+        assert_contains(result, "from module import mygen")
+        assert_contains(result, "def test_invoke_returns_true_for_mygen_instance(self):")
+        assert_contains(result, "self.assertEqual(True, invoke(mygen(42, False)))")
 
     def test_generates_assert_equal_type_test_stub_for_functions_which_take_and_return_functions(self):
         objects = [FunctionWithSingleCall('highest', {'f': lambda: 42}, lambda: 43)]

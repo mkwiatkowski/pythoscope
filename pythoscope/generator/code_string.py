@@ -45,3 +45,6 @@ def putinto(cs, template, imports):
     """Put the CodeString into a template, adding additional imports.
     """
     return CodeString(template % cs, cs.uncomplete, union(cs.imports, imports))
+
+def addimport(cs, imp):
+    return putinto(cs, "%s", set([imp]))

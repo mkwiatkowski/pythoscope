@@ -3,7 +3,7 @@ import exceptions
 import re
 import types
 
-from pythoscope.compat import all, frozenset, set, sets
+from pythoscope.compat import frozenset, set, sets
 from pythoscope.util import RePatternType, class_name, class_of, \
     module_name, regexp_flags_as_string, string2id, underscore
 
@@ -23,14 +23,6 @@ except NameError:
         BUILTIN_ENVIRONMENT_ERROR_TYPES.append(VMSError)
     except NameError:
         pass
-
-# :: SerializedObject | [SerializedObject] -> bool
-def can_be_constructed(obj):
-    if isinstance(obj, list):
-        return all(map(can_be_constructed, obj))
-    elif isinstance(obj, SequenceObject):
-        return all(map(can_be_constructed, obj.contained_objects))
-    return not isinstance(obj, UnknownObject)
 
 # :: object -> string
 def get_human_readable_id(obj):
