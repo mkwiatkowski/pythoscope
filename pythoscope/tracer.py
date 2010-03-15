@@ -215,7 +215,7 @@ class StandardTracer(object):
         if code.co_name in IGNORED_NAMES:
             return True
         if self.top_level_function is not None \
-                and code in [self.top_level_function.func_code]:
+                and code is self.top_level_function.func_code:
             return True
         return False
 
