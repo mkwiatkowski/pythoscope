@@ -1,6 +1,7 @@
 from pythoscope.inspector import static, dynamic
 from pythoscope.logger import log
 from pythoscope.store import ModuleNotFound
+from pythoscope.point_of_entry import PointOfEntry
 from pythoscope.util import generator_has_ended, last_traceback, \
     last_exception_as_string, python_modules_below
 
@@ -43,10 +44,17 @@ def remove_deleted_points_of_entry(project):
     for name in names:
         project.remove_point_of_entry(name)
 
+def ensure_point_of_entry(project, path):
+    name = project._extract_point_of_entry_subpath(path)
+    if not project.contains_point_of_entry(name):
+        poe = PointOfEntry(project=project, name=name)
+        project.add_point_of_entry(poe)
+    return project.get_point_of_entry(name)
+
 def add_and_update_points_of_entry(project):
     count = 0
     for path in python_modules_below(project.get_points_of_entry_path()):
-        poe = project.ensure_point_of_entry(path)
+        poe = ensure_point_of_entry(project, path)
         if poe.is_out_of_sync():
             count += 1
     return count

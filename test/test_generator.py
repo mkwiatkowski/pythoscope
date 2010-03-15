@@ -13,7 +13,7 @@ from pythoscope.inspector.static import inspect_code
 from pythoscope.serializer import ImmutableObject
 from pythoscope.store import Class, Function, Method, ModuleNeedsAnalysis, \
     ModuleSaveError, TestClass, TestMethod, MethodCall, FunctionCall, \
-    UserObject, GeneratorObject, ModuleNotFound
+    UserObject, GeneratorObject, GeneratorObjectInvocation, ModuleNotFound
 from pythoscope.compat import sets, sorted
 from pythoscope.util import read_file_contents, get_last_modification_time, \
     flatten
@@ -37,14 +37,17 @@ def stable_serialize_call_arguments(execution, args):
         serialized_args[key] = execution.serialize(value)
     return serialized_args
 
-def create_method_call(method, args, output, call_type, execution):
+def create_method_call(method, args, output, call_type, execution, user_object):
     sargs = stable_serialize_call_arguments(execution, args)
     if call_type == 'output':
         return MethodCall(method, sargs, output=execution.serialize(output))
     elif call_type == 'exception':
         return MethodCall(method, sargs, exception=execution.serialize(output))
     elif call_type == 'generator':
-        return GeneratorObject(None, method, sargs, map(execution.serialize, output))
+        gobject = GeneratorObject(None, method, sargs, user_object)
+        for syield in map(execution.serialize, output):
+            gobject.add_call(GeneratorObjectInvocation(method, {}, syield))
+        return gobject
 
 def ClassWithMethods(classname, methods, call_type='output'):
     """call_type has to be one of 'output', 'exception' or 'generator'.
@@ -53,14 +56,17 @@ def ClassWithMethods(classname, methods, call_type='output'):
     method_objects = []
     method_calls = []
 
-    for name, calls in methods:
-        method = Method(name, ['self'] + flatten([a.keys() for a,_ in calls]))
-        method_objects.append(method)
-        for args, output in calls:
-            method_calls.append(create_method_call(method, args, output, call_type, execution))
-
     klass = Class(classname, methods=method_objects)
     user_object = UserObject(None, klass)
+
+    for name, calls in methods:
+        method = Method(name, ['self'] + flatten([a.keys() for a,_ in calls]),
+            is_generator=(call_type=='generator'))
+        method_objects.append(method)
+        for args, output in calls:
+            method_calls.append(create_method_call(method, args, output, call_type, execution, user_object))
+
+    klass.add_methods(method_objects)
     user_object.calls = method_calls
     klass.add_user_object(user_object)
 
@@ -98,8 +104,10 @@ def GeneratorWithYields(genname, input, yields):
     generator = Function(genname, input.keys(), is_generator=True)
     gobject = GeneratorObject(None, generator,
                               stable_serialize_call_arguments(execution, input),
-                              map(execution.serialize, yields))
-    generator.calls = [gobject]
+                              generator)
+    for syield in map(execution.serialize, yields):
+        gobject.add_call(GeneratorObjectInvocation(generator, {}, syield))
+    generator.add_call(gobject)
     return generator
 
 def GeneratorWithSingleException(genname, input, exception):
@@ -107,8 +115,10 @@ def GeneratorWithSingleException(genname, input, exception):
     generator = Function(genname, input.keys(), is_generator=True)
     gobject = GeneratorObject(None, generator,
                               stable_serialize_call_arguments(execution, input),
-                              exception=execution.serialize(exception))
-    generator.calls = [gobject]
+                              generator)
+    gobject.add_call(GeneratorObjectInvocation(generator, {},
+        exception=execution.serialize(exception)))
+    generator.add_call(gobject)
     return generator
 
 class TestGeneratorClass:
@@ -388,10 +398,11 @@ class TestGeneratorClass:
         s = execution.serialize
 
         mygen = Function('mygen', ['a', 'b'], is_generator=True)
-        gobject = GeneratorObject(None, mygen, ssca({'a': 42, 'b': False}), [s(42)])
-        mygen.calls = [gobject]
+        gobject = GeneratorObject(None, mygen, ssca({'a': 42, 'b': False}), mygen)
+        gobject.add_call(GeneratorObjectInvocation(mygen, {}, s(42)))
+        mygen.add_call(gobject)
         function = Function('invoke', ['g'])
-        function.calls = [FunctionCall(function, {'g': gobject}, s(True))]
+        function.add_call(FunctionCall(function, {'g': gobject}, s(True)))
 
         result = generate_single_test_module(objects=[function, mygen])
 

@@ -9,10 +9,11 @@ from pythoscope.serializer import BuiltinException, CompositeObject, \
     ImmutableObject, MapObject, UnknownObject, SequenceObject, \
     SerializedObject, is_serialized_string
 from pythoscope.store import Class, Function, FunctionCall, TestClass, \
-    TestMethod, ModuleNotFound, UserObject, MethodCall, Method, GeneratorObject
+    TestMethod, ModuleNotFound, UserObject, MethodCall, Method, GeneratorObject, \
+    GeneratorObjectInvocation
 from pythoscope.compat import all, set, sorted
-from pythoscope.util import camelize, compact, counted, flatten, \
-    key_for_value, pluralize, underscore
+from pythoscope.util import assert_argument_type, camelize, compact, counted, \
+    flatten, key_for_value, pluralize, underscore
 
 
 # :: SerializedObject | [SerializedObject] -> bool
@@ -22,8 +23,20 @@ def can_be_constructed(obj):
     elif isinstance(obj, SequenceObject):
         return all(map(can_be_constructed, obj.contained_objects))
     elif isinstance(obj, GeneratorObject):
-        return obj.activated
+        return obj.is_activated()
     return not isinstance(obj, UnknownObject)
+
+# :: GeneratorObject -> SerializedObject | None
+def generator_object_exception(gobject):
+    assert_argument_type(gobject, GeneratorObject)
+    for call in gobject.calls:
+        if call.raised_exception():
+            return call.exception
+
+# :: GeneratorObject -> [SerializedObject]
+def generator_object_yields(gobject):
+    assert_argument_type(gobject, GeneratorObject)
+    return [c.output for c in gobject.calls]
 
 # :: Definition -> (str, str)
 def import_for(definition):
@@ -117,8 +130,8 @@ def constructor_as_string(object, assigned_names={}):
         arguments = join(', ', get_contained_objects_info(object, assigned_names))
         return putinto(arguments, object.constructor_format, object.imports)
     elif isinstance(object, GeneratorObject):
-        if object.activated:
-            cs = call_as_string_for(object.definition.name, object.input,
+        if object.is_activated():
+            cs = call_as_string_for(object.definition.name, object.args,
                 object.definition)
             return addimport(cs, import_for(object.definition))
         else:
@@ -284,16 +297,11 @@ def call_as_string(object_name, args, assigned_names={}):
         ...     {mutable: 'alist'})
         'merge(seq1=alist, seq2=[1, 2, 3])'
     """
-    uncomplete = False
-    imports = set()
     arguments = []
     for arg, value in sorted(args.iteritems()):
         constructor = constructor_as_string(value, assigned_names)
-        uncomplete = uncomplete or constructor.uncomplete
-        imports.update(constructor.imports)
-        arguments.append("%s=%s" % (arg, constructor))
-    return CodeString("%s(%s)" % (object_name, ', '.join(arguments)),
-                      uncomplete=uncomplete, imports=imports)
+        arguments.append(combine(arg, constructor, template="%s=%s"))
+    return combine(object_name, join(", ", arguments), template="%s(%s)")
 
 # :: MapObject -> {str: SerializedObject}
 def map_as_kwargs(mapobject):
@@ -324,15 +332,16 @@ def get_contained_objects(obj):
     elif isinstance(obj, UserObject):
         calls = compact([obj.get_init_call()]) + obj.get_external_calls()
         return get_contained_objects(calls)
-    elif isinstance(obj, (FunctionCall, MethodCall)):
+    elif isinstance(obj, (FunctionCall, MethodCall, GeneratorObjectInvocation)):
         if obj.raised_exception():
             output = obj.exception
         else:
             output = obj.output
         return get_those_and_contained_objects(obj.input.values() + [output])
     elif isinstance(obj, GeneratorObject):
-        if obj.activated:
-            return get_those_and_contained_objects(obj.input.values() + obj.output)
+        if obj.is_activated():
+            return get_those_and_contained_objects(obj.args.values()) +\
+                get_contained_objects(obj.calls)
         else:
             return []
     else:
@@ -453,14 +462,19 @@ def object2id(obj):
         'generator'
 
     ...but if we have a matching definition, the name is based on it.
-        >>> definition = Function('producer')
-        >>> gobject.activate(definition, {})
+        >>> definition = Function('producer', is_generator=True)
+        >>> gobject.activate(definition, {}, definition)
         >>> object2id(gobject)
         'producer_instance'
+
+    Accepts only SerializedObjects as arguments.
+        >>> object2id(42)
+        Traceback (most recent call last):
+          ...
+        TypeError: object2id() should be called with a SerializedObject argument, not 42
     """
-    if not isinstance(obj, SerializedObject):
-        raise TypeError("object2id() should be called with a SerializedObject argument, not %s" % obj)
-    if isinstance(obj, GeneratorObject) and obj.activated:
+    assert_argument_type(obj, SerializedObject)
+    if isinstance(obj, GeneratorObject) and obj.is_activated():
         return "%s_instance" % obj.definition.name
     else:
         return obj.human_readable_id
@@ -572,12 +586,16 @@ def gencall2testname(object_name, args, yields):
     return "test_%s_yields_%s" % (underscore(object_name), call_description)
 
 def call2testname(call, object_name):
-    # Note: order is significant. We may have a GeneratorObject that raised
-    # an exception, and we care about exceptions more.
-    if call.raised_exception():
+    # Generators can be treated as calls, which take arguments during
+    # initialization and return a list of yielded values.
+    if isinstance(call, GeneratorObject):
+        exception = generator_object_exception(call)
+        if exception:
+            return exccall2testname(object_name, call.args, exception)
+        else:
+            return gencall2testname(object_name, call.args, generator_object_yields(call))
+    elif call.raised_exception():
         return exccall2testname(object_name, call.input, call.exception)
-    elif isinstance(call, GeneratorObject):
-        return gencall2testname(object_name, call.input, call.output)
     else:
         return objcall2testname(object_name, call.input, call.output)
 
@@ -647,18 +665,6 @@ def class_init_stub(klass):
     if init_method:
         args = init_method.get_call_args()
     return call_with_args(klass.name, args)
-
-# :: (Call, CodeString) -> CodeString
-def decorate_call(call, string):
-    if isinstance(call, GeneratorObject):
-        invocations = len(call.output)
-        if call.raised_exception():
-            invocations += 1
-        # TODO: generators were added to Python 2.2, while itertools appeared in
-        # release 2.3, so we may generate incompatible tests here.
-        return putinto(string, "list(islice(%%s, %s))" % invocations,
-            set([("itertools", "islice")]))
-    return string
 
 def should_ignore_method(method):
     return method.is_private()
@@ -936,26 +942,41 @@ class TestGenerator(object):
         Generated assertion will be a stub if input of a call cannot be
         constructed or if stub argument is True.
         """
-        callstring = decorate_call(call, call_as_string_for(name, call.input,
-            call.definition, assigned_names))
+        if isinstance(call, GeneratorObject):
+            callstring = call_as_string_for(name, call.args, call.definition,
+                assigned_names)
+            invocations = len(call.calls)
+            #if call.raised_exception():
+            #    invocations += 1
+            # TODO: generators were added to Python 2.2, while itertools appeared in
+            # release 2.3, so we may generate incompatible tests here.
+            callstring = putinto(callstring, "list(islice(%%s, %s))" % invocations,
+                set([("itertools", "islice")]))
+            exception = generator_object_exception(call)
+            output = generator_object_yields(call)
+        else:
+            callstring = call_as_string_for(name, call.input,
+                call.definition, assigned_names)
+            exception = call.exception
+            output = call.output
 
         self.ensure_imports(callstring.imports)
 
-        if call.raised_exception():
-            return self._exception_assertion(call.exception, callstring, stub)
+        if exception is not None:
+            return self._exception_assertion(exception, callstring, stub)
         else:
             if callstring.uncomplete or stub:
                 assertion_type = 'equal_stub'
             else:
                 assertion_type = 'equal'
 
-            if can_be_constructed(call.output):
+            if can_be_constructed(output):
                 return (assertion_type,
-                        constructor_as_string(call.output, assigned_names),
+                        constructor_as_string(output, assigned_names),
                         callstring)
             else:
                 # If we can't test for real values, let's at least test for the right type.
-                output_type = type_as_string(call.output)
+                output_type = type_as_string(output)
                 if isinstance(call, GeneratorObject):
                     callstring_type = map_types(callstring)
                 else:

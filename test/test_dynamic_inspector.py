@@ -3,20 +3,22 @@ import sys
 
 from nose import SkipTest
 
+from pythoscope.execution import Execution
 from pythoscope.inspector.static import inspect_code
 from pythoscope.inspector.dynamic import inspect_code_in_context, \
     inspect_point_of_entry
 from pythoscope.serializer import ImmutableObject, MapObject, UnknownObject, \
     SequenceObject, BuiltinException
-from pythoscope.store import Class, Execution, Function, \
-    GeneratorObject, Method, UserObject, Project
+from pythoscope.store import Class, Function, FunctionCall, GeneratorObject,\
+    GeneratorObjectInvocation, Method, UserObject, Project
 from pythoscope.compat import all
 from pythoscope.util import findfirst, generator_has_ended, \
     last_exception_as_string, last_traceback
 
 from assertions import *
 from helper import ProjectInDirectory, PointOfEntryMock, EmptyProjectExecution, \
-    IgnoredWarnings, putfile, TempDirectory, P, CapturedLogger
+    IgnoredWarnings, putfile, TempDirectory, P, CapturedLogger, noindent
+from testing_project import TestingProject
 
 
 ########################################################################
@@ -147,8 +149,22 @@ def assert_call_with_string_exception(expected_input, expected_string, call):
 
 def assert_generator_object(expected_input, expected_yields, obj):
     assert_instance(obj, GeneratorObject)
-    assert_call_arguments(expected_input, obj.input)
-    assert_collection_of_serialized(expected_yields, obj.output)
+    assert obj.is_activated()
+    assert_call_arguments(expected_input, obj.args)
+    assert_collection_of_serialized(expected_yields, [c.output for c in obj.calls])
+    assert all([not c.raised_exception() for c in obj.calls])
+
+def assert_function_with_single_generator_object(name, expected_input, expected_yields, execution):
+    function = execution.project.find_object(Function, name)
+    assert function is not None
+    gobject = assert_one_element_and_return(function.calls)
+    assert_generator_object(expected_input, expected_yields, gobject)
+
+def make_execution_with_single_generator_function(name):
+    return TestingProject()\
+        .with_all_catch_module()\
+        .with_object(Function(name, is_generator=True))\
+        .make_new_execution()
 
 def assert_one_element_and_return(collection):
     """Assert that the collection has exactly one element and return this
@@ -593,9 +609,11 @@ class TestGenerators:
                 yield x * 2
                 yield x ** 3
             [x for x in generator(2)]
-        generator = inspect_returning_single_callable(function_calling_generator)
 
-        assert_instance(generator, Function)
+        execution = make_execution_with_single_generator_function("generator")
+        inspect_code_in_context(function_calling_generator, execution)
+
+        generator = execution.project.find_object(Function, "generator")
         gobject = assert_one_element_and_return(generator.calls)
 
         assert_generator_object({'x': 2}, [2, 3, 4, 8], gobject)
@@ -606,13 +624,14 @@ class TestGenerators:
                 yield 1
             g = generator()
             g.next()
-        generator = inspect_returning_single_callable(yields_one)
 
-        assert_instance(generator, Function)
+        execution = make_execution_with_single_generator_function("generator")
+        inspect_code_in_context(yields_one, execution)
+
+        generator = execution.project.find_object(Function, "generator")
         gobject = assert_one_element_and_return(generator.calls)
 
         assert_generator_object({}, [1], gobject)
-        assert not gobject.raised_exception()
 
     def test_handles_yielded_nones(self):
         if hasattr(generator_has_ended, 'unreliable'):
@@ -623,7 +642,12 @@ class TestGenerators:
                 yield None
             g = generator()
             g.next()
-        gobject = inspect_returning_single_call(yields_none)
+
+        execution = make_execution_with_single_generator_function("generator")
+        inspect_code_in_context(yields_none, execution)
+
+        generator = execution.project.find_object(Function, "generator")
+        gobject = assert_one_element_and_return(generator.calls)
 
         assert_generator_object({}, [None], gobject)
 
@@ -633,9 +657,11 @@ class TestGenerators:
                 if False:
                     yield 'something'
             [x for x in generator(123)]
-        gobject = inspect_returning_single_call(function_calling_empty_generator)
 
-        assert_generator_object({'x': 123}, [], gobject)
+        execution = make_execution_with_single_generator_function("generator")
+        inspect_code_in_context(function_calling_empty_generator, execution)
+
+        assert_function_with_single_generator_object("generator", {'x': 123}, [], execution)
 
     def test_handles_generator_objects_that_werent_destroyed(self):
         def function():
@@ -644,9 +670,11 @@ class TestGenerators:
             g = generator()
             g.next()
             globals()['__generator_yielding_one'] = g
-        gobject = inspect_returning_single_call(function)
 
-        assert_generator_object({}, [1], gobject)
+        execution = make_execution_with_single_generator_function("generator")
+        inspect_code_in_context(function, execution)
+
+        assert_function_with_single_generator_object("generator", {}, [1], execution)
 
     def test_handles_generator_objects_that_yield_none_and_dont_get_destroyed(self):
         if hasattr(generator_has_ended, 'unreliable'):
@@ -658,9 +686,11 @@ class TestGenerators:
             g = generator()
             g.next()
             globals()['__generator_yielding_none'] = g
-        gobject = inspect_returning_single_call(function)
 
-        assert_generator_object({}, [None], gobject)
+        execution = make_execution_with_single_generator_function("generator")
+        inspect_code_in_context(function, execution)
+
+        assert_function_with_single_generator_object("generator", {}, [None], execution)
 
     def test_handles_generator_methods(self):
         def function_calling_generator_method():
@@ -670,7 +700,15 @@ class TestGenerators:
                     yield 1
                     yield 0
             [x for x in GenClass().genmeth()]
-        user_object = inspect_returning_single_callable(function_calling_generator_method)
+
+        execution = TestingProject()\
+            .with_all_catch_module()\
+            .with_object(Class("GenClass", methods=[Method("genmeth", is_generator=True)]))\
+            .make_new_execution()
+        inspect_code_in_context(function_calling_generator_method, execution)
+
+        klass = execution.project.find_object(Class, "GenClass")
+        user_object = assert_one_element_and_return(klass.user_objects)
         assert_instance(user_object, UserObject)
 
         gobject = assert_one_element_and_return(user_object.calls)
@@ -686,16 +724,16 @@ class TestGenerators:
             def function(y):
                 return [x for x in generator(y)]
             function(2)
-        callables = inspect_returning_callables(function_calling_function_that_uses_generator)
 
-        assert_length(callables, 2)
+        execution = TestingProject()\
+            .with_all_catch_module()\
+            .with_object(Function("generator", is_generator=True))\
+            .with_object(Function("function"))\
+            .make_new_execution()
+        inspect_code_in_context(function_calling_function_that_uses_generator, execution)
 
-        function = find_first_with_name("function", callables)
-
-        fcall = assert_one_element_and_return(function.calls)
-
-        gobject = assert_one_element_and_return(fcall.subcalls)
-        assert_generator_object({'x': 2}, [2, 3, 4, 8], gobject)
+        assert_function_with_single_generator_object("generator",
+            {'x': 2}, [2, 3, 4, 8], execution)
 
     def test_serializes_generator_objects_passed_as_values(self):
         def function():
@@ -705,16 +743,101 @@ class TestGenerators:
                 yield 1
                 yield 2
             invoke(generator())
-        callables = inspect_returning_callables(function)
 
-        assert_length(callables, 2)
-        function = find_first_with_name("invoke", callables)
+        execution = TestingProject()\
+            .with_all_catch_module()\
+            .with_object(Function("invoke"))\
+            .with_object(Function("generator", is_generator=True))\
+            .make_new_execution()
+        inspect_code_in_context(function, execution)
+
+        function = execution.project.find_object(Function, "invoke")
         fcall = assert_one_element_and_return(function.calls)
 
-        assert_instance(fcall.input['g'], GeneratorObject)
-        gobject = assert_one_element_and_return(fcall.subcalls)
-        assert fcall.input['g'] is gobject
+        gobject = fcall.input['g']
+        assert_instance(gobject, GeneratorObject)
         assert_generator_object({}, [1, 2], gobject)
+
+    def test_generator_can_be_invoked_multiple_times_at_the_same_place(self):
+        def function():
+            def sth_else():
+                return False
+            def generator():
+                yield 1
+                yield 2
+            g = generator()
+            g.next()
+            sth_else()
+            g.next()
+
+        execution = TestingProject()\
+            .with_all_catch_module()\
+            .with_object(Function("generator", is_generator=True))\
+            .with_object(Function("sth_else"))\
+            .make_new_execution()
+        inspect_code_in_context(function, execution)
+
+        assert_instance(execution.call_graph[0], GeneratorObjectInvocation)
+        assert_instance(execution.call_graph[1], FunctionCall)
+        assert_instance(execution.call_graph[2], GeneratorObjectInvocation)
+
+    def test_generator_can_be_invoked_in_multiple_places(self):
+        def function():
+            def generator():
+                i = 1
+                while True:
+                    yield i
+                    i += 1
+            def first(g):
+                return g.next()
+            def second(g):
+                return g.next() + g.next()
+            g = generator()
+            g.next()
+            first(g)
+            second(g)
+
+        execution = TestingProject()\
+            .with_all_catch_module()\
+            .with_object(Function("generator", is_generator=True))\
+            .with_object(Function("first"))\
+            .with_object(Function("second"))\
+            .make_new_execution()
+        inspect_code_in_context(function, execution)
+
+        expected_call_graph = noindent("""
+            generator()
+            first()
+                generator()
+            second()
+                generator()
+                generator()
+        """)
+        assert_equal_strings(expected_call_graph,
+            call_graph_as_string(execution.call_graph))
+
+    def test_distinguishes_between_generator_objects_spawned_with_the_same_generator(self):
+        def function():
+            def generator():
+                yield 1
+                yield 2
+            [x for x in generator()]
+            [x for x in generator()]
+
+        execution = make_execution_with_single_generator_function("generator")
+        inspect_code_in_context(function, execution)
+
+        generator = execution.project.find_object(Function, "generator")
+        assert_length(generator.calls, 2)
+        assert_length(execution.call_graph, 4)
+
+        gcall1 = generator.calls[0]
+        assert gcall1.calls[0] is execution.call_graph[0]
+        assert gcall1.calls[1] is execution.call_graph[1]
+
+        gcall2 = generator.calls[1]
+        assert gcall2.calls[0] is execution.call_graph[2]
+        assert gcall2.calls[1] is execution.call_graph[3]
 
 class TestObjectsIdentityPreservation:
     def test_handles_passing_sequence_objects_around(self):

@@ -14,7 +14,8 @@ import os
 import sys
 
 from cmdline import find_project_directory, PythoscopeDirectoryMissing
-from store import Execution, Project
+from execution import Execution
+from store import Project
 from tracer import Tracer
 from inspector.dynamic import Inspector
 

@@ -257,11 +257,10 @@ class Python23Tracer(StandardTracer):
             self.propagating_exception = False
         return super(Python23Tracer, self).tracer(frame, event, arg)
 
-def Tracer(*args):
-    if sys.version_info < (2, 4):
-        return Python23Tracer(*args)
-    else:
-        return StandardTracer(*args)
+if sys.version_info < (2, 4):
+    Tracer = Python23Tracer
+else:
+    Tracer = StandardTracer
 
 class ICallback(object):
     """Interface that Tracer's callback object should adhere to.

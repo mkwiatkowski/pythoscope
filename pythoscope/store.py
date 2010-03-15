@@ -1,22 +1,16 @@
 import cPickle
-import itertools
 import os
 import re
-import time
-import types
 
 from pythoscope.astbuilder import regenerate
 from pythoscope.code_trees_manager import FilesystemCodeTreesManager
 from pythoscope.compat import set
 from pythoscope.localizable import Localizable
 from pythoscope.logger import log
-from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\
-    UnknownObject, SequenceObject, SerializedObject, is_immutable, is_sequence,\
-    is_mapping, is_builtin_exception
-from pythoscope.util import DirectoryException, all_of_type, class_name,\
-    directories_under, extract_subpath, findfirst, generator_has_ended,\
-    get_generator_from_frame, is_generator_code, load_pickle_from, map_values, \
-    module_name, read_file_contents, starts_with_path, write_content_to_file
+from pythoscope.serializer import SerializedObject
+from pythoscope.util import all_of_type, assert_argument_type, class_name,\
+    directories_under, extract_subpath, findfirst, load_pickle_from,\
+    starts_with_path, write_content_to_file, DirectoryException
 
 ########################################################################
 ## Project class and helpers.
@@ -130,12 +124,14 @@ class Project(object):
         subpath = self._extract_subpath(path)
         return self[subpath]
 
-    def ensure_point_of_entry(self, path):
-        name = self._extract_point_of_entry_subpath(path)
-        if name not in self.points_of_entry:
-            poe = PointOfEntry(project=self, name=name)
-            self.points_of_entry[name] = poe
+    def contains_point_of_entry(self, name):
+        return name in self.points_of_entry
+
+    def get_point_of_entry(self, name):
         return self.points_of_entry[name]
+
+    def add_point_of_entry(self, poe):
+        self.points_of_entry[poe.name] = poe
 
     def remove_point_of_entry(self, name):
         poe = self.points_of_entry.pop(name)
@@ -261,17 +257,9 @@ class Project(object):
             for function in module.functions:
                 yield function
 
-    def iter_generator_objects(self):
-        for module in self.iter_modules():
-            for generator in module.generators:
-                for gobject in generator.calls:
-                    yield gobject
-
     def find_object(self, type, name, modulename):
         try:
-            for obj in all_of_type(self[modulename].objects, type):
-                if obj.name == name:
-                    return obj
+            return self[modulename].find_object(type, name)
         except ModuleNotFound:
             pass
 
@@ -609,9 +597,6 @@ class Call(object):
         self.subcalls = []
 
     def add_subcall(self, call):
-        # Don't add the same GeneratorObject more than once.
-        if isinstance(call, GeneratorObject) and call.caller is self:
-            return
         if call.caller is not None:
             raise TypeError("This %s of %s already has a caller." % \
                                 (class_name(call), call.definition.name))
@@ -658,16 +643,18 @@ class MethodCall(Call):
 class Callable(object):
     """Dynamic aspect of a callable object. Tracks all calls made to given
     callable.
+
+    Each Callable subclass tracks a different type of Calls.
     """
+    calls_type = None
+
     def __init__(self, calls=None):
         if calls is None:
             calls = []
         self.calls = calls
 
     def add_call(self, call):
-        # Don't add the same GeneratorObject more than once.
-        if isinstance(call, GeneratorObject) and call in self.calls:
-            return
+        assert_argument_type(call, self.calls_type)
         self.calls.append(call)
 
 class Function(Definition, Callable):
@@ -675,6 +662,10 @@ class Function(Definition, Callable):
         Definition.__init__(self, name, args=args, code=code, is_generator=is_generator)
         Callable.__init__(self, calls)
         self.module = module
+        if is_generator:
+            self.calls_type = GeneratorObject
+        else:
+            self.calls_type = FunctionCall
 
     def get_unique_calls(self):
         return set(self.calls)
@@ -682,46 +673,45 @@ class Function(Definition, Callable):
     def __repr__(self):
         return "Function(name=%s, args=%r, calls=%r)" % (self.name, self.args, self.calls)
 
-class GeneratorObject(Call, SerializedObject):
+class GeneratorObjectInvocation(Call):
+    """Representation of a single generator invocation.
+
+    Each time a generator is resumed a new GeneratorObjectInvocation is created.
+    """
+
+class GeneratorObject(Callable, SerializedObject):
     """Representation of a generator object - a callable with an input and many
     outputs (here called "yields").
-
-    Although a generator object execution is not a single call, but consists of
-    a series of suspensions and resumes, we make it conform to the Call interface
-    for simplicity.
     """
-    def __init__(self, obj, generator=None, args=None, yields=None, exception=None):
+    calls_type = GeneratorObjectInvocation
+
+    def __init__(self, obj, generator=None, args=None, callable=None):
+        Callable.__init__(self)
         SerializedObject.__init__(self, obj)
-        self.activated = False
-        if generator is not None and args is not None:
-            self.activate(generator, args, yields, exception)
+        if generator is not None and args is not None and callable is not None:
+            self.activate(generator, args, callable)
 
-    def activate(self, generator, args, yields=None, exception=None):
-        if self.activated:
+    def activate(self, generator, args, callable):
+        assert_argument_type(generator, (Function, Method))
+        assert_argument_type(callable, (Function, UserObject))
+        if self.is_activated():
             raise ValueError("This generator has already been activated.")
-        if yields is None:
-            yields = []
-        Call.__init__(self, generator, args, yields, exception)
-        self.activated = True
+        if not generator.is_generator:
+            raise TypeError("Tried to activate GeneratorObject with %r as a generator definition." % generator)
+        self.definition = generator
+        self.args = args
+        # Finally register this GeneratorObject with its callable context
+        # (which will be a Function or an UserObject). This has to be
+        # done only once for each GeneratorObject.
+        callable.add_call(self)
 
-    def set_output(self, output):
-        self.output.append(output)
-
-    def __eq__(self, other):
-        if self.activated:
-            return Call.__eq__(self, other)
-        else:
-            return isinstance(other, GeneratorObject) \
-                and hash(self) == hash(other)
-
-    def __hash__(self):
-        return hash((self.timestamp, self.human_readable_id,
-                     self.module_name, self.type_name))
+    def is_activated(self):
+        return hasattr(self, 'args')
 
     def __repr__(self):
-        if self.activated:
-            return "GeneratorObject(generator=%r, yields=%r)" % \
-                (self.definition.name, self.output)
+        if self.is_activated():
+            return "GeneratorObject(generator=%r, args=%r)" % \
+                (self.definition.name, self.args)
         else:
             return "GeneratorObject()"
 
@@ -731,6 +721,8 @@ class UserObject(Callable, SerializedObject):
     UserObjects are also callables that aggregate MethodCall instances,
     capturing the whole life of an object, from initialization to destruction.
     """
+    calls_type = (MethodCall, GeneratorObject)
+
     def __init__(self, obj, klass):
         Callable.__init__(self)
         SerializedObject.__init__(self, obj)
@@ -754,6 +746,8 @@ class UserObject(Callable, SerializedObject):
         def is_not_init_call(call):
             return call.definition.name != '__init__'
         def is_external_call(call):
+            if isinstance(call, GeneratorObject):
+                return True
             return (not call.caller) or (call.caller not in self.calls)
         return filter(is_not_init_call, filter(is_external_call, self.calls))
 
@@ -909,6 +903,11 @@ class Module(Localizable, TestSuite):
         """
         return [tc for tc in self.test_cases if module in tc.associated_modules]
 
+    def find_object(self, type, name):
+        for obj in all_of_type(self.objects, type):
+            if obj.name == name:
+                return obj
+
     def save(self):
         # Don't save the test file unless it has been changed.
         if self.changed:
@@ -920,244 +919,3 @@ class Module(Localizable, TestSuite):
                 raise ModuleSaveError(self.subpath, err.args[0])
             self.changed = False
 
-########################################################################
-## Dynamic inspection classes: Execution and PointOfEntry.
-##
-class Execution(object):
-    """A single run of a user application.
-
-    To start an execution context, simply create a new Execution() object.
-        >>> e = Execution(Project("."))
-        >>> e.ended is None
-        True
-
-    When you're done tracing, call the finalize() method. Objects protected
-    from the garbage collector will be released and the execution context
-    will be closed:
-        >>> e.finalize()
-        >>> e.ended is not None
-        True
-
-    To erase any information collected during this run, call the destroy()
-    method:
-        >>> e.destroy()
-
-    In create_method_call/create_function_call if we can't find a class or
-    function in Project, we don't care about it. This way we don't record any
-    information about thid-party and dynamically created code.
-    """
-    def __init__(self, project):
-        self.project = project
-
-        self.started = time.time()
-        self.ended = None
-
-        # References to objects and calls created during the run.
-        self.captured_objects = {}
-        self.captured_calls = []
-
-        # After an inspection run, this will be a reference to the top level
-        # call. Call graph can be traveresed by descending to `subcalls`
-        # attribute of a call.
-        self.call_graph = None
-
-        # References to objects we don't want to be garbage collected just yet.
-        self._preserved_objects = []
-
-    def finalize(self):
-        """Mark execution as finished.
-        """
-        self._preserved_objects = []
-        self.ended = time.time()
-        self._fix_generator_objects()
-
-    def destroy(self):
-        """Erase any serialized objects and references created during this run.
-        """
-        self.destroy_references()
-        self.captured_objects = {}
-        self.captured_calls = []
-        self.call_graph = None
-
-    def destroy_references(self):
-        for obj in itertools.chain(self.captured_calls, self.captured_objects.values()):
-            # Method calls will also be erased, implicitly during removal of
-            # their UserObjects.
-            if isinstance(obj, UserObject):
-                obj.klass.user_objects.remove(obj)
-            # FunctionCalls and GeneratorObjects have to be removed from their
-            # definition classes.
-            elif isinstance(obj, (FunctionCall, GeneratorObject)):
-                obj.definition.calls.remove(obj)
-            # Other serializables, like ImmutableObject are not referenced from
-            # anywhere outside of calls in self.captured_calls.
-
-    # :: object -> SerializedObject
-    def serialize(self, obj):
-        """Return description of the given object in the form of a subclass of
-        SerializedObject.
-        """
-        def create_serialized_object():
-            return self.create_serialized_object(obj)
-        return self._retrieve_or_capture(obj, create_serialized_object)
-
-    # :: {str: object, ...} -> {str: SerializedObject, ...}
-    def serialize_call_arguments(self, args):
-        return map_values(self.serialize, args)
-
-    # :: object -> SerializedObject
-    def create_serialized_object(self, obj):
-        # Generator object has been passed as a value. We don't have enough
-        # information to create a GeneratorObject instance here, so create
-        # a stub to be activated later.
-        if isinstance(obj, types.GeneratorType):
-            return GeneratorObject(obj)
-        klass = self.project.find_object(Class, class_name(obj), module_name(obj))
-        if klass:
-            serialized = UserObject(obj, klass)
-            klass.add_user_object(serialized)
-            return serialized
-        elif is_immutable(obj):
-            return ImmutableObject(obj)
-        elif is_sequence(obj):
-            return SequenceObject(obj, self.serialize)
-        elif is_mapping(obj):
-            return MapObject(obj, self.serialize)
-        elif is_builtin_exception(obj):
-            return BuiltinException(obj, self.serialize)
-        else:
-            return UnknownObject(obj)
-
-    # :: (type, Definition, Callable, args, code, frame) -> Call
-    def create_call(self, call_type, definition, callable, args, code, frame):
-        sargs = self.serialize_call_arguments(args)
-        if is_generator_code(code):
-            # Each generator invocation is related to some generator object,
-            # so we have to create one if it wasn't captured yet.
-            def create_generator_object():
-                generator = get_generator_from_frame(frame)
-                gobject = GeneratorObject(generator, definition, sargs)
-                save_generator_inside(gobject, frame)
-                return gobject
-            call = self._retrieve_or_capture(code, create_generator_object)
-            # It may have been captured, but not necessarily invoked yet, so
-            # we activate it if that's the case.
-            if not call.activated:
-                call.activate(definition, sargs)
-                save_generator_inside(call, frame)
-        else:
-            call = call_type(definition, sargs)
-            self.captured_calls.append(call)
-        callable.add_call(call)
-        return call
-
-    # :: (str, object, dict, code, frame) -> MethodCall | None
-    def create_method_call(self, name, obj, args, code, frame):
-        serialized_object = self.serialize(obj)
-
-        # We ignore the call if we can't find the class of this object.
-        if isinstance(serialized_object, UserObject):
-            method = serialized_object.klass.find_method_by_name(name)
-            if method:
-                return self.create_call(MethodCall, method, serialized_object, args, code, frame)
-            else:
-                # TODO: We're lacking a definition of a method in a known class,
-                # so at least issue a warning.
-                pass
-
-    # :: (str, dict, code, frame) -> FunctionCall | None
-    def create_function_call(self, name, args, code, frame):
-        if self.project.contains_path(code.co_filename):
-            modulename = self.project._extract_subpath(code.co_filename)
-            function = self.project.find_object(Function, name, modulename)
-            if function:
-                return self.create_call(FunctionCall, function, function,
-                                        args, code, frame)
-
-    def _retrieve_or_capture(self, obj, capture_callback):
-        """Return existing description of the given object or create and return
-        new one if the description wasn't captured yet.
-
-        Preserves identity of objects, by storing them in `captured_objects`
-        list.
-        """
-        try:
-            return self.captured_objects[object_id(obj)]
-        except KeyError:
-            captured = capture_callback()
-            self._preserve(obj)
-            self.captured_objects[object_id(obj)] = captured
-            return captured
-
-    def _preserve(self, obj):
-        """Preserve an object from garbage collection, so its id won't get
-        occupied by any other object.
-        """
-        self._preserved_objects.append(obj)
-
-    def iter_captured_generator_objects(self):
-        return all_of_type(self.captured_objects.values(), GeneratorObject)
-
-    def _fix_generator_objects(self):
-        """Remove last yielded values of generator objects, as those are
-        just bogus Nones placed on generator stop.
-        """
-        for gobject in self.iter_captured_generator_objects():
-            if is_exhaused_generator_object(gobject) \
-                   and gobject.output \
-                   and gobject.output[-1] == ImmutableObject(None):
-                gobject.output.pop()
-            # Once we know if the generator is active or not, we can discard it.
-            if hasattr(gobject, '_generator'):
-                del gobject._generator
-
-def object_id(obj):
-    # The reason why we index generator by its code id is because at the time
-    # of GeneratorObject creation we don't have access to the generator itself,
-    # only to its code. See `Execution.create_call` for details.
-    if isinstance(obj, types.GeneratorType):
-        return id(obj.gi_frame.f_code)
-    else:
-        return id(obj)
-
-def save_generator_inside(gobject, frame):
-    # Generator objects return None to the tracer when stopped. That
-    # extra None we have to filter out manually (see
-    # Execution_fix_generator_objects method). We distinguish between active
-    # and stopped generators using the generator_has_ended() function.
-    # It needs the generator object itself, so we save it for later
-    # inspection inside the GeneratorObject.
-    gobject._generator = get_generator_from_frame(frame)
-
-def is_exhaused_generator_object(gobject):
-    return hasattr(gobject, '_generator') and generator_has_ended(gobject._generator)
-
-class PointOfEntry(Localizable):
-    """Piece of code provided by the user that allows dynamic analysis.
-
-    Each point of entry keeps a reference to its last run in the `execution`
-    attribute.
-    """
-    def __init__(self, project, name):
-        Localizable.__init__(self, project, project.subpath_for_point_of_entry(name))
-
-        self.project = project
-        self.name = name
-        self.execution = Execution(project)
-
-    def _get_created(self):
-        "Points of entry are not up-to-date until they're run."
-        return self.execution.ended or 0
-    def _set_created(self, value):
-        pass
-    created = property(_get_created, _set_created)
-
-    def get_path(self):
-        return self.project.path_for_point_of_entry(self.name)
-
-    def get_content(self):
-        return read_file_contents(self.get_path())
-
-    def clear_previous_run(self):
-        self.execution.destroy()
-        self.execution = Execution(self.project)

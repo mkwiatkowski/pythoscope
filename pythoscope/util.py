@@ -308,6 +308,19 @@ def compile_without_warnings(stmt):
     warnings.resetwarnings()
     return code
 
+def callers_name():
+    return sys._getframe(2).f_code.co_name
+
+def type_names(types):
+    if isinstance(types, tuple):
+        return '/'.join(map(type_names, types))
+    return types.__name__
+
+def assert_argument_type(obj, expected_type):
+    if not isinstance(obj, expected_type):
+        raise TypeError("%s() should be called with a %s argument, not %s" %
+            (callers_name(), type_names(expected_type), obj))
+
 def quoted_block(text):
     return ''.join(["> %s" % line for line in text.splitlines(True)])
 

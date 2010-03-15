@@ -34,6 +34,10 @@ class CallStack(object):
             caller.set_exception(exception)
             self.last_traceback = traceback
 
+    def unwind(self, value):
+        while self.stack:
+            self.returned(value)
+
 class Inspector(ICallback):
     """Controller of the dynamic inspection process. It receives information
     from the tracer and propagates it to Execution and CallStack objects.
@@ -43,6 +47,14 @@ class Inspector(ICallback):
         self.call_stack = CallStack()
 
     def finalize(self):
+        # TODO: There are ways for the application to terminate (easiest
+        # being os._exit) without unwinding the stack. This means Pythoscope
+        # will be left with some calls registered on the stack without a return.
+        # We remedy the situation by injecting None as the return value for
+        # those calls. In the future we should also associate some kind of
+        # an "exit" side effect with those calls.
+        self.call_stack.unwind(self.execution.serialize(None))
+
         # Copy the call graph structure to the Execution instance.
         self.execution.call_graph = self.call_stack.top_level_calls
         self.execution.finalize()

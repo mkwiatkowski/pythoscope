@@ -7,11 +7,12 @@ import warnings
 from StringIO import StringIO
 
 from pythoscope.astbuilder import EmptyCode
+from pythoscope.execution import Execution
 from pythoscope.generator import add_tests_to_project
 from pythoscope.logger import DEBUG, INFO, get_output, log, set_output
 from pythoscope.code_trees_manager import CodeTreesManager, CodeTreeNotFound
-from pythoscope.store import Execution, Function, ModuleNotFound, \
-    PointOfEntry, Project
+from pythoscope.point_of_entry import PointOfEntry
+from pythoscope.store import Function, ModuleNotFound, Project
 from pythoscope.util import read_file_contents, write_content_to_file
 
 
@@ -29,6 +30,11 @@ def read_data(name):
 def P(path):
     "Convert given path with slashes to proper format for OS we're running on."
     return os.path.join(*path.split("/"))
+
+def noindent(string):
+    lines = string.splitlines(True)
+    indent = min([len(line) - len(line.lstrip()) for line in lines if len(line.lstrip()) > 0])
+    return ''.join([line[indent:] for line in lines])
 
 class PointOfEntryMock(PointOfEntry):
     def __init__(self, project=None, name="poe", content=""):
