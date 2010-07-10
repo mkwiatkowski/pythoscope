@@ -1,9 +1,10 @@
 from pythoscope.inspector import static, dynamic
+from pythoscope.inspector.file_system import python_modules_below
 from pythoscope.logger import log
 from pythoscope.store import ModuleNotFound
 from pythoscope.point_of_entry import PointOfEntry
 from pythoscope.util import generator_has_ended, last_traceback, \
-    last_exception_as_string, python_modules_below
+    last_exception_as_string
 
 
 def inspect_project(project):
