@@ -2,9 +2,14 @@ import sys
 
 try:
     from setuptools import setup
+    # ctypes library is part of standard library since Python 2.5.
+    if sys.version_info < (2, 5):
+        install_requires = ['ctypes']
+    else:
+        install_requires = []
     args = dict(
         entry_points = {'console_scripts': ['pythoscope = pythoscope:main']},
-        install_requires = [],
+        install_requires = install_requires,
         test_suite = 'nose.collector',
         tests_require = ['nose', 'mock', 'docutils'])
 except ImportError:
@@ -17,6 +22,7 @@ if sys.version_info < (2, 5):
     ext_modules = [Extension('pythoscope._util', sources=['pythoscope/_util.c'])]
 else:
     ext_modules = []
+
 
 from pythoscope import __version__ as VERSION
 
@@ -33,8 +39,11 @@ setup(
 
     ext_modules = ext_modules,
 
-    packages = ['pythoscope', 'pythoscope.inspector', 'pythoscope.generator', 'lib2to3', 'lib2to3.pgen2'],
+    packages = ['pythoscope', 'pythoscope.inspector', 'pythoscope.generator',
+                'bytecode_tracer',
+                'lib2to3', 'lib2to3.pgen2'],
     package_data = {'pythoscope': [],
+                    'bytecode_tracer': [],
                     'lib2to3': ['*.txt']},
 
     classifiers = [

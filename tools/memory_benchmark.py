@@ -5,7 +5,7 @@ pythoscope_path = os.path.join(os.path.dirname(__file__), os.pardir)
 sys.path.insert(0, os.path.abspath(pythoscope_path))
 
 import pythoscope
-from pythoscope import inspect_project_statically
+from pythoscope.inspector import inspect_project_statically
 from pythoscope.store import Module, Class, Function, Method, CodeTree
 from pympler import heapmonitor
 

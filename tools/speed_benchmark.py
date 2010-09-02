@@ -8,7 +8,7 @@ import timeit
 pythoscope_path = os.path.join(os.path.dirname(__file__), os.pardir)
 sys.path.insert(0, os.path.abspath(pythoscope_path))
 
-from pythoscope import init_project
+from pythoscope.cmdline import init_project
 from pythoscope.store import get_pickle_path
 from test.helper import putfile, rmtree, tmpdir
 
@@ -76,12 +76,13 @@ def benchmark_project_load_performance(modules_count=25):
 
     print "==> Inspecting project.."
     elapsed = run_timer("inspect_project(Project('%s'))" % project_path,
-                        "from pythoscope import inspect_project, Project")
+                        "from pythoscope.inspector import inspect_project; from pythoscope.store import Project")
     print "It took %f seconds to inspect." % elapsed
 
     print "==> Saving project information"
     elapsed = run_timer("project.save()",
-                        """from pythoscope import inspect_project, Project ;\
+                        """from pythoscope.inspector import inspect_project ;\
+                           from pythoscope.store import Project ;\
                            project = Project('%s') ;\
                            inspect_project(project)""" % project_path)
     print "It took %f seconds to save the project information." % elapsed

@@ -4,10 +4,16 @@ import types
 
 from pythoscope.util import compact
 
+from bytecode_tracer import BytecodeTracer, rewrite_function
+
 
 # Pythons <= 2.4 surround `exec`uted code with a block named "?",
 # while Pythons > 2.4 use "<module>".
 IGNORED_NAMES = ["?", "<module>", "<genexpr>"]
+
+# imputil library is used by the bytecode tracer itself. Tracing it causes
+# problems, so we simply ignore all execution inside that module.
+IGNORED_MODULES = ["imputil.py"]
 
 def find_variable(frame, varname):
     """Find variable named varname in the scope of a frame.
@@ -124,6 +130,8 @@ class StandardTracer(object):
     def __init__(self, callback):
         self.callback = callback
 
+        self.btracer = BytecodeTracer()
+
         self.top_level_function = None
         self.sys_modules = None
 
@@ -135,12 +143,15 @@ class StandardTracer(object):
         This method may be invoked many times for a single tracer instance.
         """
         self.setup(code)
+        self.btracer.setup()
+        rewrite_function(self.top_level_function)
         sys.settrace(self.tracer)
         try:
             self.top_level_function()
         finally:
             sys.settrace(None)
             self.teardown()
+            self.btracer.teardown()
 
     def setup(self, code):
         self.top_level_function = make_callable(code)
@@ -158,6 +169,26 @@ class StandardTracer(object):
         self.sys_modules = None
 
     def tracer(self, frame, event, arg):
+        bytecode_events = list(self.btracer.trace(frame, event))
+        if bytecode_events:
+            for event, args in bytecode_events:
+                self.handle_bytecode_tracer_event(event, args)
+        else:
+            return self.handle_standard_tracer_event(frame, event, arg)
+
+    def handle_bytecode_tracer_event(self, event, args):
+        if event == 'c_call':
+            func, pargs, kargs = args
+            pass # TODO
+        elif event == 'c_return':
+            pass # TODO
+        elif event == 'print':
+            pass # TODO
+        elif event == 'print_to':
+            value, output = args
+            pass # TODO
+
+    def handle_standard_tracer_event(self, frame, event, arg):
         if event == 'call':
             if not self.should_ignore_frame(frame):
                 if self.record_call(frame):
@@ -214,6 +245,9 @@ class StandardTracer(object):
     def is_ignored_code(self, code):
         if code.co_name in IGNORED_NAMES:
             return True
+        for modname in IGNORED_MODULES:
+            if code.co_filename.endswith(modname):
+                return True
         if self.top_level_function is not None \
                 and code is self.top_level_function.func_code:
             return True
