@@ -1,4 +1,4 @@
-from pythoscope.store import Call, Class, Definition, GeneratorObject, TestClass
+from pythoscope.store import Class, Definition, GeneratorObject, TestClass
 
 
 def testable_objects(module):
