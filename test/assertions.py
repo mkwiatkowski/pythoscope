@@ -25,7 +25,8 @@ __all__ = [
     "assert_matches",
     "assert_not_raises",
     "assert_single_class",
-    "assert_single_function"]
+    "assert_single_function",
+    "assert_one_element_and_return"]
 
 
 def assert_contains(haystack, needle):
@@ -95,3 +96,10 @@ def assert_single_function(info, name, args=None):
     assert_equal(name, info.functions[0].name)
     if args is not None:
         assert_equal(args, info.functions[0].args)
+
+def assert_one_element_and_return(collection):
+    """Assert that the collection has exactly one element and return this
+    element.
+    """
+    assert_length(collection, 1)
+    return collection[0]
