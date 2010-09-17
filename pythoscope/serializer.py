@@ -105,10 +105,7 @@ class SerializedObject(object):
       type_name : str
         A canonical representation of the type this object is an instance of.
     """
-    _last_timestamp = 0
-
     def __init__(self, obj):
-        self.timestamp = SerializedObject.next_timestamp()
         self.human_readable_id = get_human_readable_id(obj)
         self.module_name = module_name(obj)
         self.type_name = get_type_name(obj)
@@ -117,11 +114,6 @@ class SerializedObject(object):
         if self.module_name not in ['__builtin__', 'exceptions']:
             return (self.module_name, self.type_name)
     type_import = property(_get_type_import)
-
-    def next_timestamp(cls):
-        cls._last_timestamp += 1
-        return cls._last_timestamp
-    next_timestamp = classmethod(next_timestamp)
 
 class ImmutableObject(SerializedObject):
     """A serialized object which identity doesn't matter.

@@ -4,16 +4,17 @@ import sys
 from nose import SkipTest
 
 from pythoscope.inspector.static import inspect_code
-from pythoscope.inspector.dynamic import inspect_code_in_context, \
+from pythoscope.inspector.dynamic import inspect_code_in_context,\
     inspect_point_of_entry
-from pythoscope.serializer import ImmutableObject, MapObject, UnknownObject, \
-    SequenceObject, BuiltinException
+from pythoscope.serializer import BuiltinException, ImmutableObject,\
+    SequenceObject
 from pythoscope.store import Class, Function, FunctionCall, GeneratorObject,\
     GeneratorObjectInvocation, Method, UserObject
 from pythoscope.compat import all
 from pythoscope.util import findfirst, generator_has_ended
 
 from assertions import *
+from inspector_assertions import *
 from inspector_helper import *
 from helper import ProjectInDirectory, PointOfEntryMock, EmptyProjectExecution, \
     IgnoredWarnings, putfile, TempDirectory, CapturedLogger, noindent
@@ -23,53 +24,6 @@ from testing_project import TestingProject
 ########################################################################
 ## Dynamic inspection test helpers.
 ##
-def assert_equal_serialized(obj1, obj2):
-    """Equal assertion that ignores UnknownObjects, SequenceObjects and
-    MapObjects identity. For testing purposes only.
-    """
-    def unknown_object_eq(o1, o2):
-        if not isinstance(o2, UnknownObject):
-            return False
-        return o1.partial_reconstructor == o2.partial_reconstructor
-    def sequence_object_eq(o1, o2):
-        if not isinstance(o2, SequenceObject):
-            return False
-        return o1.constructor_format == o2.constructor_format \
-            and o1.contained_objects == o2.contained_objects
-    def map_object_eq(o1, o2):
-        if not isinstance(o2, MapObject):
-            return False
-        return o1.mapping == o2.mapping
-    def builtin_exception_eq(o1, o2):
-        if not isinstance(o2, BuiltinException):
-            return False
-        return o1.args == o2.args
-    try:
-        UnknownObject.__eq__ = unknown_object_eq
-        SequenceObject.__eq__ = sequence_object_eq
-        MapObject.__eq__ = map_object_eq
-        BuiltinException.__eq__ = builtin_exception_eq
-        assert_equal(obj1, obj2)
-    finally:
-        del UnknownObject.__eq__
-        del SequenceObject.__eq__
-        del MapObject.__eq__
-        del BuiltinException.__eq__
-
-def serialize_value(value):
-    return EmptyProjectExecution().serialize(value)
-def serialize_collection(collection):
-    return map(serialize_value, collection)
-def serialize_arguments(args):
-    return EmptyProjectExecution().serialize_call_arguments(args)
-
-def assert_serialized(expected_unserialized, actual_serialized):
-    assert_equal_serialized(serialize_value(expected_unserialized), actual_serialized)
-def assert_collection_of_serialized(expected_collection, actual_collection):
-    assert_equal_serialized(serialize_collection(expected_collection), actual_collection)
-def assert_call_arguments(expected_args, actual_args):
-    assert_equal_serialized(serialize_arguments(expected_args), actual_args)
-
 def assert_call(expected_input, expected_output, call):
     assert_call_arguments(expected_input, call.input)
     assert not call.raised_exception()
@@ -312,21 +266,6 @@ def function_with_ignored_function():
     def not_ignored_outer(z):
         return ignored(z-1) * 3
     not_ignored_outer(13)
-
-def function_calling_functions_that_use_the_same_sequence_object():
-    def producer():
-        return []
-    def consumer(lst):
-        lst.append(1)
-    consumer(producer())
-
-def function_calling_function_that_uses_the_same_user_object():
-    class Something(object):
-        pass
-    def compare(x, y):
-        return x is y
-    obj = Something()
-    compare(obj, obj)
 
 ########################################################################
 ## Actual tests.
@@ -742,8 +681,14 @@ class TestGenerators:
 
 class TestObjectsIdentityPreservation:
     def test_handles_passing_sequence_objects_around(self):
-        callables = inspect_returning_callables(function_calling_functions_that_use_the_same_sequence_object)
+        def fun():
+            def producer():
+                return []
+            def consumer(lst):
+                lst.append(1)
+            consumer(producer())
 
+        callables = inspect_returning_callables(fun)
         assert_length(callables, 2)
 
         producer = find_first_with_name("producer", callables)
@@ -757,8 +702,15 @@ class TestObjectsIdentityPreservation:
         assert producer_call.output is consumer_call.input['lst']
 
     def test_handles_passing_user_objects_around(self):
-        callables = inspect_returning_callables(function_calling_function_that_uses_the_same_user_object)
+        def fun():
+            class Something(object):
+                pass
+            def compare(x, y):
+                return x is y
+            obj = Something()
+            compare(obj, obj)
 
+        callables = inspect_returning_callables(fun)
         assert_length(callables, 2)
 
         user_object = findfirst(is_user_object, callables)

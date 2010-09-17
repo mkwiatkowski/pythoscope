@@ -25,6 +25,10 @@ from helper import CapturedDebugLogger, CapturedLogger, P, \
     EmptyProjectExecution, putfile, TempDirectory, make_fresh_serialize
 
 
+def with_timestamp(obj):
+    obj.timestamp = 1
+    return obj
+
 def stable_serialize_call_arguments(execution, args):
     """Work just like execution.serialize_call_arguments, but serialize
     arguments in lexicographical order, so test outputs are stable.
@@ -40,13 +44,13 @@ def stable_serialize_call_arguments(execution, args):
 def create_method_call(method, args, output, call_type, execution, user_object):
     sargs = stable_serialize_call_arguments(execution, args)
     if call_type == 'output':
-        return MethodCall(method, sargs, output=execution.serialize(output))
+        return with_timestamp(MethodCall(method, sargs, output=execution.serialize(output)))
     elif call_type == 'exception':
-        return MethodCall(method, sargs, exception=execution.serialize(output))
+        return with_timestamp(MethodCall(method, sargs, exception=execution.serialize(output)))
     elif call_type == 'generator':
         gobject = GeneratorObject(None, method, sargs, user_object)
         for syield in map(execution.serialize, output):
-            gobject.add_call(GeneratorObjectInvocation(method, {}, syield))
+            gobject.add_call(with_timestamp(GeneratorObjectInvocation(method, {}, syield)))
         return gobject
 
 def ClassWithMethods(classname, methods, call_type='output'):
@@ -80,9 +84,9 @@ def ClassWithInstanceWithoutReconstruction(name):
 def FunctionWithCalls(funcname, calls):
     execution = EmptyProjectExecution()
     function = Function(funcname, sorted(calls[0][0].keys()))
-    function.calls = [FunctionCall(function,
-                                   stable_serialize_call_arguments(execution, i),
-                                   execution.serialize(o)) for (i,o) in calls]
+    function.calls = [with_timestamp(FunctionCall(function,
+                                                  stable_serialize_call_arguments(execution, i),
+                                                  output=execution.serialize(o))) for (i,o) in calls]
     return function
 
 def FunctionWithSingleCall(funcname, input, output):
@@ -91,9 +95,9 @@ def FunctionWithSingleCall(funcname, input, output):
 def FunctionWithExceptions(funcname, calls):
     execution = EmptyProjectExecution()
     function = Function(funcname, sorted(calls[0][0].keys()))
-    function.calls = [FunctionCall(function,
-                                   stable_serialize_call_arguments(execution, i),
-                                   exception=execution.serialize(e)) for (i,e) in calls]
+    function.calls = [with_timestamp(FunctionCall(function,
+                                                  stable_serialize_call_arguments(execution, i),
+                                                  exception=execution.serialize(e))) for (i,e) in calls]
     return function
 
 def FunctionWithSingleException(funcname, input, exception):
@@ -106,7 +110,7 @@ def GeneratorWithYields(genname, input, yields):
                               stable_serialize_call_arguments(execution, input),
                               generator)
     for syield in map(execution.serialize, yields):
-        gobject.add_call(GeneratorObjectInvocation(generator, {}, syield))
+        gobject.add_call(with_timestamp(GeneratorObjectInvocation(generator, {}, syield)))
     generator.add_call(gobject)
     return generator
 
@@ -116,8 +120,8 @@ def GeneratorWithSingleException(genname, input, exception):
     gobject = GeneratorObject(None, generator,
                               stable_serialize_call_arguments(execution, input),
                               generator)
-    gobject.add_call(GeneratorObjectInvocation(generator, {},
-        exception=execution.serialize(exception)))
+    gobject.add_call(with_timestamp(GeneratorObjectInvocation(generator, {},
+        exception=execution.serialize(exception))))
     generator.add_call(gobject)
     return generator
 
@@ -314,7 +318,9 @@ class TestGeneratorClass:
         user_object = klass.user_objects[0]
         method_call = user_object.calls[0]
 
-        subcall = MethodCall(Method('private'), {'argument': ImmutableObject(2)}, ImmutableObject(False))
+        subcall = with_timestamp(MethodCall(Method('private'),
+            {'argument': ImmutableObject(2)},
+            ImmutableObject(False)))
         method_call.add_subcall(subcall)
         user_object.add_call(subcall)
 
@@ -399,10 +405,10 @@ class TestGeneratorClass:
 
         mygen = Function('mygen', ['a', 'b'], is_generator=True)
         gobject = GeneratorObject(None, mygen, ssca({'a': 42, 'b': False}), mygen)
-        gobject.add_call(GeneratorObjectInvocation(mygen, {}, s(42)))
+        gobject.add_call(with_timestamp(GeneratorObjectInvocation(mygen, {}, s(42))))
         mygen.add_call(gobject)
         function = Function('invoke', ['g'])
-        function.add_call(FunctionCall(function, {'g': gobject}, s(True)))
+        function.add_call(with_timestamp(FunctionCall(function, {'g': gobject}, output=s(True))))
 
         result = generate_single_test_module(objects=[function, mygen])
 
@@ -688,7 +694,7 @@ class TestRaisedExceptions:
     def test_generates_imports_for_user_defined_exceptions(self):
         klass = Class("UserDefinedException")
         function = Function("throw")
-        function.calls = [FunctionCall(function, {}, exception=UserObject(None, klass))]
+        function.calls = [with_timestamp(FunctionCall(function, {}, exception=UserObject(None, klass)))]
 
         result = generate_single_test_module(objects=[function, klass])
 

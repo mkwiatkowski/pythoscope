@@ -9,6 +9,7 @@ class CallStack(object):
         self.last_traceback = None
         self.stack = []
         self.top_level_calls = []
+        self.top_level_side_effects = [] # TODO use this list for creating global setup & teardown methods
 
     def called(self, call):
         if self.stack:
@@ -33,6 +34,12 @@ class CallStack(object):
             caller = self.stack[-1]
             caller.set_exception(exception)
             self.last_traceback = traceback
+
+    def side_effect(self, side_effect):
+        if self.stack:
+            self.stack[-1].add_side_effect(side_effect)
+        else:
+            self.top_level_side_effects.append(side_effect)
 
     def unwind(self, value):
         while self.stack:
@@ -72,6 +79,9 @@ class Inspector(ICallback):
 
     def raised(self, exception, traceback):
         self.call_stack.raised(self.execution.serialize(exception), traceback)
+
+    def side_effect(self, klass, *args):
+        self.call_stack.side_effect(self.execution.create_side_effect(klass, *args))
 
     def called(self, call):
         if call:

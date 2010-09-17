@@ -49,8 +49,17 @@ def register_dynamic_factory(klass, function):
 ## A few handy factories for Pythoscope.
 ##
 from pythoscope.astbuilder import parse
-from pythoscope.store import TestClass, TestMethod
+from pythoscope.serializer import UnknownObject, SequenceObject
+from pythoscope.store import FunctionCall, Definition, TestClass, TestMethod
 
+register_factory(Definition,
+  name="definition")
+register_factory(UnknownObject,
+  obj=None)
+register_factory(SequenceObject,
+  obj=[], serialize=lambda x: create(UnknownObject, obj=x))
+register_factory(FunctionCall,
+  definition=create(Definition), args={}, output=create(UnknownObject))
 register_dynamic_factory(TestMethod,
   lambda:dict(name="test_method", code=parse("# a test method")))
 register_dynamic_factory(TestClass,

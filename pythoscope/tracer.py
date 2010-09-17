@@ -178,10 +178,10 @@ class StandardTracer(object):
 
     def handle_bytecode_tracer_event(self, event, args):
         if event == 'c_call':
-            func, pargs, kargs = args
-            pass # TODO
+            self.record_side_effect(*args)
+            pass # TODO record call
         elif event == 'c_return':
-            pass # TODO
+            pass # TODO pop call
         elif event == 'print':
             pass # TODO
         elif event == 'print_to':
@@ -264,6 +264,17 @@ class StandardTracer(object):
             input = input_from_argvalues(*inspect.getargvalues(frame))
             return self.callback.function_called(name, input, code, frame)
 
+    def record_side_effect(self, func, pargs, kargs):
+        try:
+            obj = func.__self__
+            klass = type(obj)
+            func_name = func.__name__
+            if klass == list:
+                if func_name == 'append':
+                    self.callback.side_effect('ListAppend', obj, pargs[0])
+        except AttributeError:
+            pass
+
 class Python23Tracer(StandardTracer):
     """Version of the tracer working around a subtle difference in exception
     handling of Python 2.3.
@@ -335,3 +346,11 @@ class ICallback(object):
         Return value is ignored.
         """
         raise NotImplementedError("Method raised() not defined.")
+
+    # :: (str, object, *object) -> None
+    def side_effect(self, klass, obj, *args):
+        """Reported when a side effect occured.
+
+        Return value is ignored.
+        """
+        raise NotImplementedError("Method side_effect() not defined.")
