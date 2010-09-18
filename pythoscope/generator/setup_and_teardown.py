@@ -249,13 +249,14 @@ def add_newline(code_string):
 
 # :: (SideEffect, {SerializedObject: str}) -> CodeString
 def setup_for_side_effect(side_effect, already_assigned_names):
+    object_name = already_assigned_names[side_effect.alist]
     if isinstance(side_effect, ListAppend):
-        return add_newline(call_as_string_for("%s.append" % already_assigned_names[side_effect.alist],
+        return add_newline(call_as_string_for("%s.%s" % (object_name, ListAppend.definition.name),
                                               {'object': side_effect.element},
                                               ListAppend.definition,
                                               already_assigned_names))
     elif isinstance(side_effect, ListExtend):
-        return add_newline(call_as_string_for("%s.extend" % already_assigned_names[side_effect.alist],
+        return add_newline(call_as_string_for("%s.%s" % (object_name, ListExtend.definition.name),
                                               {'iterable': side_effect.iterable},
                                               ListExtend.definition,
                                               already_assigned_names))
