@@ -271,7 +271,7 @@ class StandardTracer(object):
             klass = type(obj)
             func_name = func.__name__
             se = recognize_side_effect(klass, func_name)
-            self.callback.side_effect(se, obj, pargs[0])
+            self.callback.side_effect(se, obj, *pargs)
         # func.__self__ may raise AttributeError, while recognize_side_effect may raise MissingSideEffectType.
         except (AttributeError, MissingSideEffectType):
             pass

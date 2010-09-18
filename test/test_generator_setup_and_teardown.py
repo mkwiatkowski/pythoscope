@@ -1,6 +1,6 @@
 from pythoscope.generator.setup_and_teardown import Dependencies, assign_names_and_setup, setup_for_side_effect
 from pythoscope.serializer import UnknownObject, ImmutableObject, SequenceObject
-from pythoscope.side_effect import SideEffect, ListAppend, ListExtend
+from pythoscope.side_effect import SideEffect, ListAppend, ListExtend, ListInsert
 from pythoscope.store import FunctionCall
 
 from assertions import *
@@ -94,3 +94,8 @@ class TestSetupForSideEffect:
         se = ListExtend(alist, alist2)
         assert_equal_strings("alist.extend(alist2)\n",
                              setup_for_side_effect(se, {alist: 'alist', alist2: 'alist2'}))
+
+    def test_generates_setup_for_list_insert(self):
+        alist = create(SequenceObject)
+        se = ListInsert(alist, create(ImmutableObject, obj=0), create(ImmutableObject, obj=1))
+        assert_equal_strings("alist.insert(0, 1)\n", setup_for_side_effect(se, {alist: 'alist'}))

@@ -26,10 +26,14 @@ class ListAppend(BuiltinMethodWithPositionArgsSideEffect):
 class ListExtend(BuiltinMethodWithPositionArgsSideEffect):
     definition = Function('extend', ['iterable'])
 
+class ListInsert(BuiltinMethodWithPositionArgsSideEffect):
+    definition = Function('insert', ['index', 'object'])
+
 
 known_side_effects = {
     (list, 'append') : ListAppend,
     (list, 'extend') : ListExtend,
+    (list, 'insert') : ListInsert,
 }
 def recognize_side_effect(klass, func_name):
     try:
