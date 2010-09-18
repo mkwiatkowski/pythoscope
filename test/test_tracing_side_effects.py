@@ -14,8 +14,8 @@ class TestMutation:
         call = inspect_returning_single_call(fun)
         se = assert_one_element_and_return(call.side_effects)
         assert isinstance(se, ListAppend)
-        assert_serialized([], se.alist)
-        assert_serialized(1, se.element)
+        assert_serialized([], se.obj)
+        assert_collection_of_serialized([1], list(se.args))
 
     def test_handles_list_extend(self):
         def fun():
@@ -25,5 +25,5 @@ class TestMutation:
         call = inspect_returning_single_call(fun)
         se = assert_one_element_and_return(call.side_effects)
         assert isinstance(se, ListExtend)
-        assert_serialized([], se.alist)
-        assert_serialized([1], se.iterable)
+        assert_serialized([], se.obj)
+        assert_collection_of_serialized([[1]], list(se.args))

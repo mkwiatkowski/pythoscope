@@ -16,16 +16,14 @@ class SideEffect(object):
     def __init__(self, referenced_objects):
         self.referenced_objects = referenced_objects
 
-class ListAppend(SideEffect):
-    definition = Function('append', ['object'])
-    def __init__(self, alist, element):
-        super(ListAppend, self).__init__([alist, element])
-        self.alist = alist
-        self.element = element
+class BuiltinMethodSideEffect(SideEffect):
+    def __init__(self, obj, *args):
+        super(BuiltinMethodSideEffect, self).__init__([obj]+list(args))
+        self.obj = obj
+        self.args = args
 
-class ListExtend(SideEffect):
+class ListAppend(BuiltinMethodSideEffect):
+    definition = Function('append', ['object'])
+
+class ListExtend(BuiltinMethodSideEffect):
     definition = Function('extend', ['iterable'])
-    def __init__(self, alist, iterable):
-        super(ListExtend, self).__init__([alist, iterable])
-        self.alist = alist
-        self.iterable = iterable
