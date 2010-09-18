@@ -272,6 +272,8 @@ class StandardTracer(object):
             if klass == list:
                 if func_name == 'append':
                     self.callback.side_effect('ListAppend', obj, pargs[0])
+                elif func_name == 'extend':
+                    self.callback.side_effect('ListExtend', obj, pargs[0])
         except AttributeError:
             pass
 

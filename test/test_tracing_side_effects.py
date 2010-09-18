@@ -1,4 +1,4 @@
-from pythoscope.side_effect import ListAppend
+from pythoscope.side_effect import ListAppend, ListExtend
 
 from assertions import *
 from inspector_assertions import *
@@ -16,3 +16,14 @@ class TestMutation:
         assert isinstance(se, ListAppend)
         assert_serialized([], se.alist)
         assert_serialized(1, se.element)
+
+    def test_handles_list_extend(self):
+        def fun():
+            def foo(x):
+                x.extend([1])
+            foo([])
+        call = inspect_returning_single_call(fun)
+        se = assert_one_element_and_return(call.side_effects)
+        assert isinstance(se, ListExtend)
+        assert_serialized([], se.alist)
+        assert_serialized([1], se.iterable)

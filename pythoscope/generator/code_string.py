@@ -27,6 +27,9 @@ def combine_two_code_strings(template, cs1, cs2):
 def combine_string_and_code_string(template, s, cs):
     return CodeString(template % (s, cs), cs.uncomplete, cs.imports)
 
+def combine_code_string_and_string(template, cs, s):
+    return CodeString(template % (cs, s), cs.uncomplete, cs.imports)
+
 def combine(cs1, cs2, template="%s%s"):
     """Concatenate two CodeStrings, or a string and a CodeString, preserving
     information on `uncomplete` and `imports`.
@@ -35,6 +38,8 @@ def combine(cs1, cs2, template="%s%s"):
         return combine_two_code_strings(template, cs1, cs2)
     elif type(cs1) is str:
         return combine_string_and_code_string(template, cs1, cs2)
+    else:
+        return combine_code_string_and_string(template, cs1, cs2)
 
 def join(char, code_strings):
     return CodeString(char.join(code_strings),

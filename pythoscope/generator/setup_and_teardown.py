@@ -1,9 +1,9 @@
 from pythoscope.compat import set, sorted
 from pythoscope.generator.code_string import CodeString, combine
-from pythoscope.generator.constructor import constructor_as_string
+from pythoscope.generator.constructor import constructor_as_string, call_as_string_for
 from pythoscope.serializer import BuiltinException, ImmutableObject,\
     MapObject, UnknownObject, SequenceObject, SerializedObject
-from pythoscope.side_effect import ListAppend
+from pythoscope.side_effect import ListAppend, ListExtend
 from pythoscope.store import Call, FunctionCall, UserObject, MethodCall,\
     GeneratorObject, GeneratorObjectInvocation
 from pythoscope.util import counted, flatten, key_for_value
@@ -243,11 +243,22 @@ def setup_for_named_object(obj, name, already_assigned_names):
         setup = combine("# ", setup)
     return setup
 
+# :: CodeString -> CodeString
+def add_newline(code_string):
+    return combine(code_string, "\n")
+
 # :: (SideEffect, {SerializedObject: str}) -> CodeString
 def setup_for_side_effect(side_effect, already_assigned_names):
     if isinstance(side_effect, ListAppend):
-        return CodeString("%s.append(%s)\n" % (already_assigned_names[side_effect.alist],
-                                               already_assigned_names[side_effect.element]))
+        return add_newline(call_as_string_for("%s.append" % already_assigned_names[side_effect.alist],
+                                              {'object': side_effect.element},
+                                              ListAppend.definition,
+                                              already_assigned_names))
+    elif isinstance(side_effect, ListExtend):
+        return add_newline(call_as_string_for("%s.extend" % already_assigned_names[side_effect.alist],
+                                              {'iterable': side_effect.iterable},
+                                              ListExtend.definition,
+                                              already_assigned_names))
     else:
         raise TypeError("Unknown side effect type: %r" % side_effect)
 

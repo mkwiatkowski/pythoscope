@@ -1,6 +1,6 @@
-from pythoscope.generator.setup_and_teardown import Dependencies
-from pythoscope.serializer import UnknownObject, SequenceObject
-from pythoscope.side_effect import SideEffect
+from pythoscope.generator.setup_and_teardown import Dependencies, assign_names_and_setup, setup_for_side_effect
+from pythoscope.serializer import UnknownObject, ImmutableObject, SequenceObject
+from pythoscope.side_effect import SideEffect, ListAppend, ListExtend
 from pythoscope.store import FunctionCall
 
 from assertions import *
@@ -66,3 +66,31 @@ class TestDependencies:
         put_on_timeline(obj, seq, se, output, call)
 
         assert_equal(Dependencies(call).sorted(), [obj, seq, se, output])
+
+class TestAssignNamesAndSetup:
+    def test_generates_setup_for_list_with_append_and_extend(self):
+        alist = create(SequenceObject)
+        alist2 = create(SequenceObject)
+        se = ListAppend(alist, create(ImmutableObject, obj=1))
+        se2 = ListExtend(alist, alist2)
+
+        call = create(FunctionCall, output=alist)
+        create_parent_call_with_side_effects(call, [se, se2])
+
+        put_on_timeline(alist, alist2, se, se2, call)
+
+        assert_equal_strings("alist1 = []\nalist2 = []\nalist1.append(1)\nalist1.extend(alist2)\n",
+                             assign_names_and_setup(call, {}))
+
+class TestSetupForSideEffect:
+    def test_generates_setup_for_list_append(self):
+        alist = create(SequenceObject)
+        se = ListAppend(alist, create(ImmutableObject, obj=1))
+        assert_equal_strings("alist.append(1)\n", setup_for_side_effect(se, {alist: 'alist'}))
+
+    def test_generates_setup_for_list_extend(self):
+        alist = create(SequenceObject)
+        alist2 = create(SequenceObject)
+        se = ListExtend(alist, alist2)
+        assert_equal_strings("alist.extend(alist2)\n",
+                             setup_for_side_effect(se, {alist: 'alist', alist2: 'alist2'}))

@@ -56,6 +56,10 @@ def assert_equal_sets(collection1, collection2):
     assert_equal(set(collection1), set(collection2))
 
 def assert_equal_strings(s1, s2):
+    if not isinstance(s1, str):
+        raise AssertionError("Expected s1=%r to be a string" % s1)
+    if not isinstance(s2, str):
+        raise AssertionError("Expected s2=%r to be a string" % s2)
     assert_equal(s1, s2, "Strings not equal. Diff:\n\n%s" % ''.join(difflib.ndiff(s1.splitlines(True), s2.splitlines(True))))
 
 def assert_function(function, name, args):
