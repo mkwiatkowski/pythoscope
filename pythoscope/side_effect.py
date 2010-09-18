@@ -3,14 +3,7 @@ from pythoscope.store import Function
 
 class MissingSideEffectType(Exception):
     def __repr__(self):
-        return "<MissingSideEffectType(%s)>" % self.args
-
-def create_side_effect(klass, *args):
-    try:
-        subclass = globals()[klass]
-        return subclass(*args)
-    except KeyError:
-        raise MissingSideEffectType(klass)
+        return "<MissingSideEffectType(%r)>" % self.args
 
 class SideEffect(object):
     def __init__(self, referenced_objects):
@@ -32,3 +25,14 @@ class ListAppend(BuiltinMethodWithPositionArgsSideEffect):
 
 class ListExtend(BuiltinMethodWithPositionArgsSideEffect):
     definition = Function('extend', ['iterable'])
+
+
+known_side_effects = {
+    (list, 'append') : ListAppend,
+    (list, 'extend') : ListExtend,
+}
+def recognize_side_effect(klass, func_name):
+    try:
+        return known_side_effects[(klass, func_name)]
+    except KeyError:
+        raise MissingSideEffectType(klass, func_name)

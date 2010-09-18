@@ -5,7 +5,6 @@ import types
 from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\
     UnknownObject, SequenceObject, is_immutable, is_sequence,\
     is_mapping, is_builtin_exception
-from pythoscope.side_effect import create_side_effect
 from pythoscope.store import Call, Class, Function, FunctionCall,\
     GeneratorObject, GeneratorObjectInvocation, MethodCall, Project, UserObject
 from pythoscope.timeline import Timeline
@@ -195,7 +194,7 @@ class Execution(object):
 
     # :: (str, *object) -> SideEffect
     def create_side_effect(self, klass, *args):
-        se = create_side_effect(klass, *map(self.serialize, args))
+        se = klass(*map(self.serialize, args))
         self.timeline.put(se)
         return se
 
