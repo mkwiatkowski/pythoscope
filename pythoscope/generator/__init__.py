@@ -7,7 +7,7 @@ from pythoscope.generator.selector import testable_objects, testable_calls
 from pythoscope.generator.constructor import call_as_string_for,\
     constructor_as_string, todo_value, type_as_string
 from pythoscope.generator.setup_and_teardown import assign_names_and_setup,\
-    assign_names_and_setup_for_multiple_calls
+    assign_names_and_setup_for_multiple_calls, can_be_constructed
 from pythoscope.serializer import ImmutableObject, UnknownObject,\
     SequenceObject, SerializedObject, is_serialized_string
 from pythoscope.store import Class, Function, TestClass, TestMethod,\
@@ -16,16 +16,6 @@ from pythoscope.compat import all, set, sorted
 from pythoscope.util import assert_argument_type, camelize, counted, \
     key_for_value, pluralize, underscore
 
-
-# :: SerializedObject | [SerializedObject] -> bool
-def can_be_constructed(obj):
-    if isinstance(obj, list):
-        return all(map(can_be_constructed, obj))
-    elif isinstance(obj, SequenceObject):
-        return all(map(can_be_constructed, obj.contained_objects))
-    elif isinstance(obj, GeneratorObject):
-        return obj.is_activated()
-    return not isinstance(obj, UnknownObject)
 
 # :: GeneratorObject -> SerializedObject | None
 def generator_object_exception(gobject):

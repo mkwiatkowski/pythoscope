@@ -57,3 +57,15 @@ class ListInsert(BuiltinMethodWithPositionArgsSideEffect):
 class ListPop(BuiltinMethodWithPositionArgsSideEffect):
     trigger = (list, 'pop')
     definition = Function('pop', ['index'])
+
+class ListRemove(BuiltinMethodWithPositionArgsSideEffect):
+    trigger = (list, 'remove')
+    definition = Function('remove', ['value'])
+
+class ListReverse(BuiltinMethodWithPositionArgsSideEffect):
+    trigger = (list, 'reverse')
+    definition = Function('reverse', [])
+
+class ListSort(BuiltinMethodWithPositionArgsSideEffect):
+    trigger = (list, 'sort')
+    definition = Function('sort', [])

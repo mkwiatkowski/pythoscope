@@ -1,13 +1,23 @@
 from pythoscope.compat import set, sorted
 from pythoscope.generator.code_string import CodeString, combine
 from pythoscope.generator.constructor import constructor_as_string, call_as_string_for
-from pythoscope.serializer import BuiltinException, ImmutableObject,\
-    MapObject, UnknownObject, SequenceObject, SerializedObject
+from pythoscope.serializer import BuiltinException, CompositeObject,\
+    ImmutableObject, MapObject, UnknownObject, SequenceObject, SerializedObject
 from pythoscope.side_effect import BuiltinMethodWithPositionArgsSideEffect
 from pythoscope.store import Call, FunctionCall, UserObject, MethodCall,\
     GeneratorObject, GeneratorObjectInvocation
 from pythoscope.util import counted, flatten, key_for_value
 
+
+# :: SerializedObject | [SerializedObject] -> bool
+def can_be_constructed(obj):
+    if isinstance(obj, list):
+        return all(map(can_be_constructed, obj))
+    elif isinstance(obj, SequenceObject):
+        return all(map(can_be_constructed, obj.contained_objects))
+    elif isinstance(obj, GeneratorObject):
+        return obj.is_activated()
+    return not isinstance(obj, UnknownObject)
 
 # :: Call -> Call
 def top_caller(call):
@@ -124,23 +134,21 @@ class Dependencies(object):
         self.objects = []
         self.side_effects = set()
 
-        self._calculate(call)
-
-    def _calculate(self, call):
+    def _calculate(self, objects, relevant_side_effects):
         """
-        First, we gather all objects referenced by the call. Next, we look at all
-        side effects that affected those objects before the call. Those side
-        effects can reference more objects, which in turn can be affected by more
-        side effects, so we do this back and forth until we have a complete set
-        of objects and side effects that have direct or indirect relationship to
-        the call.
+        First, we look at all objects required for the call's input/output
+        (pre- and post- call dependencies ech do one of those). Next, we look
+        at all side effects that affected those objects before the call. Those
+        side effects can reference more objects, which in turn can be affected
+        by more side effects, so we do this back and forth until we have
+        a complete set of objects and side effects that have direct or indirect
+        relationship to the call.
         """
-        sebc = side_effects_before(call)
         def update(objects):
             self.objects.extend(objects)
 
             # We have some objects, let's see how many side effects affect them.
-            new_side_effects = set(side_effects_that_affect_objects(sebc, objects))
+            new_side_effects = set(side_effects_that_affect_objects(relevant_side_effects, objects))
             previous_side_effects_count = len(self.side_effects)
             self.side_effects.update(new_side_effects)
             if len(self.side_effects) == previous_side_effects_count:
@@ -149,7 +157,7 @@ class Dependencies(object):
             # Similarly, new side effects may yield some new objects, let's recur.
             update(get_those_and_contained_objects(objects_referenced_by_side_effects(new_side_effects)))
         # We start with objects required for the call itself.
-        update(get_contained_objects(call))
+        update(objects)
 
     def fold(self):
         return self # TODO
@@ -184,6 +192,20 @@ class Dependencies(object):
     def unique_objects(self):
         return set(self.objects)
 
+class PreCallDependencies(Dependencies):
+    """Dependencies for making a call.
+    """
+    def __init__(self, call):
+        super(PreCallDependencies, self).__init__(call)
+        self._calculate(get_contained_objects(call), side_effects_before(call))
+
+class PostCallDependencies(Dependencies):
+    """Dependencies regarding call's output value.
+    """
+    def __init__(self, call):
+        super(PostCallDependencies, self).__init__(call)
+        self._calculate(get_those_and_contained_objects([call.output]), call.side_effects)
+
 # :: SerializedObject -> str
 def get_name_base_for_object(obj):
     common_names = {'list': 'alist',
@@ -214,6 +236,8 @@ def assign_name_to_object(obj, assigned_names):
 
     May reassign an existing name for an object as a side effect.
     """
+    if assigned_names.has_key(obj):
+        return
     base = get_name_base_for_object(obj)
     other_obj = key_for_value(assigned_names, base)
 
@@ -281,8 +305,9 @@ def assign_names_and_setup(call, names):
     """
     if not isinstance(call, Call):
         raise TypeError("Tried to call assign_names_and_setup with %r instead of a call." % call)
-    dependencies = Dependencies(call).fold().remove_objects_unworthty_of_naming()
-    return create_setup_for_dependencies(dependencies, names)
+    pre_setup = create_setup_for_input(call, names)
+    post_setup = create_setup_for_output(call, names)
+    return combine(pre_setup, post_setup)
 
 # :: ([Call], {SerializedObject : str}) -> CodeString
 def assign_names_and_setup_for_multiple_calls(calls, names):
@@ -293,3 +318,21 @@ def assign_names_and_setup_for_multiple_calls(calls, names):
         setup = assign_names_and_setup(call, names)
         full_setup = combine(full_setup, setup)
     return full_setup
+
+# :: (Call, {SerializedObject : str}) -> CodeString
+def create_setup_for_input(call, names):
+    pre_dependencies = PreCallDependencies(call).fold().remove_objects_unworthty_of_naming()
+    return create_setup_for_dependencies(pre_dependencies, names)
+
+# :: (Call, {SerializedObject : str}) -> CodeString|str
+def create_setup_for_output(call, names):
+    """Sometimes the call's output doesn't depend on the input at all. If the
+    object has been altered by the call we need to create and name a new copy of
+    it to prepare a good equality assertion.
+    """
+    if call.output is not None and \
+            can_be_constructed(call.output) and \
+            call.output not in names.keys():
+        post_dependencies = PostCallDependencies(call).fold().remove_objects_unworthty_of_naming()
+        return create_setup_for_dependencies(post_dependencies, names)
+    return ""

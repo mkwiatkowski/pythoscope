@@ -55,16 +55,23 @@ class TestAppendingTestClasses(CapturedLogger, TempDirectory):
         expected_result = read_data(expected_output)
         assert_equal_strings(expected_result, result)
 
-class TestObjectsIdentityPreservation(CapturedLogger, TempDirectory):
-    def test_preserves_identity_of_objects(self):
-        expected_result = read_data("objects_identity_output.py")
+class TestAcceptanceWithPointOfEntry(CapturedLogger, TempDirectory):
+    def execute_with_point_of_entry_and_assert(self, id):
+        expected_result = read_data("%s_output.py" % id)
         project = ProjectInDirectory(self.tmpdir).with_points_of_entry(["poe.py"])
-        module_path = putfile(project.path, "module.py", read_data("objects_identity_module.py"))
-        write_content_to_file(read_data("objects_identity_poe.py"),
-                              project.path_for_point_of_entry("poe.py"))
+        module_path = putfile(project.path, "module.py", read_data("%s_module.py" % id))
+        write_content_to_file(read_data("generic_acceptance_poe.py"), project.path_for_point_of_entry("poe.py"))
 
         inspect_project(project)
         add_tests_to_project(project, [module_path], 'unittest')
         result = get_test_module_contents(project)
 
         assert_equal_strings(expected_result, result)
+
+class TestObjectsIdentityPreservation(TestAcceptanceWithPointOfEntry):
+    def test_preserves_identity_of_objects(self):
+        self.execute_with_point_of_entry_and_assert("objects_identity")
+
+class TestSideEffectsCaptureAndGeneration(TestAcceptanceWithPointOfEntry):
+    def test_captures_and_generates_tests_for_code_with_side_effects_on_lists(self):
+        self.execute_with_point_of_entry_and_assert("side_effects_on_lists")

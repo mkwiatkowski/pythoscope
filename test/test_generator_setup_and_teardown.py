@@ -1,4 +1,4 @@
-from pythoscope.generator.setup_and_teardown import Dependencies, assign_names_and_setup, setup_for_side_effect
+from pythoscope.generator.setup_and_teardown import PreCallDependencies, assign_names_and_setup, setup_for_side_effect
 from pythoscope.serializer import UnknownObject, ImmutableObject, SequenceObject
 from pythoscope.side_effect import SideEffect, ListAppend, ListExtend,\
     ListInsert, ListPop
@@ -19,7 +19,7 @@ def create_parent_call_with_side_effects(call, side_effects):
     parent_call.add_subcall(call)
     map(parent_call.add_side_effect, side_effects)
 
-class TestDependencies:
+class TestPreCallDependencies:
     def test_resolves_dependencies_between_side_effects_and_contained_objects(self):
         # Relations between objects have been summarized below.
         # +-------+                          +---+
@@ -53,7 +53,7 @@ class TestDependencies:
 
         put_on_timeline(obj1, obj2, obj3, obj4, obj5, se1, se2, se3, call)
 
-        assert_equal(Dependencies(call).sorted(), [obj1, obj2, obj3, obj4, se2, se3])
+        assert_equal(PreCallDependencies(call).sorted(), [obj1, obj2, obj3, obj4, se2, se3])
 
     def test_resolves_dependencies_contained_within_objects_referenced_by_side_effects(self):
         output = create(UnknownObject)
@@ -66,7 +66,7 @@ class TestDependencies:
 
         put_on_timeline(obj, seq, se, output, call)
 
-        assert_equal(Dependencies(call).sorted(), [obj, seq, se, output])
+        assert_equal(PreCallDependencies(call).sorted(), [obj, seq, se, output])
 
 class TestAssignNamesAndSetup:
     def test_generates_setup_for_list_with_append_and_extend(self):
