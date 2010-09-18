@@ -3,7 +3,7 @@ from pythoscope.generator.code_string import CodeString, combine
 from pythoscope.generator.constructor import constructor_as_string, call_as_string_for
 from pythoscope.serializer import BuiltinException, ImmutableObject,\
     MapObject, UnknownObject, SequenceObject, SerializedObject
-from pythoscope.side_effect import ListAppend, ListExtend
+from pythoscope.side_effect import BuiltinMethodWithPositionArgsSideEffect
 from pythoscope.store import Call, FunctionCall, UserObject, MethodCall,\
     GeneratorObject, GeneratorObjectInvocation
 from pythoscope.util import counted, flatten, key_for_value
@@ -250,15 +250,10 @@ def add_newline(code_string):
 # :: (SideEffect, {SerializedObject: str}) -> CodeString
 def setup_for_side_effect(side_effect, already_assigned_names):
     object_name = already_assigned_names[side_effect.obj]
-    if isinstance(side_effect, ListAppend):
-        return add_newline(call_as_string_for("%s.%s" % (object_name, ListAppend.definition.name),
-                                              {'object': side_effect.args[0]},
-                                              ListAppend.definition,
-                                              already_assigned_names))
-    elif isinstance(side_effect, ListExtend):
-        return add_newline(call_as_string_for("%s.%s" % (object_name, ListExtend.definition.name),
-                                              {'iterable': side_effect.args[0]},
-                                              ListExtend.definition,
+    if isinstance(side_effect, BuiltinMethodWithPositionArgsSideEffect):
+        return add_newline(call_as_string_for("%s.%s" % (object_name, side_effect.definition.name),
+                                              side_effect.args_mapping(),
+                                              side_effect.definition,
                                               already_assigned_names))
     else:
         raise TypeError("Unknown side effect type: %r" % side_effect)
