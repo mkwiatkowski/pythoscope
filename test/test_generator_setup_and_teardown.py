@@ -1,6 +1,7 @@
 from pythoscope.generator.setup_and_teardown import Dependencies, assign_names_and_setup, setup_for_side_effect
 from pythoscope.serializer import UnknownObject, ImmutableObject, SequenceObject
-from pythoscope.side_effect import SideEffect, ListAppend, ListExtend, ListInsert
+from pythoscope.side_effect import SideEffect, ListAppend, ListExtend,\
+    ListInsert, ListPop
 from pythoscope.store import FunctionCall
 
 from assertions import *
@@ -99,3 +100,13 @@ class TestSetupForSideEffect:
         alist = create(SequenceObject)
         se = ListInsert(alist, create(ImmutableObject, obj=0), create(ImmutableObject, obj=1))
         assert_equal_strings("alist.insert(0, 1)\n", setup_for_side_effect(se, {alist: 'alist'}))
+
+    def test_generates_setup_for_list_pop_without_arguments(self):
+        alist = create(SequenceObject)
+        se = ListPop(alist)
+        assert_equal_strings("alist.pop()\n", setup_for_side_effect(se, {alist: 'alist'}))
+
+    def test_generates_setup_for_list_pop_with_arguments(self):
+        alist = create(SequenceObject)
+        se = ListPop(alist, create(ImmutableObject, obj=0))
+        assert_equal_strings("alist.pop(0)\n", setup_for_side_effect(se, {alist: 'alist'}))

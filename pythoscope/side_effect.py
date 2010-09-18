@@ -53,3 +53,7 @@ class ListExtend(BuiltinMethodWithPositionArgsSideEffect):
 class ListInsert(BuiltinMethodWithPositionArgsSideEffect):
     trigger = (list, 'insert')
     definition = Function('insert', ['index', 'object'])
+
+class ListPop(BuiltinMethodWithPositionArgsSideEffect):
+    trigger = (list, 'pop')
+    definition = Function('pop', ['index'])
