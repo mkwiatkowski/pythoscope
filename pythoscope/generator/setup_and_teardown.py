@@ -141,7 +141,7 @@ class Dependencies(object):
     def _calculate(self, objects, relevant_side_effects):
         """
         First, we look at all objects required for the call's input/output
-        (pre- and post- call dependencies ech do one of those). Next, we look
+        (pre- and post- call dependencies each do one of those). Next, we look
         at all side effects that affected those objects before the call. Those
         side effects can reference more objects, which in turn can be affected
         by more side effects, so we do this back and forth until we have
