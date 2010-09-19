@@ -1,4 +1,4 @@
-from pythoscope.compat import set, sorted
+from pythoscope.compat import all, set, sorted
 from pythoscope.generator.code_string import CodeString, combine
 from pythoscope.generator.constructor import constructor_as_string, call_as_string_for
 from pythoscope.serializer import BuiltinException, CompositeObject,\
