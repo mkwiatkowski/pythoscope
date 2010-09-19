@@ -7,7 +7,6 @@ from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\
     is_mapping, is_builtin_exception
 from pythoscope.store import Call, Class, Function, FunctionCall,\
     GeneratorObject, GeneratorObjectInvocation, MethodCall, Project, UserObject
-from pythoscope.timeline import Timeline
 from pythoscope.util import all_of_type, assert_argument_type, class_name,\
     generator_has_ended, get_generator_from_frame, is_generator_code,\
     map_values, module_name
@@ -41,8 +40,6 @@ class Execution(object):
 
         self.started = time.time()
         self.ended = None
-
-        self.timeline = Timeline()
 
         # References to objects and calls created during the run.
         self.captured_objects = {}
@@ -165,7 +162,6 @@ class Execution(object):
             sargs = {}
         call = call_type(definition, sargs)
         self.captured_calls.append(call)
-        self.timeline.put(call)
         callable.add_call(call)
         return call
 
@@ -194,9 +190,7 @@ class Execution(object):
 
     # :: (str, *object) -> SideEffect
     def create_side_effect(self, klass, *args):
-        se = klass(*map(self.serialize, args))
-        self.timeline.put(se)
-        return se
+        return klass(*map(self.serialize, args))
 
     # :: (object, callable) -> SerializedObject | None
     def _retrieve_or_capture(self, obj, capture_callback):
@@ -220,7 +214,6 @@ class Execution(object):
             captured = capture_callback(obj)
             if captured:
                 self._preserve(obj)
-                self.timeline.put(captured)
                 self.captured_objects[object_id(obj)] = captured
                 return captured
 

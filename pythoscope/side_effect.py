@@ -1,4 +1,5 @@
 from pythoscope.store import Function
+from pythoscope.event import Event
 
 
 class MissingSideEffectType(Exception):
@@ -26,9 +27,10 @@ class MetaSideEffect(type):
         if hasattr(cls, 'trigger'):
             register_side_effect_type(cls.trigger, cls)
 
-class SideEffect(object):
+class SideEffect(Event):
     __metaclass__ = MetaSideEffect
     def __init__(self, affected_objects, only_referenced_objects):
+        super(SideEffect, self).__init__()
         self.affected_objects = affected_objects
         self.referenced_objects = affected_objects + only_referenced_objects
 

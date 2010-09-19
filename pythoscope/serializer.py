@@ -4,6 +4,7 @@ import re
 import types
 
 from pythoscope.compat import frozenset, set, sets
+from pythoscope.event import Event
 from pythoscope.util import RePatternType, class_name, class_of, \
     module_name, regexp_flags_as_string, string2id, underscore
 
@@ -82,7 +83,7 @@ def get_type_name(obj):
     objtype = type(obj)
     return mapping.get(objtype, class_name(obj))
 
-class SerializedObject(object):
+class SerializedObject(Event):
     """An object captured during execution.
 
     This is an abstract class, see subclasses for descriptions of different
@@ -106,6 +107,7 @@ class SerializedObject(object):
         A canonical representation of the type this object is an instance of.
     """
     def __init__(self, obj):
+        super(SerializedObject, self).__init__()
         self.human_readable_id = get_human_readable_id(obj)
         self.module_name = module_name(obj)
         self.type_name = get_type_name(obj)

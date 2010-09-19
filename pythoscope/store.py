@@ -5,6 +5,7 @@ import re
 from pythoscope.astbuilder import regenerate
 from pythoscope.code_trees_manager import FilesystemCodeTreesManager
 from pythoscope.compat import set
+from pythoscope.event import Event
 from pythoscope.localizable import Localizable
 from pythoscope.logger import log
 from pythoscope.serializer import SerializedObject
@@ -567,7 +568,7 @@ class TestSuite(TestCase):
         if not isinstance(test_case, tuple(self.allowed_test_case_classes)):
             raise TypeError("Given test case isn't allowed to be added to this test suite.")
 
-class Call(object):
+class Call(Event):
     """Stores information about a single function or method call.
 
     Includes reference to the caller, all call arguments, references to
@@ -584,6 +585,8 @@ class Call(object):
             raise ValueError("Call should have a single point of return.")
         if not isinstance(definition, Definition):
             raise ValueError("Call definition object should be an instance of Definition.")
+
+        super(Call, self).__init__()
 
         self.definition = definition
         self.input = args
