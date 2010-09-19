@@ -28,14 +28,15 @@ class MetaSideEffect(type):
 
 class SideEffect(object):
     __metaclass__ = MetaSideEffect
-    def __init__(self, referenced_objects):
-        self.referenced_objects = referenced_objects
+    def __init__(self, affected_objects, only_referenced_objects):
+        self.affected_objects = affected_objects
+        self.referenced_objects = affected_objects + only_referenced_objects
 
 class BuiltinMethodWithPositionArgsSideEffect(SideEffect):
     definition = None # set in a subclass
 
     def __init__(self, obj, *args):
-        super(BuiltinMethodWithPositionArgsSideEffect, self).__init__([obj]+list(args))
+        super(BuiltinMethodWithPositionArgsSideEffect, self).__init__([obj], list(args))
         self.obj = obj
         self.args = args
 

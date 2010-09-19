@@ -121,11 +121,15 @@ def sorted_by_timestamp(objects):
 def objects_referenced_by_side_effects(side_effects):
     return flatten(map(lambda se: se.referenced_objects, side_effects))
 
+# :: [SideEffect] -> [SerializedObject]
+def objects_affected_by_side_effects(side_effects):
+    return flatten(map(lambda se: se.affected_objects, side_effects))
+
 # :: ([SideEffect], set([SerializedObject])) -> [SideEffect]
 def side_effects_that_affect_objects(side_effects, objects):
     "Filter out side effects that are irrelevant to given set of objects."
     for side_effect in side_effects:
-        for obj in side_effect.referenced_objects:
+        for obj in side_effect.affected_objects:
             if obj in objects:
                 yield side_effect
 
@@ -163,7 +167,7 @@ class Dependencies(object):
         return self # TODO
 
     def remove_objects_unworthty_of_naming(self):
-        referenced_objects = objects_referenced_by_side_effects(self.side_effects)
+        affected_objects = objects_affected_by_side_effects(self.side_effects)
         for obj, usage_count in counted(self.objects):
             # ImmutableObjects don't need to be named, as their identity is
             # always unambiguous.
@@ -171,8 +175,8 @@ class Dependencies(object):
                 # Anything mentioned more than once have to be named.
                 if usage_count > 1:
                     continue
-                # Anything with side effects is also worth naming.
-                if obj in referenced_objects:
+                # Anything affected by side effects is also worth naming.
+                if obj in affected_objects:
                     continue
             for i in range(usage_count):
                 self.objects.remove(obj)

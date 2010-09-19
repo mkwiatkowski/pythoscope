@@ -8,38 +8,29 @@ from module import main
 
 class TestFacade(unittest.TestCase):
     def test_just_do_it_returns_None_after_creation_with_system_instance(self):
-        obj1 = Object('one')
         alist = []
-        alist.append(obj1)
-        obj2 = Object('two')
-        alist.append(obj2)
-        obj3 = Object('three')
-        alist.append(obj3)
+        alist.append(Object('one'))
+        alist.append(Object('two'))
+        alist.append(Object('three'))
         facade = Facade(System(Composite(alist)))
         self.assertEqual(None, facade.just_do_it())
 
 class TestSystem(unittest.TestCase):
     def test_do_that_and_do_this_after_creation_with_composite_instance(self):
-        obj1 = Object('one')
         alist = []
-        alist.append(obj1)
-        obj2 = Object('two')
-        alist.append(obj2)
-        obj3 = Object('three')
-        alist.append(obj3)
+        alist.append(Object('one'))
+        alist.append(Object('two'))
+        alist.append(Object('three'))
         system = System(Composite(alist))
         self.assertEqual(None, system.do_this())
         self.assertEqual(None, system.do_that())
 
 class TestComposite(unittest.TestCase):
     def test_that_and_this_after_creation_with_list(self):
-        obj1 = Object('one')
         alist = []
-        alist.append(obj1)
-        obj2 = Object('two')
-        alist.append(obj2)
-        obj3 = Object('three')
-        alist.append(obj3)
+        alist.append(Object('one'))
+        alist.append(Object('two'))
+        alist.append(Object('three'))
         composite = Composite(alist)
         self.assertEqual(None, composite.this())
         self.assertEqual(None, composite.that())
@@ -62,13 +53,10 @@ class TestObject(unittest.TestCase):
 
 class TestDoSomethingSimpleWithSystem(unittest.TestCase):
     def test_do_something_simple_with_system_returns_None_for_system_instance(self):
-        obj1 = Object('one')
         alist = []
-        alist.append(obj1)
-        obj2 = Object('two')
-        alist.append(obj2)
-        obj3 = Object('three')
-        alist.append(obj3)
+        alist.append(Object('one'))
+        alist.append(Object('two'))
+        alist.append(Object('three'))
         self.assertEqual(None, do_something_simple_with_system(System(Composite(alist))))
 
 class TestMain(unittest.TestCase):
