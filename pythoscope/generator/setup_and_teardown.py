@@ -1,9 +1,10 @@
 from pythoscope.compat import all, set, sorted
 from pythoscope.generator.code_string import CodeString, combine
 from pythoscope.generator.constructor import constructor_as_string, call_as_string_for
+from pythoscope.generator.setup_optimizer import optimize
 from pythoscope.serializer import BuiltinException, CompositeObject,\
     ImmutableObject, MapObject, UnknownObject, SequenceObject, SerializedObject
-from pythoscope.side_effect import BuiltinMethodWithPositionArgsSideEffect
+from pythoscope.side_effect import BuiltinMethodWithPositionArgsSideEffect, SideEffect
 from pythoscope.store import Call, FunctionCall, UserObject, MethodCall,\
     GeneratorObject, GeneratorObjectInvocation
 from pythoscope.util import counted, flatten, key_for_value
@@ -135,8 +136,8 @@ def side_effects_that_affect_objects(side_effects, objects):
 
 class Dependencies(object):
     def __init__(self, call):
-        self.objects = []
-        self.side_effects = set()
+        self.objects_usage_counts = []
+        self.all = []
 
     def _calculate(self, objects, relevant_side_effects):
         """
@@ -148,14 +149,16 @@ class Dependencies(object):
         a complete set of objects and side effects that have direct or indirect
         relationship to the call.
         """
+        all_objects = []
+        all_side_effects = set()
         def update(objects):
-            self.objects.extend(objects)
+            all_objects.extend(objects)
 
             # We have some objects, let's see how many side effects affect them.
             new_side_effects = set(side_effects_that_affect_objects(relevant_side_effects, objects))
-            previous_side_effects_count = len(self.side_effects)
-            self.side_effects.update(new_side_effects)
-            if len(self.side_effects) == previous_side_effects_count:
+            previous_side_effects_count = len(all_side_effects)
+            all_side_effects.update(new_side_effects)
+            if len(all_side_effects) == previous_side_effects_count:
                 return
 
             # Similarly, new side effects may yield some new objects, let's recur.
@@ -163,12 +166,36 @@ class Dependencies(object):
         # We start with objects required for the call itself.
         update(objects)
 
-    def fold(self):
-        return self # TODO
+        # Usage count is important for naming process, see
+        # remove_objects_unworthty_of_naming below.
+        self.objects_usage_counts = dict(counted(all_objects))
+
+        # Finally assemble the whole timeline of dependencies.
+        # Since data we have was gathered during real execution there is no way setup
+        # dependencies are cyclic, i.e. there is a strict order of object creation.
+        # We've chosen to sort objects by their creation timestamp.
+        self.all = sorted_by_timestamp(set(all_objects).union(all_side_effects))
+
+    def optimize(self):
+        """Shorten a chain of events, by replacing pairs with single events.
+
+        For example, a creation of an empty list and appending to it a number:
+
+            >>> x = []
+            >>> x.append(1)
+
+        can be shortened to a single creation:
+
+            >>> x = [1]
+
+        and that's exactly what this optimizer does.
+        """
+        optimize(self)
+        return self
 
     def remove_objects_unworthty_of_naming(self):
-        affected_objects = objects_affected_by_side_effects(self.side_effects)
-        for obj, usage_count in counted(self.objects):
+        affected_objects = objects_affected_by_side_effects(self.get_side_effects())
+        for obj, usage_count in self.objects_usage_counts.copy().iteritems():
             # ImmutableObjects don't need to be named, as their identity is
             # always unambiguous.
             if not isinstance(obj, ImmutableObject):
@@ -178,23 +205,40 @@ class Dependencies(object):
                 # Anything affected by side effects is also worth naming.
                 if obj in affected_objects:
                     continue
-            for i in range(usage_count):
-                self.objects.remove(obj)
+            self.remove_object(obj)
+        # We won't be needing this anymore.
+        del self.objects_usage_counts
         return self
 
-    def all(self):
-        return list(set(self.objects).union(self.side_effects))
+    def get_side_effects(self):
+        return filter(lambda x: isinstance(x, SideEffect), self.all)
 
-    def sorted(self):
-        """
-        Since data we have was gathered during real execution there is no way setup
-        dependencies are cyclic, i.e. there is a strict order of object creation.
-        We've chosen to sort objects by their creation timestamp.
-        """
-        return sorted_by_timestamp(self.all())
+    def get_objects(self):
+        return filter(lambda x: isinstance(x, SerializedObject), self.all)
 
-    def unique_objects(self):
-        return set(self.objects)
+    def remove_object(self, obj):
+        self.all.remove(obj)
+        del self.objects_usage_counts[obj]
+
+    def replace_pair_with_event(self, event1, event2, new_event):
+        """Replaces pair of events with a single event. The second event
+        must be a SideEffect.
+
+        Optimizer only works on values with names, which means we don't really
+        have to traverse the whole Project tree and replace all occurences
+        of an object. It is sufficient to replace it on the dependencies
+        timeline, which will be used as a base for naming objects and their
+        later usage.
+        """
+        assert not hasattr(self, 'objects_usage_counts')
+        if not isinstance(event2, SideEffect):
+            raise TypeError("Second argument to replace_pair_with_object has to be a SideEffect, was %r instead." % event2)
+        new_event.timestamp = event1.timestamp
+        self.all[self.all.index(event1)] = new_event
+        if isinstance(event1, SerializedObject):
+            if not isinstance(new_event, SerializedObject):
+                raise TypeError("Expected new_event to be of the same type as event1 in a call to replace_pair_with_object, got %r instead." % new_event)
+        self.all.remove(event2)
 
 class PreCallDependencies(Dependencies):
     """Dependencies for making a call.
@@ -291,9 +335,9 @@ def create_setup_for_dependencies(dependencies, names):
     """Returns a setup code string. Modifies names dictionary as a side effect.
     """
     already_assigned_names = names.copy()
-    assign_names_to_objects(dependencies.unique_objects(), names)
+    assign_names_to_objects(dependencies.get_objects(), names)
     full_setup = CodeString("")
-    for dependency in dependencies.sorted():
+    for dependency in dependencies.all:
         if isinstance(dependency, SerializedObject):
             name = names[dependency]
             setup = setup_for_named_object(dependency, name, already_assigned_names)
@@ -325,7 +369,7 @@ def assign_names_and_setup_for_multiple_calls(calls, names):
 
 # :: (Call, {SerializedObject : str}) -> CodeString
 def create_setup_for_input(call, names):
-    pre_dependencies = PreCallDependencies(call).fold().remove_objects_unworthty_of_naming()
+    pre_dependencies = PreCallDependencies(call).remove_objects_unworthty_of_naming().optimize()
     return create_setup_for_dependencies(pre_dependencies, names)
 
 # :: (Call, {SerializedObject : str}) -> CodeString|str
@@ -337,6 +381,6 @@ def create_setup_for_output(call, names):
     if call.output is not None and \
             can_be_constructed(call.output) and \
             call.output not in names.keys():
-        post_dependencies = PostCallDependencies(call).fold().remove_objects_unworthty_of_naming()
+        post_dependencies = PostCallDependencies(call).remove_objects_unworthty_of_naming().optimize()
         return create_setup_for_dependencies(post_dependencies, names)
     return ""

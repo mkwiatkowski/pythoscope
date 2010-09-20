@@ -5,8 +5,7 @@ from module import main
 
 class TestBefore(unittest.TestCase):
     def test_before_returns_list(self):
-        alist = []
-        alist.append(1)
+        alist = [1]
         alist.extend([3, 2])
         alist.insert(0, 4)
         alist.pop()
@@ -16,8 +15,7 @@ class TestBefore(unittest.TestCase):
 
 class TestAfter(unittest.TestCase):
     def test_after_returns_alist_for_alist_equal_list(self):
-        alist = []
-        alist.append(1)
+        alist = [1]
         alist.extend([3, 2])
         alist.insert(0, 4)
         alist.pop()

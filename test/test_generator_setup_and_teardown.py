@@ -53,7 +53,7 @@ class TestPreCallDependencies:
 
         put_on_timeline(obj1, obj2, obj3, obj4, obj5, se1, se2, se3, call)
 
-        assert_equal(PreCallDependencies(call).sorted(), [obj1, obj2, obj3, obj4, se2, se3])
+        assert_equal(PreCallDependencies(call).all, [obj1, obj2, obj3, obj4, se2, se3])
 
     def test_resolves_dependencies_contained_within_objects_referenced_or_affected_by_side_effects(self):
         output = create(UnknownObject)
@@ -67,13 +67,13 @@ class TestPreCallDependencies:
 
             put_on_timeline(obj, seq, se, output, call)
 
-            assert_equal(PreCallDependencies(call).sorted(), [obj, seq, se, output])
+            assert_equal(PreCallDependencies(call).all, [obj, seq, se, output])
 
         yield(test, [output, seq], []) # resolves objects affected by side effects
         yield(test, [output], [seq]) # resolves objects only referenced by side effects
 
 class TestAssignNamesAndSetup:
-    def test_generates_setup_for_list_with_append_and_extend(self):
+    def test_generates_setup_for_list_with_append_and_extend_optimizing_the_sequence(self):
         alist = create(SequenceObject)
         alist2 = create(SequenceObject)
         se = ListAppend(alist, create(ImmutableObject, obj=1))
@@ -84,7 +84,7 @@ class TestAssignNamesAndSetup:
 
         put_on_timeline(alist, alist2, se, se2, call)
 
-        assert_equal_strings("alist = []\nalist.append(1)\nalist.extend([])\n",
+        assert_equal_strings("alist = [1]\nalist.extend([])\n",
                              assign_names_and_setup(call, {}))
 
 class TestSetupForSideEffect:
