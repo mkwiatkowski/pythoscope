@@ -26,13 +26,16 @@ def top_caller(call):
         return call
     return top_caller(call.caller)
 
+# :: ([Event], int) -> [Event]
+def older_than(events, reference_timestamp):
+    return filter(lambda e: e.timestamp < reference_timestamp, events)
+
 # :: (Call, int) -> [Call]
 def subcalls_before_timestamp(call, reference_timestamp):
-    for c in call.subcalls:
-        if c.timestamp < reference_timestamp:
-            yield c
-            for sc in subcalls_before_timestamp(c, reference_timestamp):
-                yield sc
+    for c in older_than(call.subcalls, reference_timestamp):
+        yield c
+        for sc in subcalls_before_timestamp(c, reference_timestamp):
+            yield sc
 
 # :: Call -> [Call]
 def calls_before(call):
@@ -66,9 +69,13 @@ def calls_before(call):
     top = top_caller(call)
     return [top] + list(subcalls_before_timestamp(top, call.timestamp))
 
+# :: [Call] -> [SideEffect]
+def side_effects_of(calls):
+    return flatten(map(lambda c: c.side_effects, calls))
+
 # :: Call -> [SideEffect]
 def side_effects_before(call):
-    return flatten(map(lambda c: c.side_effects, calls_before(call)))
+    return older_than(side_effects_of(calls_before(call)), call.timestamp)
 
 # :: SerializedObject | Call | [SerializedObject] | [Call] -> [SerializedObject]
 def get_contained_objects(obj):

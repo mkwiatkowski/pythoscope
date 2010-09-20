@@ -77,6 +77,17 @@ class TestPreCallDependencies:
         yield(test, [output, seq], []) # resolves objects affected by side effects
         yield(test, [output], [seq]) # resolves objects only referenced by side effects
 
+    def test_ignores_side_effects_that_happened_inside_parent_call_but_after_the_call_were_interested_in(self):
+        obj = create(UnknownObject)
+        call = create(FunctionCall, args={}, output=obj)
+        se1 = SideEffect([obj], [])
+        se2 = SideEffect([obj], [])
+        create_parent_call_with_side_effects(call, [se1, se2])
+
+        put_on_timeline(obj, se1, call, se2)
+
+        assert_equal(PreCallDependenciesMock(call).all, [obj, se1])
+
 class TestAssignNamesAndSetup:
     def test_generates_setup_for_list_with_append_and_extend_optimizing_the_sequence(self):
         alist = create(SequenceObject)
