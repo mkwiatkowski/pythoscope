@@ -19,6 +19,11 @@ def create_parent_call_with_side_effects(call, side_effects):
     parent_call.add_subcall(call)
     map(parent_call.add_side_effect, side_effects)
 
+# We want to test only the logic in _calculate.
+class PreCallDependenciesMock(PreCallDependencies):
+    def _remove_objects_unworthty_of_naming(self, objects_usage_counts):
+        pass
+
 class TestPreCallDependencies:
     def test_resolves_dependencies_between_side_effects_and_contained_objects(self):
         # Relations between objects have been summarized below.
@@ -53,7 +58,7 @@ class TestPreCallDependencies:
 
         put_on_timeline(obj1, obj2, obj3, obj4, obj5, se1, se2, se3, call)
 
-        assert_equal(PreCallDependencies(call).all, [obj1, obj2, obj3, obj4, se2, se3])
+        assert_equal(PreCallDependenciesMock(call).all, [obj1, obj2, obj3, obj4, se2, se3])
 
     def test_resolves_dependencies_contained_within_objects_referenced_or_affected_by_side_effects(self):
         output = create(UnknownObject)
@@ -67,7 +72,7 @@ class TestPreCallDependencies:
 
             put_on_timeline(obj, seq, se, output, call)
 
-            assert_equal(PreCallDependencies(call).all, [obj, seq, se, output])
+            assert_equal(PreCallDependenciesMock(call).all, [obj, seq, se, output])
 
         yield(test, [output, seq], []) # resolves objects affected by side effects
         yield(test, [output], [seq]) # resolves objects only referenced by side effects

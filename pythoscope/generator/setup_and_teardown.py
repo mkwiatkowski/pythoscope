@@ -136,7 +136,6 @@ def side_effects_that_affect_objects(side_effects, objects):
 
 class Dependencies(object):
     def __init__(self, call):
-        self.objects_usage_counts = []
         self.all = []
 
     def _calculate(self, objects, relevant_side_effects):
@@ -166,36 +165,19 @@ class Dependencies(object):
         # We start with objects required for the call itself.
         update(objects)
 
-        # Usage count is important for naming process, see
-        # remove_objects_unworthty_of_naming below.
-        self.objects_usage_counts = dict(counted(all_objects))
-
         # Finally assemble the whole timeline of dependencies.
         # Since data we have was gathered during real execution there is no way setup
         # dependencies are cyclic, i.e. there is a strict order of object creation.
         # We've chosen to sort objects by their creation timestamp.
         self.all = sorted_by_timestamp(set(all_objects).union(all_side_effects))
 
-    def optimize(self):
-        """Shorten a chain of events, by replacing pairs with single events.
+        self._remove_objects_unworthty_of_naming(dict(counted(all_objects)))
 
-        For example, a creation of an empty list and appending to it a number:
-
-            >>> x = []
-            >>> x.append(1)
-
-        can be shortened to a single creation:
-
-            >>> x = [1]
-
-        and that's exactly what this optimizer does.
-        """
         optimize(self)
-        return self
 
-    def remove_objects_unworthty_of_naming(self):
+    def _remove_objects_unworthty_of_naming(self, objects_usage_counts):
         affected_objects = objects_affected_by_side_effects(self.get_side_effects())
-        for obj, usage_count in self.objects_usage_counts.copy().iteritems():
+        for obj, usage_count in objects_usage_counts.iteritems():
             # ImmutableObjects don't need to be named, as their identity is
             # always unambiguous.
             if not isinstance(obj, ImmutableObject):
@@ -205,20 +187,13 @@ class Dependencies(object):
                 # Anything affected by side effects is also worth naming.
                 if obj in affected_objects:
                     continue
-            self.remove_object(obj)
-        # We won't be needing this anymore.
-        del self.objects_usage_counts
-        return self
+            self.all.remove(obj)
 
     def get_side_effects(self):
         return filter(lambda x: isinstance(x, SideEffect), self.all)
 
     def get_objects(self):
         return filter(lambda x: isinstance(x, SerializedObject), self.all)
-
-    def remove_object(self, obj):
-        self.all.remove(obj)
-        del self.objects_usage_counts[obj]
 
     def replace_pair_with_event(self, event1, event2, new_event):
         """Replaces pair of events with a single event. The second event
@@ -230,7 +205,6 @@ class Dependencies(object):
         timeline, which will be used as a base for naming objects and their
         later usage.
         """
-        assert not hasattr(self, 'objects_usage_counts')
         if not isinstance(event2, SideEffect):
             raise TypeError("Second argument to replace_pair_with_object has to be a SideEffect, was %r instead." % event2)
         new_event.timestamp = event1.timestamp
@@ -369,7 +343,7 @@ def assign_names_and_setup_for_multiple_calls(calls, names):
 
 # :: (Call, {SerializedObject : str}) -> CodeString
 def create_setup_for_input(call, names):
-    pre_dependencies = PreCallDependencies(call).remove_objects_unworthty_of_naming().optimize()
+    pre_dependencies = PreCallDependencies(call)
     return create_setup_for_dependencies(pre_dependencies, names)
 
 # :: (Call, {SerializedObject : str}) -> CodeString|str
@@ -381,6 +355,6 @@ def create_setup_for_output(call, names):
     if call.output is not None and \
             can_be_constructed(call.output) and \
             call.output not in names.keys():
-        post_dependencies = PostCallDependencies(call).remove_objects_unworthty_of_naming().optimize()
+        post_dependencies = PostCallDependencies(call)
         return create_setup_for_dependencies(post_dependencies, names)
     return ""

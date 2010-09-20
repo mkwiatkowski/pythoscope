@@ -8,6 +8,19 @@ class NonSerializingSequenceObject(SequenceObject):
         self.contained_objects = contained_objects
 
 def optimize(dependencies):
+    """Shorten a chain of events, by replacing pairs with single events.
+
+    For example, a creation of an empty list and appending to it a number:
+
+        >>> x = []
+        >>> x.append(1)
+
+    can be shortened to a single creation:
+
+        >>> x = [1]
+
+    and that's exactly what this optimizer does.
+    """
     i = 0
     while i+1 < len(dependencies.all):
         e1 = dependencies.all[i]
