@@ -186,7 +186,7 @@ class BytecodeTracer(object):
            A call to a C function with given arguments is about to happen.
          * ('c_return', return_value)
            A C function returned with given value (it will always be the function
-           for the most recent 'c_call' event.
+           for the most recent 'c_call' event).
          * ('print', value)
          * ('print_to', (value, output))
            A print statement is about to be executed.
