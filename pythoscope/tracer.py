@@ -2,7 +2,7 @@ import inspect
 import sys
 import types
 
-from pythoscope.util import compact
+from pythoscope.util import compact, get_self_from_method
 
 from bytecode_tracer import BytecodeTracer, rewrite_function
 
@@ -264,15 +264,11 @@ class StandardTracer(object):
             return self.callback.function_called(name, input, code, frame)
 
     def record_c_call(self, func, pargs, kargs):
-        try:
-            # TODO Method wrappers in Python 2.3 and 2.4 never have __self__.
-            obj = func.__self__
+        obj = get_self_from_method(func)
+        if obj is not None:
             klass = type(obj)
             method_name = func.__name__
             self.callback.c_method_called(obj, klass, method_name, pargs)
-        # func.__self__ may raise AttributeError.
-        except AttributeError:
-            pass
 
 class Python23Tracer(StandardTracer):
     """Version of the tracer working around a subtle difference in exception

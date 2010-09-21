@@ -10,6 +10,7 @@ import types
 import warnings
 
 from pythoscope.compat import groupby, set, sorted
+from pythoscope.py_wrapper_object import get_wrapper_self
 
 
 def compact(lst):
@@ -276,6 +277,19 @@ except ImportError:
         # generator frame is garbage collected once the generator has ended.
         def _generator_has_ended(generator):
             return generator.gi_frame is None
+
+wrapper_type = [].__len__.__class__
+def is_method_wrapper(obj):
+    return isinstance(obj, wrapper_type)
+
+# :: object -> object | None
+def get_self_from_method(method):
+    # Since Python 2.5 even wrapper methods have __self__, so let's use that
+    # when we can. For earlier versions we have to go deeper.
+    if hasattr(method, '__self__'):
+        return method.__self__
+    elif is_method_wrapper(method):
+        return get_wrapper_self(method)
 
 def compile_without_warnings(stmt):
     """Compile single interactive statement with Python interpreter warnings
