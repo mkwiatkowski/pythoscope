@@ -648,10 +648,13 @@ class TestGenerators:
         expected_call_graph = noindent("""
             generator()
             first()
-                generator()
+                next()
+                    generator()
             second()
-                generator()
-                generator()
+                next()
+                    generator()
+                next()
+                    generator()
         """)
         assert_equal_strings(expected_call_graph,
             call_graph_as_string(execution.call_graph))

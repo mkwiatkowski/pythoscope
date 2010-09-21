@@ -640,6 +640,14 @@ class Call(Event):
             (class_name(self), self.definition.name, self.input, self.output,
              self.exception, self.side_effects)
 
+class CFunction(Definition):
+    pass
+
+class CallToC(Call):
+    def __init__(self, name, side_effect=None):
+        super(CallToC, self).__init__(CFunction(name), {})
+        self.side_effect = side_effect
+
 class FunctionCall(Call):
     pass
 

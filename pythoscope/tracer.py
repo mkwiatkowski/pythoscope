@@ -2,7 +2,6 @@ import inspect
 import sys
 import types
 
-from pythoscope.side_effect import recognize_side_effect, MissingSideEffectType
 from pythoscope.util import compact
 
 from bytecode_tracer import BytecodeTracer, rewrite_function
@@ -179,10 +178,9 @@ class StandardTracer(object):
 
     def handle_bytecode_tracer_event(self, event, args):
         if event == 'c_call':
-            self.record_side_effect(*args)
-            pass # TODO record call
+            self.record_c_call(*args)
         elif event == 'c_return':
-            pass # TODO pop call
+            self.callback.c_returned(args)
         elif event == 'print':
             pass # TODO
         elif event == 'print_to':
@@ -265,15 +263,15 @@ class StandardTracer(object):
             input = input_from_argvalues(*inspect.getargvalues(frame))
             return self.callback.function_called(name, input, code, frame)
 
-    def record_side_effect(self, func, pargs, kargs):
+    def record_c_call(self, func, pargs, kargs):
         try:
+            # TODO Method wrappers in Python 2.3 and 2.4 never have __self__.
             obj = func.__self__
             klass = type(obj)
-            func_name = func.__name__
-            se = recognize_side_effect(klass, func_name)
-            self.callback.side_effect(se, obj, *pargs)
-        # func.__self__ may raise AttributeError, while recognize_side_effect may raise MissingSideEffectType.
-        except (AttributeError, MissingSideEffectType):
+            method_name = func.__name__
+            self.callback.c_method_called(obj, klass, method_name, pargs)
+        # func.__self__ may raise AttributeError.
+        except AttributeError:
             pass
 
 class Python23Tracer(StandardTracer):
@@ -332,6 +330,14 @@ class ICallback(object):
         """
         raise NotImplementedError("Method function_called() not defined.")
 
+    # :: (object, type, str, tuple) -> None
+    def c_method_called(self, obj, klass, method_name, pargs):
+        """Reported when a call to method implemented in C occurs.
+
+        Return value is ignored.
+        """
+        raise NotImplementedError("Method c_called() not defined.")
+
     # :: object -> None
     def returned(self, output):
         """Reported when function or method returns.
@@ -339,6 +345,14 @@ class ICallback(object):
         Return value is ignored.
         """
         raise NotImplementedError("Method returned() not defined.")
+
+    # :: object -> None
+    def c_returned(self, output):
+        """Reported when a C function or method returns.
+
+        Return value is ignored.
+        """
+        raise NotImplementedError("Method c_returned() not defined.")
 
     # :: (exception|str, traceback) -> None
     def raised(self, exception, traceback):

@@ -48,3 +48,14 @@ class TestMutation:
         call = inspect_returning_single_call(fun)
         se = assert_one_element_and_return(call.side_effects)
         assert_builtin_method_side_effects(se, ListPop, [1, 2, 3], 1)
+
+    def test_handles_list_pop_without_arguments_on_empty_list(self):
+        def fun():
+            def foo(x):
+                try:
+                    x.pop()
+                except IndexError:
+                    pass
+            foo([])
+        call = inspect_returning_single_call(fun)
+        assert_equal([], call.side_effects)

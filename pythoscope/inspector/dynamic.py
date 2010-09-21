@@ -1,6 +1,8 @@
 import os
 import sys
 
+from pythoscope.side_effect import recognize_side_effect, MissingSideEffectType
+from pythoscope.store import CallToC
 from pythoscope.tracer import ICallback, Tracer
 
 
@@ -45,6 +47,10 @@ class CallStack(object):
         while self.stack:
             self.returned(value)
 
+    def last_call(self):
+        if self.stack:
+            return self.stack[-1]
+
 class Inspector(ICallback):
     """Controller of the dynamic inspection process. It receives information
     from the tracer and propagates it to Execution and CallStack objects.
@@ -74,14 +80,27 @@ class Inspector(ICallback):
         call = self.execution.create_function_call(name, args, code, frame)
         return self.called(call)
 
+    def c_method_called(self, obj, klass, method_name, pargs):
+        try:
+            se_type = recognize_side_effect(klass, method_name)
+            se = self.execution.create_side_effect(se_type, obj, *pargs)
+            call = CallToC(method_name, se)
+        except MissingSideEffectType:
+            call = CallToC(method_name)
+        self.call_stack.called(call)
+
     def returned(self, output):
         self.call_stack.returned(self.execution.serialize(output))
 
+    def c_returned(self, output):
+        last_call = self.call_stack.last_call()
+        if isinstance(last_call, CallToC):
+            self.call_stack.returned(self.execution.serialize(output))
+            if last_call.side_effect:
+                self.call_stack.side_effect(last_call.side_effect)
+
     def raised(self, exception, traceback):
         self.call_stack.raised(self.execution.serialize(exception), traceback)
-
-    def side_effect(self, klass, *args):
-        self.call_stack.side_effect(self.execution.create_side_effect(klass, *args))
 
     def called(self, call):
         if call:
