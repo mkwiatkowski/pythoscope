@@ -107,12 +107,18 @@ class PathImporter(imputil.Importer):
         # not found
         return None
 
-import_manager = imputil.ImportManager()
+class ImportManager(imputil.ImportManager):
+    def _import_hook(self, fqname, globals=None, locals=None, fromlist=None, level=-1):
+        # TODO: support level argument added in Python 2.5
+        return imputil.ImportManager._import_hook(self, fqname, globals, locals, fromlist)
+
+import_manager = ImportManager()
 
 def install(callback):
     "Install callback as a code-rewriting function for each imported module."
     import_manager.install()
     sys.path.insert(0, PathImporter(sys.path, callback))
+    sys.path.insert(0, imputil.BuiltinImporter())
 
 def uninstall():
     import_manager.uninstall()

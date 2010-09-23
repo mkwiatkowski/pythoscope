@@ -76,3 +76,4 @@ License
 
 All Pythoscope source code is licensed under an MIT license (see LICENSE file).
 All files under lib2to3/ are licensed under PSF license.
+File named imputil.py under bytecode_tracer/ is also licensed under PSF license.

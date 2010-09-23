@@ -479,12 +479,14 @@ class TestRewriteFunction:
 class TestImportSupportWithOtherModules(TestBytecodeTracer):
     def test_support_with_pickle(self):
         self.btracer.setup()
-        self.btracer.teardown()
         # This can raise any number of exceptions.
         #
-        # Under Python 2.3 with imputil it will raise
+        # Before I've copied imputil.py version from Python 2.6 sources over,
+        # under Python 2.3 it would raise:
         #   PicklingError: Can't pickle <class 'pythoscope.store.CodeTree'>: attribute lookup pythoscope.store.CodeTree failed
         #
-        # Under Python 2.6 with imputil it will raise
+        # Before I added support for level argument of the __import__ hook,
+        # under Python 2.6 it would raise:
         #   TypeError: _import_hook() takes at most 5 arguments (6 given)
         cPickle.dumps(CodeTree(None), cPickle.HIGHEST_PROTOCOL)
+        self.btracer.teardown()
