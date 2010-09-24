@@ -271,6 +271,7 @@ class TestBytecodeTracerWithExceptions(TestBytecodeTracer):
             chr(90)
         self.trace_function(fun)
         self.assert_trace(('c_call', (chr, [256], {})),
+                          ('c_return', None),
                           ('c_call', (chr, [90], {})),
                           ('c_return', 'Z'))
 
@@ -283,6 +284,7 @@ class TestBytecodeTracerWithExceptions(TestBytecodeTracer):
             chr(65)
         self.trace_function(fun)
         self.assert_trace(('c_call', (abs, [], {})),
+                          ('c_return', None),
                           ('c_call', (chr, [65], {})),
                           ('c_return', 'A'))
 
@@ -295,6 +297,7 @@ class TestBytecodeTracerWithExceptions(TestBytecodeTracer):
             chr(97)
         self.trace_function(fun)
         self.assert_trace(('c_call', (abs, ["a"], {})),
+                          ('c_return', None),
                           ('c_call', (chr, [97], {})),
                           ('c_return', 'a'))
 
@@ -307,6 +310,7 @@ class TestBytecodeTracerWithExceptions(TestBytecodeTracer):
             chr(66)
         self.trace_function(fun)
         self.assert_trace(('c_call', (map, [1, [2, 3]], {})),
+                          ('c_return', None),
                           ('c_call', (chr, [66], {})),
                           ('c_return', 'B'))
 
@@ -322,6 +326,7 @@ class TestBytecodeTracerWithExceptions(TestBytecodeTracer):
             chr(67)
         self.trace_function(fun)
         self.assert_trace(('c_call', (map, [bad, [0, 1, 2]], {})),
+                          ('c_return', None),
                           ('c_call', (chr, [67], {})),
                           ('c_return', 'C'))
 

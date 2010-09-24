@@ -4,16 +4,13 @@ import types
 
 from pythoscope.util import compact, get_self_from_method
 
-from bytecode_tracer import BytecodeTracer, rewrite_function
+from bytecode_tracer import BytecodeTracer, rewrite_function,\
+    has_been_rewritten, rewrite_lnotab
 
 
 # Pythons <= 2.4 surround `exec`uted code with a block named "?",
 # while Pythons > 2.4 use "<module>".
 IGNORED_NAMES = ["?", "<module>", "<genexpr>"]
-
-# imputil library is used by the bytecode tracer itself. Tracing it causes
-# problems, so we simply ignore all execution inside that module.
-IGNORED_MODULES = ["imputil.py"]
 
 def find_variable(frame, varname):
     """Find variable named varname in the scope of a frame.
@@ -109,6 +106,7 @@ def input_from_argvalues(args, varargs, varkw, locals):
 
 def make_callable(code):
     if isinstance(code, str):
+        code = rewrite_lnotab(compile(code, "<string>", "exec"))
         def function():
             exec code in {}
         return function
@@ -169,12 +167,24 @@ class StandardTracer(object):
         self.sys_modules = None
 
     def tracer(self, frame, event, arg):
+        # Bytecode tracing is unreliable without the rewrite step, so we have
+        # to ignore all interactions inside that code. That usually concerns
+        # modules that were imported before the tracer started.
+        if not has_been_rewritten(frame.f_code):
+            return
         bytecode_events = list(self.btracer.trace(frame, event))
         if bytecode_events:
-            for event, args in bytecode_events:
-                self.handle_bytecode_tracer_event(event, args)
-        else:
-            return self.handle_standard_tracer_event(frame, event, arg)
+            for ev, args in bytecode_events:
+                # If an exception originated in C code it will only get
+                # reported once - there is no additional 'exception' event
+                # for the C code, only event in Python code. To regain
+                # consistency with Python exceptions reporting we have to
+                # effectively inject an exception event.
+                if ev == 'c_return' and event == 'exception':
+                    self.handle_standard_tracer_event(frame, event, arg)
+                self.handle_bytecode_tracer_event(ev, args)
+        st = self.handle_standard_tracer_event(frame, event, arg)
+        return st
 
     def handle_bytecode_tracer_event(self, event, args):
         if event == 'c_call':
@@ -244,9 +254,6 @@ class StandardTracer(object):
     def is_ignored_code(self, code):
         if code.co_name in IGNORED_NAMES:
             return True
-        for modname in IGNORED_MODULES:
-            if code.co_filename.endswith(modname):
-                return True
         if self.top_level_function is not None \
                 and code is self.top_level_function.func_code:
             return True
@@ -264,11 +271,13 @@ class StandardTracer(object):
             return self.callback.function_called(name, input, code, frame)
 
     def record_c_call(self, func, pargs, kargs):
+        func_name = func.__name__
         obj = get_self_from_method(func)
         if obj is not None:
             klass = type(obj)
-            method_name = func.__name__
-            self.callback.c_method_called(obj, klass, method_name, pargs)
+            self.callback.c_method_called(obj, klass, func_name, pargs)
+        else:
+            self.callback.c_function_called(func_name, pargs)
 
 class Python23Tracer(StandardTracer):
     """Version of the tracer working around a subtle difference in exception
@@ -327,12 +336,20 @@ class ICallback(object):
         raise NotImplementedError("Method function_called() not defined.")
 
     # :: (object, type, str, tuple) -> None
-    def c_method_called(self, obj, klass, method_name, pargs):
+    def c_method_called(self, obj, klass, name, pargs):
         """Reported when a call to method implemented in C occurs.
 
         Return value is ignored.
         """
-        raise NotImplementedError("Method c_called() not defined.")
+        raise NotImplementedError("Method c_method_called() not defined.")
+
+    # :: (str, tuple) -> None
+    def c_function_called(self, name, pargs):
+        """Reported when a call to function implemented in C occurs.
+
+        Return value is ignored.
+        """
+        raise NotImplementedError("Method c_function_called() not defined.")
 
     # :: object -> None
     def returned(self, output):
@@ -357,11 +374,3 @@ class ICallback(object):
         Return value is ignored.
         """
         raise NotImplementedError("Method raised() not defined.")
-
-    # :: (str, object, *object) -> None
-    def side_effect(self, klass, obj, *args):
-        """Reported when a side effect occured.
-
-        Return value is ignored.
-        """
-        raise NotImplementedError("Method side_effect() not defined.")

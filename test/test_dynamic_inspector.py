@@ -241,8 +241,9 @@ def function_with_nested_calls():
     top()
 
 expected_call_graph_for_function_with_nested_calls = """top()
-    __init__()
-        _setup()
+    Class()
+        __init__()
+            _setup()
     first()
         second()
             first()
@@ -833,6 +834,40 @@ class TestRaisedExceptions(IgnoredWarnings):
 
         assert_call_with_string_exception({}, "this is not a drill", call)
 
+    def test_propagates_exceptions_raised_by_c_functions(self):
+        def fun():
+            def adder(x):
+                return x+1
+            def raising_io_error():
+                file('nosuchfilehere')
+            try:
+                raising_io_error()
+            except IOError:
+                pass
+            adder(3)
+
+        callables = inspect_returning_callables(fun)
+        assert_length(callables, 2)
+        raising_io_error = find_first_with_name("raising_io_error", callables)
+        adder = find_first_with_name("adder", callables)
+
+        assert_length(raising_io_error.calls, 1)
+        assert_call_with_exception({}, 'IOError', raising_io_error.calls[0])
+
+        assert_length(adder.calls, 1)
+        assert_call({'x': 3}, 4, adder.calls[0])
+
+        file_call = assert_one_element_and_return(raising_io_error.calls[0].subcalls)
+        assert_call_with_exception({}, 'IOError', file_call)
+
+    def test_ignores_importer_machinery(self):
+        def fun():
+            def foo():
+                import pythoscope.store
+            foo()
+        call = inspect_returning_single_call(fun)
+        assert_call({}, None, call)
+
 class TestExceptionsPassedAsValues:
     def test_builtin_exceptions_are_serialized_as_builin_exception_type_with_args_attribute(self):
         exc = serialize_value(AttributeError("foo", "bar"))
@@ -889,7 +924,6 @@ class TestTraceExec:
     "trace_exec"
     def test_returns_function_objects_with_all_calls_recorded(self):
         function = inspect_returning_single_callable("f = lambda x: x + 1; f(5); f(42)")
-
         assert_call({'x': 5},  6,  function.calls[0])
         assert_call({'x': 42}, 43, function.calls[1])
 

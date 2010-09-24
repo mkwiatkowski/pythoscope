@@ -2,7 +2,7 @@ import os
 import sys
 
 from pythoscope.side_effect import recognize_side_effect, MissingSideEffectType
-from pythoscope.store import CallToC
+from pythoscope.store import CallToC, UnknownCall
 from pythoscope.tracer import ICallback, Tracer
 
 
@@ -31,25 +31,37 @@ class CallStack(object):
             if handled_traceback is self.last_traceback:
                 caller.clear_exception()
 
+            # Register a side effect when applicable.
+            if isinstance(caller, CallToC) and caller.side_effect:
+                if not caller.raised_exception():
+                    self._side_effect(caller.side_effect)
+                caller.clear_side_effect()
+
     def raised(self, exception, traceback):
         if self.stack:
             caller = self.stack[-1]
             caller.set_exception(exception)
             self.last_traceback = traceback
 
-    def side_effect(self, side_effect):
-        if self.stack:
-            self.stack[-1].add_side_effect(side_effect)
-        else:
-            self.top_level_side_effects.append(side_effect)
-
     def unwind(self, value):
         while self.stack:
             self.returned(value)
 
-    def last_call(self):
+    def assert_last_call_was_c_call(self):
+        assert isinstance(self._last_call(), CallToC)
+
+    def assert_last_call_was_python_call(self):
+        assert not isinstance(self._last_call(), CallToC)
+
+    def _last_call(self):
         if self.stack:
             return self.stack[-1]
+
+    def _side_effect(self, side_effect):
+        if self.stack:
+            self.stack[-1].add_side_effect(side_effect)
+        else:
+            self.top_level_side_effects.append(side_effect)
 
 class Inspector(ICallback):
     """Controller of the dynamic inspection process. It receives information
@@ -80,24 +92,25 @@ class Inspector(ICallback):
         call = self.execution.create_function_call(name, args, code, frame)
         return self.called(call)
 
-    def c_method_called(self, obj, klass, method_name, pargs):
+    def c_method_called(self, obj, klass, name, pargs):
         try:
-            se_type = recognize_side_effect(klass, method_name)
+            se_type = recognize_side_effect(klass, name)
             se = self.execution.create_side_effect(se_type, obj, *pargs)
-            call = CallToC(method_name, se)
+            call = CallToC(name, se)
         except MissingSideEffectType:
-            call = CallToC(method_name)
+            call = CallToC(name)
         self.call_stack.called(call)
 
+    def c_function_called(self, name, pargs):
+        self.call_stack.called(CallToC(name))
+
     def returned(self, output):
+        self.call_stack.assert_last_call_was_python_call()
         self.call_stack.returned(self.execution.serialize(output))
 
     def c_returned(self, output):
-        last_call = self.call_stack.last_call()
-        if isinstance(last_call, CallToC):
-            self.call_stack.returned(self.execution.serialize(output))
-            if last_call.side_effect:
-                self.call_stack.side_effect(last_call.side_effect)
+        self.call_stack.assert_last_call_was_c_call()
+        self.call_stack.returned(self.execution.serialize(output))
 
     def raised(self, exception, traceback):
         self.call_stack.raised(self.execution.serialize(exception), traceback)
@@ -105,7 +118,9 @@ class Inspector(ICallback):
     def called(self, call):
         if call:
             self.call_stack.called(call)
-            return True
+        else:
+            self.call_stack.called(UnknownCall())
+        return True
 
 def inspect_point_of_entry(point_of_entry):
     projects_root = point_of_entry.project.path

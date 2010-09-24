@@ -240,6 +240,7 @@ class BytecodeTracer(object):
         # are reported in succession. Exceptions raised from C functions don't
         # generate the 'return' event, so we have to pop from the stack right away.
         elif event == 'exception' and self.call_stack[-1]:
+            yield 'c_return', None
             self.call_stack.pop()
         # Python functions always generate a 'return' event, even when an exception
         # has been raised, so let's just check for that.

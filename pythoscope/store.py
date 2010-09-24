@@ -648,6 +648,13 @@ class CallToC(Call):
         super(CallToC, self).__init__(CFunction(name), {})
         self.side_effect = side_effect
 
+    def clear_side_effect(self):
+        self.side_effect = None
+
+class UnknownCall(Call):
+    def __init__(self):
+        super(UnknownCall, self).__init__(Function('<unknown>'), {})
+
 class FunctionCall(Call):
     pass
 
