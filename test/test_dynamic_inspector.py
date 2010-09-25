@@ -860,6 +860,35 @@ class TestRaisedExceptions(IgnoredWarnings):
         file_call = assert_one_element_and_return(raising_io_error.calls[0].subcalls)
         assert_call_with_exception({}, 'IOError', file_call)
 
+    def test_differentiates_between_exceptions_from_C_caught_on_the_same_level_and_level_above(self):
+        def fun1():
+            def bar():
+                pass
+            def foo():
+                def raising_io_error():
+                    file('nosuchfilehere')
+                try:
+                    raising_io_error()
+                except IOError:
+                    pass
+                bar()
+            foo()
+        graph1 = call_graph_as_string(inspect_returning_execution(fun1).call_graph)
+        def fun2():
+            def bar():
+                pass
+            def foo():
+                def raising_io_error():
+                    try:
+                        file('nosuchfilehere')
+                    except IOError:
+                        pass
+                raising_io_error()
+                bar()
+            foo()
+        graph2 = call_graph_as_string(inspect_returning_execution(fun2).call_graph)
+        assert_equal_strings(graph1, graph2)
+
     def test_ignores_importer_machinery(self):
         def fun():
             def foo():

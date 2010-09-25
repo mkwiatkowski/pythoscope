@@ -1,6 +1,7 @@
 import opcode
 import os
 import re
+import sys
 
 from types import CodeType, MethodType
 
@@ -147,7 +148,7 @@ def is_c_func(func):
     return not hasattr(func, 'func_code')
 
 
-class BytecodeTracer(object):
+class StandardBytecodeTracer(object):
     """A tracer that goes over each bytecode and reports events that couldn't
     be traced by other means.
 
@@ -236,9 +237,11 @@ class BytecodeTracer(object):
                 yield 'print_to', (stack[-2], stack[-1])
         elif event == 'call':
             self.call_stack.append(False)
-        # When an exception happens in Python code, 'exception' and 'return' events
-        # are reported in succession. Exceptions raised from C functions don't
-        # generate the 'return' event, so we have to pop from the stack right away.
+        # When an exception happens in Python >= 2.4 code, 'exception' and
+        # 'return' events are reported in succession. Exceptions raised from
+        # C functions don't generate the 'return' event, so we have to pop
+        # from the stack right away and simulate the 'c_return' event
+        # ourselves.
         elif event == 'exception' and self.call_stack[-1]:
             yield 'c_return', None
             self.call_stack.pop()
@@ -246,6 +249,38 @@ class BytecodeTracer(object):
         # has been raised, so let's just check for that.
         elif event == 'return':
             self.call_stack.pop()
+
+class Python23BytecodeTracer(StandardBytecodeTracer):
+    """Version of the tracer working around a subtle difference in exception
+    handling of Python 2.3.
+
+    In Python 2.4 and higher, when a function (or method) exits with
+    an exception, interpreter reports two events to a trace function:
+    first 'exception' and then 'return' right after that.
+
+    In Python 2.3 the second event isn't reported, i.e. only 'exception'
+    events are passed to a trace function. For the sake of consistency this
+    version of the tracer will act just as the 'return' event would happen
+    before each consecutive exception reported.
+    """
+    def __init__(self, *args):
+        super(Python23BytecodeTracer, self).__init__(*args)
+        self.propagating_exception = False
+
+    def trace(self, frame, event):
+        if event == 'exception':
+            if self.propagating_exception:
+                self.call_stack.pop()
+            else:
+                self.propagating_exception = True
+        else:
+            self.propagating_exception = False
+        return super(Python23BytecodeTracer, self).trace(frame, event)
+
+if sys.version_info < (2, 4):
+    BytecodeTracer = Python23BytecodeTracer
+else:
+    BytecodeTracer = StandardBytecodeTracer
 
 def rewrite_lnotab(code):
     """Replace a code object's line number information to claim that every

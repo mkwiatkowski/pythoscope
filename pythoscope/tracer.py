@@ -175,16 +175,14 @@ class StandardTracer(object):
         bytecode_events = list(self.btracer.trace(frame, event))
         if bytecode_events:
             for ev, args in bytecode_events:
-                # If an exception originated in C code it will only get
-                # reported once - there is no additional 'exception' event
-                # for the C code, only event in Python code. To regain
-                # consistency with Python exceptions reporting we have to
-                # effectively inject an exception event.
+                # Exceptions originating in C code are reported only after
+                # execution goes back to the Python level. To regain
+                # consistency with other exception events, we simulate
+                # an exception raised inside C code just before its return.
                 if ev == 'c_return' and event == 'exception':
                     self.handle_standard_tracer_event(frame, event, arg)
                 self.handle_bytecode_tracer_event(ev, args)
-        st = self.handle_standard_tracer_event(frame, event, arg)
-        return st
+        return self.handle_standard_tracer_event(frame, event, arg)
 
     def handle_bytecode_tracer_event(self, event, args):
         if event == 'c_call':
@@ -296,15 +294,19 @@ class Python23Tracer(StandardTracer):
         super(Python23Tracer, self).__init__(*args)
         self.propagating_exception = False
 
-    def tracer(self, frame, event, arg):
+    def handle_standard_tracer_event(self, frame, event, arg):
+        retval = super(Python23Tracer, self).handle_standard_tracer_event(frame, event, arg)
         if event == 'exception':
             if self.propagating_exception:
-                self.callback.returned(None)
+                # Don't recur or the propagating_exception flag will be erased
+                # and we don't want that.
+                # Invoking the method in the superclass instead.
+                super(Python23Tracer, self).handle_standard_tracer_event(frame, 'return', None)
             else:
                 self.propagating_exception = True
         elif event in ['call', 'return']:
             self.propagating_exception = False
-        return super(Python23Tracer, self).tracer(frame, event, arg)
+        return retval
 
 if sys.version_info < (2, 4):
     Tracer = Python23Tracer
