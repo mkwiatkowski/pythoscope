@@ -6,6 +6,7 @@ from pythoscope.util import last_exception_as_string, last_traceback
 from assertions import *
 
 __all__ = ["inspect_returning_callables", "inspect_returning_execution",
+    "inspect_returning_callables_and_execution",
     "inspect_returning_single_callable", "inspect_returning_single_call"]
 
 
@@ -71,7 +72,7 @@ class ProjectMock(Project):
         else:
             return type(name)
 
-def inspect_returning_callables_and_execution(fun, ignored_functions):
+def inspect_returning_callables_and_execution(fun, ignored_functions=None):
     project = ProjectMock(ignored_functions or [])
     execution = Execution(project=project)
 

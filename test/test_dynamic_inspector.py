@@ -29,6 +29,10 @@ def assert_call(expected_input, expected_output, call):
     assert not call.raised_exception()
     assert_serialized(expected_output, call.output)
 
+def assert_single_call(expected_input, expected_output, callable):
+    assert_length(callable.calls, 1)
+    assert_call(expected_input, expected_output, callable.calls[0])
+
 def assert_call_with_exception(expected_input, expected_exception_name, call):
     assert_call_arguments(expected_input, call.input)
     assert call.raised_exception()
@@ -880,6 +884,49 @@ class TestRaisedExceptions(IgnoredWarnings):
 
         file_call = assert_one_element_and_return(raising_io_error.calls[0].subcalls)
         assert_call_with_exception({}, 'IOError', file_call)
+
+    def test_handles_exceptions_raised_in_python_code_passed_to_c_code(self):
+        def fun():
+            def rescue(x):
+                return x - 1
+            def after(x):
+                return x + 1
+            def bad(x):
+                if x > 0:
+                    raise ValueError
+            def trymap():
+                try:
+                    map(bad, [0, 1, 2])
+                except ValueError:
+                    rescue(1)
+                after(2)
+            trymap()
+
+        expected_call_graph = noindent("""
+            trymap()
+                map()
+                    bad()
+                    bad()
+                rescue()
+                after()
+        """)
+
+        callables, execution = inspect_returning_callables_and_execution(fun)
+        assert_equal_strings(expected_call_graph,
+            call_graph_as_string(execution.call_graph))
+
+        assert_length(callables, 4)
+        rescue = find_first_with_name("rescue", callables)
+        after = find_first_with_name("after", callables)
+        trymap = find_first_with_name("trymap", callables)
+        bad = find_first_with_name("bad", callables)
+
+        assert_single_call({'x': 1}, 0, rescue)
+        assert_single_call({'x': 2}, 3, after)
+        assert_single_call({}, None, trymap)
+        assert_length(bad.calls, 2)
+        assert_call({'x': 0}, None, bad.calls[0])
+        assert_call_with_exception({'x': 1}, 'ValueError', bad.calls[1])
 
     def test_differentiates_between_exceptions_from_C_caught_on_the_same_level_and_level_above(self):
         def fun1():
