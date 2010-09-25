@@ -7,7 +7,7 @@ from pythoscope.inspector.static import inspect_code
 from pythoscope.inspector.dynamic import inspect_code_in_context,\
     inspect_point_of_entry
 from pythoscope.serializer import BuiltinException, ImmutableObject,\
-    SequenceObject
+    SequenceObject, MapObject
 from pythoscope.store import Class, Function, FunctionCall, GeneratorObject,\
     GeneratorObjectInvocation, Method, UserObject
 from pythoscope.compat import all
@@ -704,6 +704,27 @@ class TestObjectsIdentityPreservation:
         assert_instance(producer_call.output, SequenceObject)
         assert_instance(consumer_call.input['lst'], SequenceObject)
         assert producer_call.output is consumer_call.input['lst']
+
+    def test_objects_contained_in_a_sequence_objects_should_always_be_older_than_the_whole_object(self):
+        def fun():
+            def make():
+                return [1, 2]
+            make()
+        call = inspect_returning_single_call(fun)
+        assert_instance(call.output, SequenceObject)
+        for obj in call.output.contained_objects:
+            assert obj.timestamp < call.output.timestamp
+
+    def test_objects_contained_in_a_map_objects_should_always_be_older_than_the_whole_object(self):
+        def fun():
+            def make():
+                return {1: 2, 3: 4}
+            make()
+        call = inspect_returning_single_call(fun)
+        assert_instance(call.output, MapObject)
+        for keyobj, valobj in call.output.mapping:
+            assert keyobj.timestamp < call.output.timestamp
+            assert valobj.timestamp < call.output.timestamp
 
     def test_handles_passing_user_objects_around(self):
         def fun():

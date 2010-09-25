@@ -238,9 +238,11 @@ class SequenceObject(CompositeObject):
     }
 
     def __init__(self, obj, serialize):
-        CompositeObject.__init__(self, obj)
-
+        # Serialize the parts first and only after that call super, so that
+        # the parts get a lower timestamp than the whole object.
         self.contained_objects = map(serialize, obj)
+
+        CompositeObject.__init__(self, obj)
 
         # Arrays constructor needs to include a typecode.
         if isinstance(obj, array.array):
@@ -261,9 +263,12 @@ class MapObject(CompositeObject):
     """A mutable object that contains unordered mapping of key/value pairs.
     """
     def __init__(self, obj, serialize):
+        # Serialize the parts first and only after that call super, so that
+        # the parts get a lower timestamp than the whole object.
+        self.mapping = [(serialize(k), serialize(v)) for k,v in obj.items()]
+
         CompositeObject.__init__(self, obj)
 
-        self.mapping = [(serialize(k), serialize(v)) for k,v in obj.items()]
         self.constructor_format = "{%s}"
         self.imports = set()
 
