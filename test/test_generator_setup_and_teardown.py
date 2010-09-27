@@ -21,7 +21,7 @@ def create_parent_call_with_side_effects(call, side_effects):
 
 # We want to test only the logic in _calculate.
 class PreCallDependenciesMock(PreCallDependencies):
-    def _remove_objects_unworthty_of_naming(self, objects_usage_counts):
+    def _remove_objects_unworthy_of_naming(self, objects_usage_counts):
         pass
 
 class TestPreCallDependencies:

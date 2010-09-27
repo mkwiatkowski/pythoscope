@@ -178,11 +178,11 @@ class Dependencies(object):
         # We've chosen to sort objects by their creation timestamp.
         self.all = sorted_by_timestamp(set(all_objects).union(all_side_effects))
 
-        self._remove_objects_unworthty_of_naming(dict(counted(all_objects)))
+        self._remove_objects_unworthy_of_naming(dict(counted(all_objects)))
 
         optimize(self)
 
-    def _remove_objects_unworthty_of_naming(self, objects_usage_counts):
+    def _remove_objects_unworthy_of_naming(self, objects_usage_counts):
         affected_objects = objects_affected_by_side_effects(self.get_side_effects())
         for obj, usage_count in objects_usage_counts.iteritems():
             # ImmutableObjects don't need to be named, as their identity is
@@ -228,11 +228,11 @@ class PreCallDependencies(Dependencies):
         super(PreCallDependencies, self).__init__(call)
         self._calculate(get_contained_objects(call), side_effects_before(call))
 
-class PostCallDependencies(Dependencies):
+class CallOutputDependencies(Dependencies):
     """Dependencies regarding call's output value.
     """
     def __init__(self, call):
-        super(PostCallDependencies, self).__init__(call)
+        super(CallOutputDependencies, self).__init__(call)
         self._calculate(get_those_and_contained_objects([call.output]), call.side_effects)
 
 # :: SerializedObject -> str
@@ -362,6 +362,6 @@ def create_setup_for_output(call, names):
     if call.output is not None and \
             can_be_constructed(call.output) and \
             call.output not in names.keys():
-        post_dependencies = PostCallDependencies(call)
+        post_dependencies = CallOutputDependencies(call)
         return create_setup_for_dependencies(post_dependencies, names)
     return ""
