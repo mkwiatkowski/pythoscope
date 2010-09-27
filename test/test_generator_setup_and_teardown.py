@@ -103,6 +103,12 @@ class TestAssignNamesAndSetup:
         assert_equal_strings("alist = [1]\nalist.extend([])\n",
                              assign_names_and_setup(call, {}))
 
+    def test_will_recognize_and_name_objects_that_are_both_input_and_output_of_a_function(self):
+        alist = create(SequenceObject)
+        call = create(FunctionCall, args={'x': alist}, output=alist)
+        put_on_timeline(alist, call)
+        assert_equal_strings("alist = []\n", assign_names_and_setup(call, {}))
+
 class TestSetupForSideEffect:
     def test_generates_setup_for_list_append(self):
         alist = create(SequenceObject)

@@ -228,11 +228,11 @@ class PreCallDependencies(Dependencies):
         super(PreCallDependencies, self).__init__(call)
         self._calculate(get_contained_objects(call), side_effects_before(call))
 
-class CallOutputDependencies(Dependencies):
+class PostCallDependencies(Dependencies):
     """Dependencies regarding call's output value.
     """
     def __init__(self, call):
-        super(CallOutputDependencies, self).__init__(call)
+        super(PostCallDependencies, self).__init__(call)
         self._calculate(get_those_and_contained_objects([call.output]), call.side_effects)
 
 # :: SerializedObject -> str
@@ -362,6 +362,6 @@ def create_setup_for_output(call, names):
     if call.output is not None and \
             can_be_constructed(call.output) and \
             call.output not in names.keys():
-        post_dependencies = CallOutputDependencies(call)
+        post_dependencies = PostCallDependencies(call)
         return create_setup_for_dependencies(post_dependencies, names)
     return ""
