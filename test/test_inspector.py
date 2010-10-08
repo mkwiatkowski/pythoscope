@@ -72,6 +72,10 @@ class TestInspector(CapturedLogger, TempDirectory):
         if sys.version_info < (2, 6):
             assert_contains_once(self._get_log_output(),
                                  "WARNING: Point of entry exited with error: bad string")
+        elif sys.version_info > (2, 6, 4): # Message changed a bit from 2.6.4 to 2.6.5
+            assert_contains_once(self._get_log_output(),
+                                 "WARNING: Point of entry exited with error: "
+                                 "TypeError('exceptions must be old-style classes or derived from BaseException, not str',)")
         else:
             assert_contains_once(self._get_log_output(),
                                  "WARNING: Point of entry exited with error: "
