@@ -7,13 +7,8 @@ from pythoscope.store import FunctionCall
 
 from assertions import *
 from factories import create
+from generator_helper import put_on_timeline
 
-
-def put_on_timeline(*objects):
-    timestamp = 1
-    for obj in objects:
-        obj.timestamp = timestamp
-        timestamp += 1
 
 def create_parent_call_with_side_effects(call, side_effects):
     parent_call = create(FunctionCall)

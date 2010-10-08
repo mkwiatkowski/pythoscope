@@ -5,7 +5,6 @@ from pythoscope.generator.adder import add_test_case_to_project
 from pythoscope.generator.assertion import Assertion
 from pythoscope.generator.code_string import combine, putinto
 from pythoscope.generator.selector import testable_objects, testable_calls
-from pythoscope.generator.side_effect_assertions import assertions_for_call
 from pythoscope.generator.constructor import call_as_string_for,\
     constructor_as_string, todo_value, type_as_string
 from pythoscope.generator.setup_and_teardown import assign_names_and_setup,\
@@ -464,9 +463,6 @@ class TestGenerator(object):
                 yield self._create_assertion(function.name, call,
                                              stub=setup.uncomplete,
                                              assigned_names=assigned_names)
-                # TODO pass and respect 'stub' setting
-                for assertion in assertions_for_call(call, assigned_names):
-                    yield assertion
 
             yield TestMethodDescription(name, list(assertions()), setup)
 
