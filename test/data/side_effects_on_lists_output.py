@@ -22,6 +22,7 @@ class TestAfter(unittest.TestCase):
         alist.remove(3)
         alist.sort()
         self.assertEqual(alist, after(alist))
+        self.assertEqual([4, 1], alist)
 
 class TestMain(unittest.TestCase):
     def test_main_returns_None(self):

@@ -8,7 +8,8 @@ First, register a factory for some domain object.
     >>> class Struct:
     ...     def __init__(self, name):
     ...         self.name = name
-    >>> register_factory(Struct, name="nice_structure")
+    >>> register_factory(Struct, name="nice_structure") #doctest: +ELLIPSIS
+    <test.factories.Factory object ...>
 
 Now, use it in tests:
     >>> struct = create(Struct)
@@ -25,43 +26,67 @@ In that cases use register_dynamic_factory:
     >>> class Tree:
     ...     def __init__(self, leaves):
     ...         self.leaves = leaves
-    >>> register_dynamic_factory(Tree, lambda:dict(leaves=[]))
+    >>> register_dynamic_factory(Tree, lambda:dict(leaves=[])) #doctest: +ELLIPSIS
+    <test.factories.Factory object ...>
     >>> klass1 = create(Tree)
     >>> klass2 = create(Tree)
     >>> klass1.leaves is not klass2.leaves
     True
 """
 
-DEFAULTS = {}
+FACTORIES = {}
 
 def create(klass, **kwds):
-    args = DEFAULTS[klass]()
-    args.update(kwds)
-    return klass(**args)
+    return FACTORIES[klass].invoke(klass, kwds)
 
 def register_factory(klass, **kwds):
-    DEFAULTS[klass] = kwds.copy
+    factory = Factory(kwds.copy)
+    FACTORIES[klass] = factory
+    return factory
 
 def register_dynamic_factory(klass, function):
-    DEFAULTS[klass] = function
+    factory = Factory(function)
+    FACTORIES[klass] = factory
+    return factory
+
+class Factory(object):
+    def __init__(self, callback):
+        self.args_callback = callback
+        self.after_callback = None
+
+    def after(self, callback):
+        self.after_callback = callback
+        return self
+
+    def invoke(self, klass, kwargs):
+        args = self.args_callback()
+        args.update(kwargs)
+        obj = klass(**args)
+        if self.after_callback:
+            self.after_callback(obj)
+        return obj
 
 ########################################################################
 ## A few handy factories for Pythoscope.
 ##
 from pythoscope.astbuilder import parse
 from pythoscope.serializer import UnknownObject, ImmutableObject, SequenceObject
-from pythoscope.store import FunctionCall, Definition, TestClass, TestMethod
+from pythoscope.store import Function, FunctionCall, Definition, TestClass,\
+    TestMethod
 
 register_factory(Definition,
   name="definition")
+register_factory(Function,
+  name="function")
 register_factory(UnknownObject,
   obj=None)
 register_factory(ImmutableObject,
   obj=1)
 register_factory(SequenceObject,
   obj=[], serialize=lambda x: create(UnknownObject, obj=x))
-register_factory(FunctionCall,
-  definition=create(Definition), args={}, output=create(UnknownObject))
+register_dynamic_factory(FunctionCall,
+  lambda:dict(definition=create(Function), args={}, output=create(ImmutableObject))).\
+  after(lambda fc: fc.definition.add_call(fc))
 register_dynamic_factory(TestMethod,
   lambda:dict(name="test_method", code=parse("# a test method")))
 register_dynamic_factory(TestClass,

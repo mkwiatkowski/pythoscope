@@ -10,7 +10,7 @@ from nose import SkipTest
 from pythoscope.generator import add_tests_to_project, constructor_as_string, \
     TestGenerator
 from pythoscope.inspector.static import inspect_code
-from pythoscope.serializer import ImmutableObject
+from pythoscope.serializer import ImmutableObject, SequenceObject
 from pythoscope.store import Class, Function, Method, ModuleNeedsAnalysis, \
     ModuleSaveError, TestClass, TestMethod, MethodCall, FunctionCall, \
     UserObject, GeneratorObject, GeneratorObjectInvocation, ModuleNotFound
@@ -19,6 +19,7 @@ from pythoscope.util import read_file_contents, get_last_modification_time, \
     flatten
 
 from assertions import *
+from factories import create
 from helper import CapturedDebugLogger, CapturedLogger, P, \
     ProjectInDirectory, EmptyProject, TestableProject, \
     generate_single_test_module, get_test_cases, \
@@ -40,9 +41,13 @@ def stable_serialize_call_arguments(execution, args):
 def create_method_call(method, args, output, call_type, execution, user_object):
     sargs = stable_serialize_call_arguments(execution, args)
     if call_type == 'output':
-        return MethodCall(method, sargs, output=execution.serialize(output))
+        call = MethodCall(method, sargs)
+        call.set_output(execution.serialize(output))
+        return call
     elif call_type == 'exception':
-        return MethodCall(method, sargs, exception=execution.serialize(output))
+        call = MethodCall(method, sargs)
+        call.set_exception(execution.serialize(output))
+        return call
     elif call_type == 'generator':
         gobject = GeneratorObject(None, method, sargs, user_object)
         for syield in map(execution.serialize, output):
@@ -594,6 +599,18 @@ class TestGeneratorClass:
         assert_contains(result, "alist = []")
         assert_contains(result, "doubler = Doubler()")
         assert_contains(result, "self.assertEqual((alist, alist), doubler.double(alist))")
+
+    def test_names_output_when_it_was_a_part_of_input(self):
+        function = create(Function, args=['x'])
+        obj1 = create(SequenceObject)
+        obj2 = create(SequenceObject)
+        alist = create(SequenceObject, obj=[obj1, obj2], serialize=lambda x:x)
+        call = create(FunctionCall, args={'x': alist}, output=obj1, definition=function)
+
+        result = generate_single_test_module(objects=[function])
+
+        assert_contains(result, "alist = []")
+        assert_contains(result, "self.assertEqual(alist, function([alist, []]))")
 
     def test_generates_sample_assertions_in_test_stubs_for_functions(self):
         objects = [Function('something', args=['arg1', 'arg2', '*rest'])]

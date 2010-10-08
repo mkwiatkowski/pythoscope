@@ -2,8 +2,10 @@ from pythoscope.astvisitor import descend, ASTVisitor
 from pythoscope.astbuilder import parse_fragment, EmptyCode
 from pythoscope.logger import log
 from pythoscope.generator.adder import add_test_case_to_project
-from pythoscope.generator.code_string import CodeString, combine, putinto
+from pythoscope.generator.assertion import Assertion
+from pythoscope.generator.code_string import combine, putinto
 from pythoscope.generator.selector import testable_objects, testable_calls
+from pythoscope.generator.side_effect_assertions import assertions_for_call
 from pythoscope.generator.constructor import call_as_string_for,\
     constructor_as_string, todo_value, type_as_string
 from pythoscope.generator.setup_and_teardown import assign_names_and_setup,\
@@ -14,7 +16,7 @@ from pythoscope.store import Class, Function, TestClass, TestMethod,\
     ModuleNotFound, GeneratorObject
 from pythoscope.compat import all, set, sorted
 from pythoscope.util import assert_argument_type, camelize, counted, \
-    key_for_value, pluralize, underscore
+    key_for_value, pluralize, underscore, flatten
 
 
 # :: GeneratorObject -> SerializedObject | None
@@ -234,7 +236,7 @@ def assertion_stub(callable, args):
     """Create assertion stub over function/method return value, including names
     of arguments.
     """
-    return ('equal_stub', 'expected', call_with_args(callable, args))
+    return Assertion('equal_stub', args=('expected', call_with_args(callable, args)))
 
 def class_init_stub(klass):
     """Create setup that contains stub of object creation for given class.
@@ -281,14 +283,24 @@ def to_pure_calls(calls):
         else:
             yield call
 
+# :: str, str -> str
+def indented_setup(setup, indentation):
+    """Indent each line of setup with given amount of indentation.
+
+    >>> indented_setup("x = 1\\n", "  ")
+    '  x = 1\\n'
+    >>> indented_setup("x = 1\\ny = 2\\n", "    ")
+    '    x = 1\\n    y = 2\\n'
+    """
+    return ''.join([indentation + line for line in setup.splitlines(True)])
+
 class TestMethodDescription(object):
-    # Assertions should be tuples (type, attributes...), where type is a string
-    # denoting a type of an assertion, e.g. 'equal' is an equality assertion.
-    #
     # During test generation assertion attributes are passed to the corresponding
     # TestGenerator method as arguments. E.g. assertion of type 'equal' invokes
     # 'equal_assertion' method of the TestGenerator.
     def __init__(self, name, assertions=[], setup=""):
+        if [a for a in assertions if not isinstance(a, Assertion)]:
+            raise ValueError("All assertions must be of type Assertion.")
         self.name = name
         self.assertions = assertions
         self.setup = setup
@@ -296,19 +308,8 @@ class TestMethodDescription(object):
     def contains_code(self):
         return self._has_complete_setup() or self._get_code_assertions()
 
-    # :: str -> str
-    def indented_setup(self, indentation):
-        """Indent each line of setup with given amount of indentation.
-
-        >>> TestMethodDescription("test", setup="x = 1\\n").indented_setup("  ")
-        '  x = 1\\n'
-        >>> TestMethodDescription("test", setup="x = 1\\ny = 2\\n").indented_setup("    ")
-        '    x = 1\\n    y = 2\\n'
-        """
-        return ''.join([indentation + line for line in self.setup.splitlines(True)])
-
     def _get_code_assertions(self):
-        return [a for a in self.assertions if a[0] in ['equal', 'missing', 'raises']]
+        return [a for a in self.assertions if a.has_code()]
 
     def _has_complete_setup(self):
         return self.setup and not self.setup.startswith("#")
@@ -379,10 +380,12 @@ class TestGenerator(object):
         for method_description in method_descriptions:
             result += "    def %s(self):\n" % method_description.name
             if method_description.setup:
-                result += method_description.indented_setup("        ")
+                result += indented_setup(method_description.setup, "        ")
             for assertion in method_description.assertions:
-                apply_template = getattr(self, "%s_assertion" % assertion[0])
-                result += "        %s\n" % apply_template(*assertion[1:])
+                if assertion.setup:
+                    result += indented_setup(assertion.setup, "        ")
+                apply_template = getattr(self, "%s_assertion" % assertion.type)
+                result += "        %s\n" % apply_template(*assertion.args)
             # We need at least one statement in a method to be syntatically correct.
             if not method_description.contains_code():
                 result += "        pass\n"
@@ -424,7 +427,7 @@ class TestGenerator(object):
             # No calls were traced, so we'll go for a single test stub.
             log.debug("Detected _no_ testable calls in function %s." % function.name)
             name = name2testname(underscore(function.name))
-            assertions = [assertion_stub(function.name, function.args), ('missing',)]
+            assertions = [assertion_stub(function.name, function.args), Assertion('missing')]
             return [TestMethodDescription(name, assertions)]
 
     def _generate_test_method_descriptions_for_class(self, klass, module):
@@ -445,7 +448,7 @@ class TestGenerator(object):
         test_name = name2testname(method.name)
         object_name = underscore(klass.name)
         setup = '# %s = %s\n' % (object_name, class_init_stub(klass))
-        assertions = [('missing',)]
+        assertions = [Assertion('missing')]
         # Generate assertion stub, but only for non-creational methods.
         if not method.is_creational():
             assertions.insert(0, assertion_stub("%s.%s" % (object_name, method.name),
@@ -457,11 +460,15 @@ class TestGenerator(object):
             assigned_names = {}
             setup = assign_names_and_setup_for_multiple_calls(to_pure_calls([call]), assigned_names)
             name = call2testname(call, function.name)
-            assertions = [self._create_assertion(function.name, call,
-                                                 stub=setup.uncomplete,
-                                                 assigned_names=assigned_names)]
+            def assertions():
+                yield self._create_assertion(function.name, call,
+                                             stub=setup.uncomplete,
+                                             assigned_names=assigned_names)
+                # TODO pass and respect 'stub' setting
+                for assertion in assertions_for_call(call, assigned_names):
+                    yield assertion
 
-            yield TestMethodDescription(name, assertions, setup)
+            yield TestMethodDescription(name, list(assertions()), setup)
 
     def _method_description_from_user_object(self, user_object):
         init_call = user_object.get_init_call()
@@ -509,7 +516,7 @@ class TestGenerator(object):
                 if init_call.raised_exception():
                     yield self._create_assertion(user_object.klass.name, init_call, stub=stub_all, assigned_names=assigned_names)
                 else:
-                    yield(('comment', "# Make sure it doesn't raise any exceptions."))
+                    yield(Assertion('comment', args=("# Make sure it doesn't raise any exceptions.",)))
 
             for call in external_calls:
                 name = "%s.%s" % (local_name, call.definition.name)
@@ -565,9 +572,9 @@ class TestGenerator(object):
                 assertion_type = 'equal'
 
             if can_be_constructed(output):
-                return (assertion_type,
-                        constructor_as_string(output, assigned_names),
-                        callstring)
+                return Assertion(assertion_type,
+                                 args=(constructor_as_string(output, assigned_names),
+                                       callstring))
             else:
                 # If we can't test for real values, let's at least test for the right type.
                 output_type = type_as_string(output)
@@ -576,7 +583,7 @@ class TestGenerator(object):
                 else:
                     callstring_type = type_of(callstring)
                 self.ensure_import('types')
-                return (assertion_type, output_type, callstring_type)
+                return Assertion(assertion_type, args=(output_type, callstring_type))
 
     def _exception_assertion(self, exception, callstring, stub):
         if is_serialized_string(exception):
@@ -592,16 +599,16 @@ class TestGenerator(object):
             # string exceptions by value. We don't use this solution, because
             # currently in Pythoscope there is no facility for attaching and
             # using test helpers.
-            return ('raises_stub',
-                    todo_value(exception.reconstructor),
-                    in_lambda(callstring))
+            return Assertion('raises_stub',
+                    args=(todo_value(exception.reconstructor),
+                          in_lambda(callstring)))
 
         if callstring.uncomplete or stub:
             assertion_type = 'raises_stub'
         else:
             assertion_type = 'raises'
         self.ensure_import(exception.type_import)
-        return (assertion_type, exception.type_name, in_lambda(callstring))
+        return Assertion(assertion_type, args=(exception.type_name, in_lambda(callstring)))
 
 class UnittestTestGenerator(TestGenerator):
     main_snippet = parse_fragment("if __name__ == '__main__':\n    unittest.main()\n")

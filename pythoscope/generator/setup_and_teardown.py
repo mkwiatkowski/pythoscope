@@ -1,9 +1,12 @@
-from pythoscope.compat import all, set, sorted
+from pythoscope.compat import all, set
 from pythoscope.generator.code_string import CodeString, combine
 from pythoscope.generator.constructor import constructor_as_string, call_as_string_for
+from pythoscope.generator.dependencies import Dependencies, sorted_by_timestamp,\
+    older_than, side_effects_before, side_effects_that_affect_objects,\
+    objects_affected_by_side_effects
 from pythoscope.generator.setup_optimizer import optimize
-from pythoscope.serializer import BuiltinException, CompositeObject,\
-    ImmutableObject, MapObject, UnknownObject, SequenceObject, SerializedObject
+from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\
+    UnknownObject, SequenceObject, SerializedObject
 from pythoscope.side_effect import BuiltinMethodWithPositionArgsSideEffect, SideEffect
 from pythoscope.store import Call, FunctionCall, UserObject, MethodCall,\
     GeneratorObject, GeneratorObjectInvocation
@@ -19,63 +22,6 @@ def can_be_constructed(obj):
     elif isinstance(obj, GeneratorObject):
         return obj.is_activated()
     return not isinstance(obj, UnknownObject)
-
-# :: Call -> Call
-def top_caller(call):
-    if call.caller is None:
-        return call
-    return top_caller(call.caller)
-
-# :: ([Event], int) -> [Event]
-def older_than(events, reference_timestamp):
-    return filter(lambda e: e.timestamp < reference_timestamp, events)
-
-# :: (Call, int) -> [Call]
-def subcalls_before_timestamp(call, reference_timestamp):
-    for c in older_than(call.subcalls, reference_timestamp):
-        yield c
-        for sc in subcalls_before_timestamp(c, reference_timestamp):
-            yield sc
-
-# :: Call -> [Call]
-def calls_before(call):
-    """Go up the call graph and return all calls that happened before
-    the given one.
-
-    >>> class Call(object):
-    ...     def __init__(self, caller, timestamp):
-    ...         self.subcalls = []
-    ...         self.caller = caller
-    ...         self.timestamp = timestamp
-    ...         if caller:
-    ...             caller.subcalls.append(self)
-    >>> top = Call(None, 1)
-    >>> branch1 = Call(top, 2)
-    >>> leaf1 = Call(branch1, 3)
-    >>> branch2 = Call(top, 4)
-    >>> leaf2 = Call(branch2, 5)
-    >>> leaf3 = Call(branch2, 6)
-    >>> leaf4 = Call(branch2, 7)
-    >>> branch3 = Call(top, 8)
-    >>> calls_before(branch3) == [top, branch1, leaf1, branch2, leaf2, leaf3, leaf4]
-    True
-    >>> calls_before(leaf3) == [top, branch1, leaf1, branch2, leaf2]
-    True
-    >>> calls_before(branch2) == [top, branch1, leaf1]
-    True
-    >>> calls_before(branch1) == [top]
-    True
-    """
-    top = top_caller(call)
-    return [top] + list(subcalls_before_timestamp(top, call.timestamp))
-
-# :: [Call] -> [SideEffect]
-def side_effects_of(calls):
-    return flatten(map(lambda c: c.side_effects, calls))
-
-# :: Call -> [SideEffect]
-def side_effects_before(call):
-    return older_than(side_effects_of(calls_before(call)), call.timestamp)
 
 # :: SerializedObject | Call | [SerializedObject] | [Call] -> [SerializedObject]
 def get_contained_objects(obj):
@@ -121,31 +67,26 @@ def get_those_and_contained_objects(objs):
     """
     return objs + get_contained_objects(objs)
 
-# :: [SerializedObject|Call] -> [SerializedObject|Call]
-def sorted_by_timestamp(objects):
-    return sorted(objects, key=lambda o: o.timestamp)
-
 # :: [SideEffect] -> [SerializedObject]
 def objects_referenced_by_side_effects(side_effects):
     return flatten(map(lambda se: se.referenced_objects, side_effects))
 
-# :: [SideEffect] -> [SerializedObject]
-def objects_affected_by_side_effects(side_effects):
-    return flatten(map(lambda se: se.affected_objects, side_effects))
-
-# :: ([SideEffect], set([SerializedObject])) -> [SideEffect]
-def side_effects_that_affect_objects(side_effects, objects):
-    "Filter out side effects that are irrelevant to given set of objects."
-    for side_effect in side_effects:
-        for obj in side_effect.affected_objects:
-            if obj in objects:
-                yield side_effect
-
-class Dependencies(object):
+class CallDependencies(Dependencies):
+    """Dependencies for making a call and later asserting its output and side
+    effects.
+    """
     def __init__(self, call):
-        self.all = []
+        super(CallDependencies, self).__init__()
+        objects = get_those_and_contained_objects(call.input.values())
+        if call.output is not None:
+            # If pieces of the output (or even the output itself) have been
+            # created before the call we want to reuse them at assertion time.
+            # To make sure those pieces get named we bump their usage counts
+            # by one.
+            objects += older_than(get_those_and_contained_objects([call.output]), call.timestamp)
+        self._calculate(objects, side_effects_before(call), call.side_effects)
 
-    def _calculate(self, objects, relevant_side_effects):
+    def _calculate(self, objects, relevant_side_effects, additional_affecting_side_effects):
         """
         First, we look at all objects required for the call's input/output
         (pre- and post- call dependencies each do one of those). Next, we look
@@ -178,12 +119,13 @@ class Dependencies(object):
         # We've chosen to sort objects by their creation timestamp.
         self.all = sorted_by_timestamp(set(all_objects).union(all_side_effects))
 
-        self._remove_objects_unworthy_of_naming(dict(counted(all_objects)))
+        self._remove_objects_unworthy_of_naming(dict(counted(all_objects)),
+                                                self.get_side_effects() + additional_affecting_side_effects)
 
         optimize(self)
 
-    def _remove_objects_unworthy_of_naming(self, objects_usage_counts):
-        affected_objects = objects_affected_by_side_effects(self.get_side_effects())
+    def _remove_objects_unworthy_of_naming(self, objects_usage_counts, side_effects):
+        affected_objects = objects_affected_by_side_effects(side_effects)
         for obj, usage_count in objects_usage_counts.iteritems():
             # ImmutableObjects don't need to be named, as their identity is
             # always unambiguous.
@@ -198,42 +140,6 @@ class Dependencies(object):
 
     def get_side_effects(self):
         return filter(lambda x: isinstance(x, SideEffect), self.all)
-
-    def get_objects(self):
-        return filter(lambda x: isinstance(x, SerializedObject), self.all)
-
-    def replace_pair_with_event(self, event1, event2, new_event):
-        """Replaces pair of events with a single event. The second event
-        must be a SideEffect.
-
-        Optimizer only works on values with names, which means we don't really
-        have to traverse the whole Project tree and replace all occurences
-        of an object. It is sufficient to replace it on the dependencies
-        timeline, which will be used as a base for naming objects and their
-        later usage.
-        """
-        if not isinstance(event2, SideEffect):
-            raise TypeError("Second argument to replace_pair_with_object has to be a SideEffect, was %r instead." % event2)
-        new_event.timestamp = event1.timestamp
-        self.all[self.all.index(event1)] = new_event
-        if isinstance(event1, SerializedObject):
-            if not isinstance(new_event, SerializedObject):
-                raise TypeError("Expected new_event to be of the same type as event1 in a call to replace_pair_with_object, got %r instead." % new_event)
-        self.all.remove(event2)
-
-class PreCallDependencies(Dependencies):
-    """Dependencies for making a call.
-    """
-    def __init__(self, call):
-        super(PreCallDependencies, self).__init__(call)
-        self._calculate(get_contained_objects(call), side_effects_before(call))
-
-class PostCallDependencies(Dependencies):
-    """Dependencies regarding call's output value.
-    """
-    def __init__(self, call):
-        super(PostCallDependencies, self).__init__(call)
-        self._calculate(get_those_and_contained_objects([call.output]), call.side_effects)
 
 # :: SerializedObject -> str
 def get_name_base_for_object(obj):
@@ -259,11 +165,12 @@ def get_next_name(names, base):
         return int(name[base_length:])
     return base + str(max(map(get_index, filter(has_right_base, names))) + 1)
 
-# :: SerializedObject, {SerializedObject: str} -> None
-def assign_name_to_object(obj, assigned_names):
+# :: SerializedObject, {SerializedObject: str}, bool -> None
+def assign_name_to_object(obj, assigned_names, rename=True):
     """Assign a right name for given object.
 
-    May reassign an existing name for an object as a side effect.
+    May reassign an existing name for an object as a side effect, unless
+    `rename` is False.
     """
     if assigned_names.has_key(obj):
         return
@@ -272,7 +179,8 @@ def assign_name_to_object(obj, assigned_names):
 
     if other_obj:
         # Avoid overlapping names by numbering objects with the same base.
-        assigned_names[other_obj] = base+"1"
+        if rename:
+            assigned_names[other_obj] = base+"1"
         assigned_names[obj] = base+"2"
     elif base+"1" in assigned_names.values():
         # We have some objects already numbered, insert a name with a new index.
@@ -281,12 +189,12 @@ def assign_name_to_object(obj, assigned_names):
         # It's the first object with that base.
         assigned_names[obj] = base
 
-# :: ([SerializedObject], {SerializedObject: str}) -> None
-def assign_names_to_objects(objects, names):
+# :: ([SerializedObject], {SerializedObject: str}), bool -> None
+def assign_names_to_objects(objects, names, rename=True):
     """Modifies names dictionary as a side effect.
     """
     for obj in sorted_by_timestamp(objects):
-        assign_name_to_object(obj, names)
+        assign_name_to_object(obj, names, rename)
 
 # :: (SerializedObject, str, {SerializedObject: str}) -> CodeString
 def setup_for_named_object(obj, name, already_assigned_names):
@@ -312,11 +220,11 @@ def setup_for_side_effect(side_effect, already_assigned_names):
         raise TypeError("Unknown side effect type: %r" % side_effect)
 
 # :: (Dependencies, {SerializedObject: str}) -> CodeString
-def create_setup_for_dependencies(dependencies, names):
+def create_setup_for_dependencies(dependencies, names, rename=True):
     """Returns a setup code string. Modifies names dictionary as a side effect.
     """
     already_assigned_names = names.copy()
-    assign_names_to_objects(dependencies.get_objects(), names)
+    assign_names_to_objects(dependencies.get_objects(), names, rename)
     full_setup = CodeString("")
     for dependency in dependencies.all:
         if isinstance(dependency, SerializedObject):
@@ -328,40 +236,23 @@ def create_setup_for_dependencies(dependencies, names):
         full_setup = combine(full_setup, setup)
     return full_setup
 
-# :: (Call, {SerializedObject : str}) -> CodeString
-def assign_names_and_setup(call, names):
+# :: (Call, {SerializedObject : str}), bool -> CodeString
+def assign_names_and_setup(call, names, rename=True):
     """Returns a setup code string. Modifies names dictionary as a side effect.
     """
     if not isinstance(call, Call):
         raise TypeError("Tried to call assign_names_and_setup with %r instead of a call." % call)
-    pre_setup = create_setup_for_input(call, names)
-    post_setup = create_setup_for_output(call, names)
-    return combine(pre_setup, post_setup)
+    dependencies = CallDependencies(call)
+    return create_setup_for_dependencies(dependencies, names, rename)
 
 # :: ([Call], {SerializedObject : str}) -> CodeString
 def assign_names_and_setup_for_multiple_calls(calls, names):
     """Returns a setup code string. Modifies names dictionary as a side effect.
     """
     full_setup = CodeString("")
+    rename = True
     for call in sorted_by_timestamp(calls):
-        setup = assign_names_and_setup(call, names)
+        setup = assign_names_and_setup(call, names, rename)
         full_setup = combine(full_setup, setup)
+        rename = False # We can't rename after the first setup is already done.
     return full_setup
-
-# :: (Call, {SerializedObject : str}) -> CodeString
-def create_setup_for_input(call, names):
-    pre_dependencies = PreCallDependencies(call)
-    return create_setup_for_dependencies(pre_dependencies, names)
-
-# :: (Call, {SerializedObject : str}) -> CodeString|str
-def create_setup_for_output(call, names):
-    """Sometimes the call's output doesn't depend on the input at all. If the
-    object has been altered by the call we need to create and name a new copy of
-    it to prepare a good equality assertion.
-    """
-    if call.output is not None and \
-            can_be_constructed(call.output) and \
-            call.output not in names.keys():
-        post_dependencies = PostCallDependencies(call)
-        return create_setup_for_dependencies(post_dependencies, names)
-    return ""
