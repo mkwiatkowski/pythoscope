@@ -1,7 +1,8 @@
 from pythoscope.serializer import SequenceObject
 from pythoscope.store import Function, FunctionCall
+from pythoscope.side_effect import SideEffect
 from pythoscope.generator.side_effect_assertions import assertions_for_call,\
-    EqualAssertionLine
+    EqualAssertionLine, expand_into_timeline
 
 from assertions import *
 from factories import create
@@ -29,9 +30,8 @@ def assert_is_equal_assertion_line(assertion, expected, actual, expected_a_copy=
 
 class TestAssertionsForCall:
     def setUp(self):
-        self.function = create(Function, args=[])
         self.alist = create(SequenceObject)
-        self.call = create(FunctionCall, args={}, output=self.alist, definition=self.function)
+        self.call = create(FunctionCall, args={}, output=self.alist)
 
     def test_returns_one_assertion_if_output_object_didnt_exist_before_the_call(self):
         put_on_timeline(self.call, self.alist)
@@ -53,3 +53,37 @@ class TestAssertionsForCall:
         assert_is_equal_assertion_line(assertions[1], expected_a_copy=True,
                                        expected=self.call.output, actual=self.call.output)
         assert assertions[0].timestamp < assertions[1].timestamp
+
+    def test_assertion_gets_timestamp_half_higher_than_the_last_call_action(self):
+        se = SideEffect([self.alist], [])
+        self.call.add_side_effect(se)
+        put_on_timeline(self.call, self.alist, se)
+
+        assertion = assert_one_element_and_return(assertions_for_call(self.call))
+        assert_equal(se.timestamp+0.5, assertion.timestamp)
+
+class TestExpandIntoTimeline:
+    def setUp(self):
+        self.alist = create(SequenceObject)
+        self.call = create(FunctionCall, args={}, output=self.alist)
+        self.aline = EqualAssertionLine(self.alist, self.call, 0)
+
+    def test_returns_objects_in_assertion_sorted_by_timestamp(self):
+        put_on_timeline(self.alist, self.call, self.aline)
+
+        assert_equal([self.alist, self.aline], expand_into_timeline(self.aline))
+
+    def test_includes_relevant_side_effects_in_the_output(self):
+        se = SideEffect([self.alist], [])
+        self.call.add_side_effect(se)
+        put_on_timeline(self.alist, self.call, se, self.aline)
+
+        assert_equal([self.alist, se, self.aline], expand_into_timeline(self.aline))
+
+    def test_includes_relevant_objects_affected_by_side_effects_in_the_output(self):
+        alist2 = create(SequenceObject)
+        se = SideEffect([self.alist, alist2], [])
+        self.call.add_side_effect(se)
+        put_on_timeline(self.alist, alist2, self.call, se, self.aline)
+
+        assert_equal([self.alist, alist2, se, self.aline], expand_into_timeline(self.aline))
