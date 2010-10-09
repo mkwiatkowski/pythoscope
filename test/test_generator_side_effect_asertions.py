@@ -40,6 +40,7 @@ class TestAssertionsForCall:
         assert_is_equal_assertion_line(assertion, expected_a_copy=True,
                                        expected=self.call.output,
                                        actual=self.call)
+        assert assertion.timestamp > self.call.timestamp
 
     def test_returns_two_assertions_if_output_object_existed_before_the_call(self):
         put_on_timeline(self.alist, self.call)
@@ -51,3 +52,4 @@ class TestAssertionsForCall:
                                        expected=self.call.output, actual=self.call)
         assert_is_equal_assertion_line(assertions[1], expected_a_copy=True,
                                        expected=self.call.output, actual=self.call.output)
+        assert assertions[0].timestamp < assertions[1].timestamp
