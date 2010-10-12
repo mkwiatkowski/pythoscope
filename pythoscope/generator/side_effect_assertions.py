@@ -1,14 +1,15 @@
 from copy import copy
 
 from pythoscope.event import Event
-from pythoscope.generator.dependencies import sorted_by_timestamp
+from pythoscope.generator.dependencies import sorted_by_timestamp, objects_affected_by_side_effects
+from pythoscope.generator.namer import assign_names_to_objects
 
 from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\
-    UnknownObject, SequenceObject
+    UnknownObject, SequenceObject, SerializedObject
 from pythoscope.side_effect import SideEffect
 from pythoscope.store import FunctionCall, UserObject, MethodCall,\
     GeneratorObject, GeneratorObjectInvocation
-from pythoscope.util import flatten
+from pythoscope.util import counted, flatten, all_of_type
 
 
 class AssertionLine(Event):
@@ -49,6 +50,43 @@ def assertions_for_call(call):
 # :: AssertionLine -> [Event]
 def expand_into_timeline(assertion_line):
     return sorted_by_timestamp(list(set(get_contained_events([assertion_line.expected, assertion_line.actual]))) + [assertion_line])
+
+# :: [Event] -> [SerializedObject]
+def objects_only(events):
+    return all_of_type(events, SerializedObject)
+
+# :: [Event] -> [Event]
+def not_objects_only(events):
+    return [e for e in events if not isinstance(e, SerializedObject)]
+
+# :: [Event] -> {SerializedObject: str}
+def name_objects_on_timeline(events):
+    names = {}
+    assign_names_to_objects(objects_only(events), names)
+    return names
+
+# :: [Event] -> [Event]
+def remove_objects_unworthy_of_naming(events):
+    new_events = list(events)
+    side_effects = all_of_type(events, SideEffect)
+    affected_objects = objects_affected_by_side_effects(side_effects)
+    objects_with_duplicates = objects_only(get_those_and_contained_events(not_objects_only(events)))
+    objects_usage_counts = dict(counted(objects_with_duplicates))
+    for obj, usage_count in objects_usage_counts.iteritems():
+        # ImmutableObjects don't need to be named, as their identity is
+        # always unambiguous.
+        if not isinstance(obj, ImmutableObject):
+            # Anything mentioned more than once have to be named.
+            if usage_count > 1:
+                continue
+            # Anything affected by side effects is also worth naming.
+            if obj in affected_objects:
+                continue
+        try:
+            new_events.remove(obj)
+        except ValueError:
+            pass # If the element wasn't on the timeline, even better.
+    return new_events
 
 # :: SerializedObject | Call | [SerializedObject] | [Call] -> [Event]
 def get_contained_events(obj):

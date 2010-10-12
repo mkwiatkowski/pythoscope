@@ -1,8 +1,9 @@
-from pythoscope.serializer import SequenceObject
+from pythoscope.serializer import SequenceObject, ImmutableObject
 from pythoscope.store import Function, FunctionCall
 from pythoscope.side_effect import SideEffect
 from pythoscope.generator.side_effect_assertions import assertions_for_call,\
-    EqualAssertionLine, expand_into_timeline
+    EqualAssertionLine, expand_into_timeline, name_objects_on_timeline,\
+    remove_objects_unworthy_of_naming
 
 from assertions import *
 from factories import create
@@ -87,3 +88,58 @@ class TestExpandIntoTimeline:
         put_on_timeline(self.alist, alist2, self.call, se, self.aline)
 
         assert_equal([self.alist, alist2, se, self.aline], expand_into_timeline(self.aline))
+
+class TestRemoveObjectsUnworthyOfNaming:
+    def test_keeps_objects_used_more_than_once(self):
+        alist = create(SequenceObject)
+        call = create(FunctionCall, args={'x': alist}, output=alist,
+                      definition=create(Function, args=['x']))
+        put_on_timeline(alist, call)
+        assert_equal([alist, call], remove_objects_unworthy_of_naming([alist, call]))
+
+    def test_removes_objects_used_only_once(self):
+        alist = create(SequenceObject)
+        call = create(FunctionCall, args={}, output=alist)
+        put_on_timeline(alist, call)
+        assert_equal([call], remove_objects_unworthy_of_naming([alist, call]))
+
+    def test_removes_all_immutable_objects(self):
+        obj = create(ImmutableObject)
+        call = create(FunctionCall, args={'x': obj}, output=obj,
+                      definition=create(Function, args=['x']))
+        put_on_timeline(obj, call)
+        assert_equal([call], remove_objects_unworthy_of_naming([obj, call]))
+
+    def test_keeps_objects_affected_by_side_effects(self):
+        output = create(SequenceObject)
+        seq = create(SequenceObject, obj=[1])
+        call = create(FunctionCall, output=output)
+        se = SideEffect([output, seq], [])
+
+        put_on_timeline(seq, se, output, call)
+
+        assert_equal([seq, se, output, call],
+                     remove_objects_unworthy_of_naming([seq, se, output, call]))
+
+    def test_removes_objects_only_referenced_by_side_effects(self):
+        seq = create(SequenceObject, obj=[1])
+        output = create(SequenceObject)
+        se = SideEffect([output], [seq])
+        call = create(FunctionCall, args={'x': seq}, output=output,
+                      definition=create(Function, args=['x']))
+
+        put_on_timeline(seq, output, se, call)
+
+        assert_equal([output, se, call],
+                     remove_objects_unworthy_of_naming([seq, output, se, call]))
+
+class TestNameObjectsOnTimeline:
+    def test_names_objects_appropriatelly(self):
+        obj = create(SequenceObject)
+        call = create(FunctionCall, args={'x': obj}, output=obj,
+                      definition=create(Function, args=['x']))
+        obj2 = create(SequenceObject)
+        put_on_timeline(obj, call, obj2)
+
+        assert_equal({obj: 'alist1', obj2: 'alist2'},
+                     name_objects_on_timeline([obj, call, obj2]))
