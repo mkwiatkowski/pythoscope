@@ -1,14 +1,16 @@
 from copy import copy
 
 from pythoscope.event import Event
+from pythoscope.generator.code_string import CodeString, combine
+from pythoscope.generator.constructor import constructor_as_string, call_as_string_for
 from pythoscope.generator.dependencies import sorted_by_timestamp, objects_affected_by_side_effects
 from pythoscope.generator.namer import assign_names_to_objects
 
 from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\
     UnknownObject, SequenceObject, SerializedObject
-from pythoscope.side_effect import SideEffect
+from pythoscope.side_effect import SideEffect, BuiltinMethodWithPositionArgsSideEffect
 from pythoscope.store import FunctionCall, UserObject, MethodCall,\
-    GeneratorObject, GeneratorObjectInvocation
+    GeneratorObject, GeneratorObjectInvocation, Call
 from pythoscope.util import counted, flatten, all_of_type
 
 
@@ -75,6 +77,51 @@ def name_objects_on_timeline(events):
             return Assign(names[event], event, event.timestamp)
         return event
     return map(map_object_to_assign, events)
+
+class Template(object):
+    # :: (CodeString, CodeString) -> CodeString
+    def equal_assertion(self, expected, actual):
+        raise NotImplementedError("Method equal_assertion() not defined.")
+
+class UnittestTemplate(Template):
+    def equal_assertion(self, expected, actual):
+        return combine(expected, actual, "self.assertEqual(%s, %s)")
+
+# :: CodeString -> CodeString
+def add_newline(code_string):
+    return combine(code_string, "\n")
+
+# :: [Event] -> CodeString
+def generate_test_contents(events, template):
+    contents = CodeString("")
+    already_assigned_names = {}
+    for event in events:
+        if isinstance(event, Assign):
+            constructor = constructor_as_string(event.obj, already_assigned_names)
+            line = combine(event.name, constructor, "%s = %s")
+            already_assigned_names[event.obj] = event.name
+        elif isinstance(event, EqualAssertionLine):
+            expected = constructor_as_string(event.expected, already_assigned_names)
+            if isinstance(event.actual, Call):
+                call = event.actual
+                actual = call_as_string_for(call.definition.name, call.input,
+                                            call.definition, already_assigned_names)
+            else:
+                actual = constructor_as_string(event.actual, already_assigned_names)
+            line = template.equal_assertion(expected, actual)
+        elif isinstance(event, BuiltinMethodWithPositionArgsSideEffect):
+            # All objects affected by side effects are named.
+            object_name = already_assigned_names[event.obj]
+            line = call_as_string_for("%s.%s" % (object_name, event.definition.name),
+                                      event.args_mapping(),
+                                      event.definition,
+                                      already_assigned_names)
+        else:
+            pass # TODO
+        if line.uncomplete:
+            line = combine("# ", line)
+        contents = combine(contents, add_newline(line))
+    return contents
 
 # :: [Event] -> [Event]
 def remove_objects_unworthy_of_naming(events):

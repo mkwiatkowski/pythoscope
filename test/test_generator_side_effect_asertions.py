@@ -1,9 +1,10 @@
 from pythoscope.serializer import SequenceObject, ImmutableObject
 from pythoscope.store import Function, FunctionCall
-from pythoscope.side_effect import SideEffect
+from pythoscope.side_effect import SideEffect, ListAppend
 from pythoscope.generator.side_effect_assertions import assertions_for_call,\
     EqualAssertionLine, expand_into_timeline, name_objects_on_timeline,\
-    remove_objects_unworthy_of_naming, Assign
+    remove_objects_unworthy_of_naming, Assign, generate_test_contents,\
+    UnittestTemplate
 
 from assertions import *
 from factories import create
@@ -150,3 +151,22 @@ class TestNameObjectsOnTimeline:
         assert_assignment(timeline[0], 'alist1', obj)
         assert_equal(call, timeline[1])
         assert_assignment(timeline[2], 'alist2', obj2)
+
+class TestGenerateTestContents:
+    def test_generates_assignment_line(self):
+        assign = Assign('foo', create(SequenceObject), 1)
+        assert_equal_strings("foo = []\n",
+                             generate_test_contents([assign], None))
+
+    def test_generates_assertion_line(self):
+        aline = EqualAssertionLine(create(SequenceObject), create(FunctionCall), 1)
+        template = UnittestTemplate()
+        assert_equal_strings("self.assertEqual([], function())\n",
+                             generate_test_contents([aline], template))
+
+    def test_generates_side_effect_line(self):
+        alist = create(SequenceObject)
+        assign = Assign('alist', alist, 1)
+        se = ListAppend(alist, create(ImmutableObject, obj=1))
+        assert_equal_strings("alist = []\nalist.append(1)\n",
+                             generate_test_contents([assign, se], None))
