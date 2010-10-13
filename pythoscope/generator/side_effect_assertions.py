@@ -59,11 +59,22 @@ def objects_only(events):
 def not_objects_only(events):
     return [e for e in events if not isinstance(e, SerializedObject)]
 
-# :: [Event] -> {SerializedObject: str}
+class Assign(Event):
+    def __init__(self, name, obj, timestamp):
+        self.name = name
+        self.obj = obj
+        # We don't call Event.__init__ on purpose, we set our own timestamp.
+        self.timestamp = timestamp
+
+# :: [Event] -> [Event]
 def name_objects_on_timeline(events):
     names = {}
     assign_names_to_objects(objects_only(events), names)
-    return names
+    def map_object_to_assign(event):
+        if isinstance(event, SerializedObject):
+            return Assign(names[event], event, event.timestamp)
+        return event
+    return map(map_object_to_assign, events)
 
 # :: [Event] -> [Event]
 def remove_objects_unworthy_of_naming(events):

@@ -3,7 +3,7 @@ from pythoscope.store import Function, FunctionCall
 from pythoscope.side_effect import SideEffect
 from pythoscope.generator.side_effect_assertions import assertions_for_call,\
     EqualAssertionLine, expand_into_timeline, name_objects_on_timeline,\
-    remove_objects_unworthy_of_naming
+    remove_objects_unworthy_of_naming, Assign
 
 from assertions import *
 from factories import create
@@ -133,6 +133,11 @@ class TestRemoveObjectsUnworthyOfNaming:
         assert_equal([output, se, call],
                      remove_objects_unworthy_of_naming([seq, output, se, call]))
 
+def assert_assignment(event, expected_name, expected_object):
+    assert_instance(event, Assign)
+    assert_equal(expected_name, event.name)
+    assert_equal(expected_object, event.obj)
+
 class TestNameObjectsOnTimeline:
     def test_names_objects_appropriatelly(self):
         obj = create(SequenceObject)
@@ -141,5 +146,7 @@ class TestNameObjectsOnTimeline:
         obj2 = create(SequenceObject)
         put_on_timeline(obj, call, obj2)
 
-        assert_equal({obj: 'alist1', obj2: 'alist2'},
-                     name_objects_on_timeline([obj, call, obj2]))
+        timeline = name_objects_on_timeline([obj, call, obj2])
+        assert_assignment(timeline[0], 'alist1', obj)
+        assert_equal(call, timeline[1])
+        assert_assignment(timeline[2], 'alist2', obj2)
