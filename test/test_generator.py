@@ -601,7 +601,7 @@ class TestGeneratorClass:
         assert_contains(result, "self.assertEqual((alist, alist), doubler.double(alist))")
 
     def test_names_output_when_it_was_a_part_of_input(self):
-        function = create(Function, args=['x'])
+        function = create(Function, args=['x'], module=None)
         obj1 = create(SequenceObject)
         obj2 = create(SequenceObject)
         alist = create(SequenceObject, obj=[obj1, obj2], serialize=lambda x:x)

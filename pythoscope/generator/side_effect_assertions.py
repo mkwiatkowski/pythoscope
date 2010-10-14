@@ -1,7 +1,7 @@
 from copy import copy
 
 from pythoscope.event import Event
-from pythoscope.generator.code_string import CodeString, combine
+from pythoscope.generator.code_string import addimport, CodeString, combine
 from pythoscope.generator.constructor import constructor_as_string, call_as_string_for
 from pythoscope.generator.dependencies import sorted_by_timestamp, objects_affected_by_side_effects
 from pythoscope.generator.namer import assign_names_to_objects
@@ -132,6 +132,8 @@ def generate_test_contents(events, template):
                 call = event.actual
                 actual = call_as_string_for(call.definition.name, call.input,
                                             call.definition, already_assigned_names)
+                # TODO method calls should be different
+                actual = addimport(actual, (call.definition.module.locator, call.definition.name))
             else:
                 actual = constructor_as_string(event.actual, already_assigned_names)
             line = template.equal_assertion(expected, actual)

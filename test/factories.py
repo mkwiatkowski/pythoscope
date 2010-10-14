@@ -72,12 +72,16 @@ class Factory(object):
 from pythoscope.astbuilder import parse
 from pythoscope.serializer import UnknownObject, ImmutableObject, SequenceObject
 from pythoscope.store import Function, FunctionCall, Definition, TestClass,\
-    TestMethod
+    TestMethod, Module, Project
 
+register_factory(Project,
+  path="/tmp/")
+register_factory(Module,
+  project=create(Project), subpath="module")
 register_factory(Definition,
   name="definition")
 register_factory(Function,
-  name="function")
+  name="function", module=create(Module))
 register_factory(UnknownObject,
   obj=None)
 register_factory(ImmutableObject,

@@ -165,6 +165,11 @@ class TestGenerateTestContents:
         assert_equal_strings("self.assertEqual([], function())\n",
                              generate_test_contents([aline], unittest_template))
 
+    def test_adds_import_for_an_assertion_line(self):
+        aline = EqualAssertionLine(create(SequenceObject), create(FunctionCall), 1)
+        assert_equal(set([('module', 'function')]),
+                     generate_test_contents([aline], unittest_template).imports)
+
     def test_generates_side_effect_line(self):
         alist = create(SequenceObject)
         assign = Assign('alist', alist, 1)
@@ -177,7 +182,6 @@ class TestGenerateTestCase:
         alist = create(SequenceObject)
         call = create(FunctionCall, args={}, output=alist)
         put_on_timeline(call, alist)
-        assert_equal_strings("self.assertEqual([], function())\n",
-                             generate_test_case(call, template=unittest_template))
-        # TODO check imports (for function!)
-
+        code_string = generate_test_case(call, template=unittest_template)
+        assert_equal_strings("self.assertEqual([], function())\n", code_string)
+        assert_equal(set([('module', 'function')]), code_string.imports)
