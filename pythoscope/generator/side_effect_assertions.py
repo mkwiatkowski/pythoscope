@@ -14,6 +14,27 @@ from pythoscope.store import FunctionCall, UserObject, MethodCall,\
 from pythoscope.util import counted, flatten, all_of_type
 
 
+# :: Call -> CodeString
+def generate_test_case(call, template):
+    """This functions binds all other functions from this module together,
+    implementing full test generation process, from the object to a test case
+    string.
+
+    Call -> assertions_for_call ->
+      [AssertionLine] -> expand_all_into_timeline ->
+        [Event] -> remove_objects_unworthy_of_naming ->
+          [Event] -> name_objects_on_timeline ->
+            [Event] -> generate_test_contents ->
+              CodeString
+    """
+    return \
+        generate_test_contents(
+        name_objects_on_timeline(
+            remove_objects_unworthy_of_naming(
+                expand_all_into_timeline(
+                    assertions_for_call(call)))),
+        template)
+
 class AssertionLine(Event):
     def __init__(self, timestamp):
         # We don't call Event.__init__ on purpose, we set our own timestamp.
@@ -51,7 +72,12 @@ def assertions_for_call(call):
 
 # :: AssertionLine -> [Event]
 def expand_into_timeline(assertion_line):
-    return sorted_by_timestamp(list(set(get_contained_events([assertion_line.expected, assertion_line.actual]))) + [assertion_line])
+    return sorted_by_timestamp(list(set(get_contained_events(assertion_line))) + [assertion_line])
+
+# :: [AssertionLine] -> [Event]
+def expand_all_into_timeline(assertion_lines):
+    # TODO remove duplicates?
+    return sorted_by_timestamp(flatten(map(expand_into_timeline, assertion_lines)))
 
 # :: [Event] -> [SerializedObject]
 def objects_only(events):
@@ -91,7 +117,7 @@ class UnittestTemplate(Template):
 def add_newline(code_string):
     return combine(code_string, "\n")
 
-# :: [Event] -> CodeString
+# :: ([Event], Template) -> CodeString
 def generate_test_contents(events, template):
     contents = CodeString("")
     already_assigned_names = {}
@@ -117,7 +143,7 @@ def generate_test_contents(events, template):
                                       event.definition,
                                       already_assigned_names)
         else:
-            pass # TODO
+            raise TypeError("Don't know how to generate test contents for event %r." % event)
         if line.uncomplete:
             line = combine("# ", line)
         contents = combine(contents, add_newline(line))
@@ -182,6 +208,8 @@ def get_contained_events(obj):
             return []
     elif isinstance(obj, SideEffect):
         return [obj] + get_those_and_contained_events(list(obj.affected_objects))
+    elif isinstance(obj, EqualAssertionLine):
+        return get_contained_events(obj.expected) + get_contained_events(obj.actual)
     else:
         raise TypeError("Wrong argument to get_contained_events: %r." % obj)
 

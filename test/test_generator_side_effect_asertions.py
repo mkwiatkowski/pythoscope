@@ -4,7 +4,7 @@ from pythoscope.side_effect import SideEffect, ListAppend
 from pythoscope.generator.side_effect_assertions import assertions_for_call,\
     EqualAssertionLine, expand_into_timeline, name_objects_on_timeline,\
     remove_objects_unworthy_of_naming, Assign, generate_test_contents,\
-    UnittestTemplate
+    UnittestTemplate, generate_test_case
 
 from assertions import *
 from factories import create
@@ -152,6 +152,8 @@ class TestNameObjectsOnTimeline:
         assert_equal(call, timeline[1])
         assert_assignment(timeline[2], 'alist2', obj2)
 
+unittest_template = UnittestTemplate()
+
 class TestGenerateTestContents:
     def test_generates_assignment_line(self):
         assign = Assign('foo', create(SequenceObject), 1)
@@ -160,9 +162,8 @@ class TestGenerateTestContents:
 
     def test_generates_assertion_line(self):
         aline = EqualAssertionLine(create(SequenceObject), create(FunctionCall), 1)
-        template = UnittestTemplate()
         assert_equal_strings("self.assertEqual([], function())\n",
-                             generate_test_contents([aline], template))
+                             generate_test_contents([aline], unittest_template))
 
     def test_generates_side_effect_line(self):
         alist = create(SequenceObject)
@@ -170,3 +171,13 @@ class TestGenerateTestContents:
         se = ListAppend(alist, create(ImmutableObject, obj=1))
         assert_equal_strings("alist = []\nalist.append(1)\n",
                              generate_test_contents([assign, se], None))
+
+class TestGenerateTestCase:
+    def test_generates_full_test_case_for_a_call(self):
+        alist = create(SequenceObject)
+        call = create(FunctionCall, args={}, output=alist)
+        put_on_timeline(call, alist)
+        assert_equal_strings("self.assertEqual([], function())\n",
+                             generate_test_case(call, template=unittest_template))
+        # TODO check imports (for function!)
+
