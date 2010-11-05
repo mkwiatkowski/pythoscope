@@ -7,13 +7,8 @@ from pythoscope.store import FunctionCall
 
 from assertions import *
 from factories import create
-from generator_helper import put_on_timeline
+from generator_helper import put_on_timeline, create_parent_call_with_side_effects
 
-
-def create_parent_call_with_side_effects(call, side_effects):
-    parent_call = create(FunctionCall)
-    parent_call.add_subcall(call)
-    map(parent_call.add_side_effect, side_effects)
 
 # We want to test only the logic in _calculate.
 class CallDependenciesMock(CallDependencies):

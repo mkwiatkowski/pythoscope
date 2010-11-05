@@ -3,7 +3,8 @@ from copy import copy
 from pythoscope.event import Event
 from pythoscope.generator.code_string import addimport, CodeString, combine
 from pythoscope.generator.constructor import constructor_as_string, call_as_string_for
-from pythoscope.generator.dependencies import sorted_by_timestamp, objects_affected_by_side_effects
+from pythoscope.generator.dependencies import sorted_by_timestamp,\
+    objects_affected_by_side_effects, older_than
 from pythoscope.generator.namer import assign_names_to_objects
 
 from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\
@@ -14,6 +15,10 @@ from pythoscope.store import FunctionCall, UserObject, MethodCall,\
 from pythoscope.util import counted, flatten, all_of_type
 
 
+# :: Call -> [Event]
+def assertions_for_call(call):
+    return test_timeline_for_call(expand_into_timeline(call), call)
+
 # :: Call -> CodeString
 def generate_test_case(call, template):
     """This functions binds all other functions from this module together,
@@ -21,18 +26,16 @@ def generate_test_case(call, template):
     string.
 
     Call -> assertions_for_call ->
-      [AssertionLine] -> expand_all_into_timeline ->
-        [Event] -> remove_objects_unworthy_of_naming ->
-          [Event] -> name_objects_on_timeline ->
-            [Event] -> generate_test_contents ->
-              CodeString
+      [Event] -> remove_objects_unworthy_of_naming ->
+        [Event] -> name_objects_on_timeline ->
+          [Event] -> generate_test_contents ->
+            CodeString
     """
     return \
         generate_test_contents(
         name_objects_on_timeline(
             remove_objects_unworthy_of_naming(
-                expand_all_into_timeline(
-                    assertions_for_call(call)))),
+                assertions_for_call(call))),
         template)
 
 class AssertionLine(Event):
@@ -46,11 +49,33 @@ class EqualAssertionLine(AssertionLine):
         self.expected = expected
         self.actual = actual
 
-# :: SerializedObject -> SerializedObject
-def object_copy(obj):
-    new_obj = copy(obj)
-    new_obj.timestamp = obj.timestamp+0.5
-    return new_obj
+# :: Event -> Event
+def event_copy(event):
+    new_event = copy(event)
+    new_event.timestamp = event.timestamp+0.5
+    return new_event
+
+# :: (list, object, object) -> None
+def replace(alist, old_element, new_element):
+    def pass_or_replace(element):
+        if element is old_element:
+            return new_element
+        return element
+    return map(pass_or_replace, alist)
+
+# :: (SideEffect, SerializedObject, SerializedObject) -> SideEffect
+def copy_side_effects(side_effects, old_obj, new_obj):
+    "Copy side effects replacing occurences of old_obj with new_obj."
+    new_side_effects = []
+    for side_effect in side_effects:
+        new_side_effect = event_copy(side_effect)
+        new_side_effect.affected_objects = replace(new_side_effect.affected_objects, old_obj, new_obj)
+        new_side_effect.referenced_objects = replace(new_side_effect.referenced_objects, old_obj, new_obj)
+        if isinstance(side_effect, BuiltinMethodWithPositionArgsSideEffect):
+            new_side_effect.obj = new_side_effect.affected_objects[0]
+            new_side_effect.args = new_side_effect.referenced_objects[1:]
+        new_side_effects.append(new_side_effect)
+    return new_side_effects
 
 # :: Call -> int
 def last_call_action_timestamp(call):
@@ -58,26 +83,49 @@ def last_call_action_timestamp(call):
         return call.side_effects[-1].timestamp
     return call.timestamp
 
-# :: Call -> [AssertionLine]
-def assertions_for_call(call):
-    after_call_timestamp = last_call_action_timestamp(call)
+# :: ([Event], SerializedObject) -> [SideEffect]
+def side_effects_that_affect_object(events, obj):
+    "Filter out side effects that are irrelevant to given object."
+    for side_effect in all_of_type(events, SideEffect):
+        if obj in side_effect.affected_objects:
+            yield side_effect
+
+# :: [Event] -> [Event]
+def without_calls(events):
+    def not_call(event):
+        return not isinstance(event, Call)
+    return filter(not_call, events)
+
+# :: ([Event], Call) -> [Event]
+def test_timeline_for_call(execution_events, call):
+    """Construct a new timeline for a test case based on real execution timeline
+    and a call that needs to be tested.
+
+    The new timeline in most cases will contain assertions.
+    """
+    events = older_than(without_calls(execution_events), call.timestamp)
+    def copy_object_at(obj, timestamp):
+        new_obj = event_copy(obj) # TODO use timestamp
+        new_ses = older_than(side_effects_that_affect_object(execution_events, obj), timestamp)
+        return new_obj, copy_side_effects(new_ses, obj, new_obj)
+    call_return_timestamp = last_call_action_timestamp(call)
+    # We want a copy of the output right after the call, so we pass a timestamp
+    # slightly bigger than the call return.
+    output_copy, output_side_effects = copy_object_at(call.output, call_return_timestamp+0.01)
+    events.extend([output_copy] + output_side_effects)
     if call.output.timestamp < call.timestamp:
         # If object existed before the call we need two assertions: one for
         # identity, the other for value.
-        return [EqualAssertionLine(call.output, call, after_call_timestamp+0.25),
-                EqualAssertionLine(object_copy(call.output), call.output, after_call_timestamp+0.5)]
+        events.extend([EqualAssertionLine(call.output, call, call_return_timestamp+0.25),
+                       EqualAssertionLine(output_copy, call.output, call_return_timestamp+0.75)])
     else:
         # If it didn't exist before the call we just need a value assertion.
-        return [EqualAssertionLine(object_copy(call.output), call, after_call_timestamp+0.5)]
+        events.extend([EqualAssertionLine(output_copy, call, call_return_timestamp+0.75)])
+    return events
 
-# :: AssertionLine -> [Event]
-def expand_into_timeline(assertion_line):
-    return sorted_by_timestamp(list(set(get_contained_events(assertion_line))) + [assertion_line])
-
-# :: [AssertionLine] -> [Event]
-def expand_all_into_timeline(assertion_lines):
-    # TODO remove duplicates?
-    return sorted_by_timestamp(flatten(map(expand_into_timeline, assertion_lines)))
+# :: (Event, ...) -> [Event]
+def expand_into_timeline(*events):
+    return sorted_by_timestamp(set(get_those_and_contained_events(list(events))))
 
 # :: [Event] -> [SerializedObject]
 def objects_only(events):
@@ -197,11 +245,10 @@ def get_contained_events(obj):
     elif isinstance(obj, UserObject):
         return get_contained_events(obj.get_init_and_external_calls())
     elif isinstance(obj, (FunctionCall, MethodCall, GeneratorObjectInvocation)):
-        if obj.raised_exception():
-            output = obj.exception
-        else:
-            output = obj.output
-        return get_those_and_contained_events(obj.input.values() + [output] + list(obj.side_effects))
+        ret = get_those_and_contained_events(obj.input.values() + list(obj.side_effects))
+        if obj.caller:
+            ret += get_contained_events(obj.caller)
+        return ret
     elif isinstance(obj, GeneratorObject):
         if obj.is_activated():
             return get_those_and_contained_events(obj.args.values()) +\
@@ -211,9 +258,12 @@ def get_contained_events(obj):
     elif isinstance(obj, SideEffect):
         return [obj] + get_those_and_contained_events(list(obj.affected_objects))
     elif isinstance(obj, EqualAssertionLine):
-        return get_contained_events(obj.expected) + get_contained_events(obj.actual)
+        objs = [obj.expected]
+        if not isinstance(obj.actual, Call):
+            objs.append(obj.actual)
+        return objs + get_contained_events([obj.expected, obj.actual])
     else:
-        raise TypeError("Wrong argument to get_contained_events: %r." % obj)
+        raise TypeError("Wrong argument to get_contained_events: %s." % repr(obj))
 
 # :: [Event] -> [Event]
 def get_those_and_contained_events(objs):

@@ -2,13 +2,15 @@ from pythoscope.serializer import SequenceObject, ImmutableObject
 from pythoscope.store import Function, FunctionCall
 from pythoscope.side_effect import SideEffect, ListAppend
 from pythoscope.generator.side_effect_assertions import assertions_for_call,\
+    AssertionLine, \
     EqualAssertionLine, expand_into_timeline, name_objects_on_timeline,\
     remove_objects_unworthy_of_naming, Assign, generate_test_contents,\
     UnittestTemplate, generate_test_case
+from pythoscope.util import all_of_type
 
 from assertions import *
 from factories import create
-from generator_helper import put_on_timeline
+from generator_helper import put_on_timeline, create_parent_call_with_side_effects
 
 
 def assert_is_copy_of(obj, copy):
@@ -38,7 +40,8 @@ class TestAssertionsForCall:
     def test_returns_one_assertion_if_output_object_didnt_exist_before_the_call(self):
         put_on_timeline(self.call, self.alist)
 
-        assertion = assert_one_element_and_return(assertions_for_call(self.call))
+        assertions = all_of_type(assertions_for_call(self.call), AssertionLine)
+        assertion = assert_one_element_and_return(assertions)
         assert_is_equal_assertion_line(assertion, expected_a_copy=True,
                                        expected=self.call.output,
                                        actual=self.call)
@@ -47,7 +50,7 @@ class TestAssertionsForCall:
     def test_returns_two_assertions_if_output_object_existed_before_the_call(self):
         put_on_timeline(self.alist, self.call)
 
-        assertions = assertions_for_call(self.call)
+        assertions = all_of_type(assertions_for_call(self.call), AssertionLine)
         assert_length(assertions, 2)
 
         assert_is_equal_assertion_line(assertions[0],
@@ -56,18 +59,38 @@ class TestAssertionsForCall:
                                        expected=self.call.output, actual=self.call.output)
         assert assertions[0].timestamp < assertions[1].timestamp
 
-    def test_assertion_gets_timestamp_half_higher_than_the_last_call_action(self):
+    def test_assertion_gets_timestamp_075_higher_than_the_last_call_action(self):
         se = SideEffect([self.alist], [])
         self.call.add_side_effect(se)
         put_on_timeline(self.call, self.alist, se)
 
-        assertion = assert_one_element_and_return(assertions_for_call(self.call))
-        assert_equal(se.timestamp+0.5, assertion.timestamp)
+        assertions = all_of_type(assertions_for_call(self.call), AssertionLine)
+        assertion = assert_one_element_and_return(assertions)
+        assert_equal(se.timestamp+0.75, assertion.timestamp)
+
+    def test_object_copy_includes_its_side_effects(self):
+        se = SideEffect([self.alist], [])
+        self.call.add_side_effect(se)
+        put_on_timeline(self.alist, se, self.call)
+
+        timeline = assertions_for_call(self.call)
+
+        alists = all_of_type(timeline, SequenceObject)
+        assert_length(alists, 2)
+        assert alists[0] is not alists[1]
+
+        side_effects = all_of_type(timeline, SideEffect)
+        assert_length(side_effects, 2)
+        assert side_effects[0] is not side_effects[1]
+
+        assert alists[0] in side_effects[0].affected_objects
+        assert alists[1] in side_effects[1].affected_objects
 
 class TestExpandIntoTimeline:
     def setUp(self):
         self.alist = create(SequenceObject)
-        self.call = create(FunctionCall, args={}, output=self.alist)
+        self.call = create(FunctionCall, args={'x': self.alist},
+                      definition=create(Function, args=['x']))
         self.aline = EqualAssertionLine(self.alist, self.call, 0)
 
     def test_returns_objects_in_assertion_sorted_by_timestamp(self):
@@ -77,30 +100,30 @@ class TestExpandIntoTimeline:
 
     def test_includes_relevant_side_effects_in_the_output(self):
         se = SideEffect([self.alist], [])
-        self.call.add_side_effect(se)
-        put_on_timeline(self.alist, self.call, se, self.aline)
+        create_parent_call_with_side_effects(self.call, [se])
+        put_on_timeline(self.alist, se, self.call, self.aline)
 
         assert_equal([self.alist, se, self.aline], expand_into_timeline(self.aline))
 
     def test_includes_relevant_objects_affected_by_side_effects_in_the_output(self):
         alist2 = create(SequenceObject)
         se = SideEffect([self.alist, alist2], [])
-        self.call.add_side_effect(se)
-        put_on_timeline(self.alist, alist2, self.call, se, self.aline)
+        create_parent_call_with_side_effects(self.call, [se])
+        put_on_timeline(self.alist, alist2, se, self.call, self.aline)
 
         assert_equal([self.alist, alist2, se, self.aline], expand_into_timeline(self.aline))
 
 class TestRemoveObjectsUnworthyOfNaming:
     def test_keeps_objects_used_more_than_once(self):
         alist = create(SequenceObject)
-        call = create(FunctionCall, args={'x': alist}, output=alist,
-                      definition=create(Function, args=['x']))
+        call = create(FunctionCall, args={'x': alist, 'y': alist},
+                      definition=create(Function, args=['x', 'y']))
         put_on_timeline(alist, call)
         assert_equal([alist, call], remove_objects_unworthy_of_naming([alist, call]))
 
     def test_removes_objects_used_only_once(self):
         alist = create(SequenceObject)
-        call = create(FunctionCall, args={}, output=alist)
+        call = create(FunctionCall, args={'x': alist})
         put_on_timeline(alist, call)
         assert_equal([call], remove_objects_unworthy_of_naming([alist, call]))
 
@@ -185,3 +208,18 @@ class TestGenerateTestCase:
         code_string = generate_test_case(call, template=unittest_template)
         assert_equal_strings("self.assertEqual([], function())\n", code_string)
         assert_equal(set([('module', 'function')]), code_string.imports)
+
+    def test_generates_full_test_case_for_a_call_with_side_effects_and_two_assertions_required(self):
+        alist = create(SequenceObject)
+        call = create(FunctionCall, args={'x': alist}, output=alist,
+                      definition=create(Function, args=['x']))
+        se = ListAppend(alist, create(ImmutableObject, obj=1))
+        call.add_side_effect(se)
+        put_on_timeline(alist, call, se)
+
+        assert_equal_strings("alist1 = []\n"
+                             "alist2 = []\n"
+                             "alist2.append(1)\n"
+                             "self.assertEqual(alist1, function(alist1))\n"
+                             "self.assertEqual(alist2, alist1)\n",
+                             generate_test_case(call, template=unittest_template))
