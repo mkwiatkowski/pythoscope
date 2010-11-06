@@ -11,15 +11,15 @@ from pythoscope.store import Class, Function, UserObject, MethodCall, Method,\
 def import_for(definition):
     return (definition.module.locator, definition.name)
 
-# :: string -> string
+# :: string -> CodeString
 def todo_value(value):
     """Wrap given value in a <TODO: value> block.
     """
-    return "<TODO: %s>" % value
+    return CodeString("<TODO: %s>" % value, uncomplete=True)
 
-# :: [string] -> string
+# :: [CodeString] -> CodeString
 def list_of(strings):
-    return "[%s]" % ', '.join(strings)
+    return putinto(join(', ', strings), "[%s]")
 
 # :: MapObject -> {str: SerializedObject}
 def map_as_kwargs(mapobject):
@@ -27,7 +27,7 @@ def map_as_kwargs(mapobject):
     # the interpreter on runtime.
     return sorted([(eval(k.reconstructor), v) for k,v in mapobject.mapping])
 
-# :: SerializedObject | [SerializedObject] -> string
+# :: SerializedObject | [SerializedObject] -> CodeString
 def type_as_string(object):
     """Return a most common representation of the wrapped object type.
 
@@ -36,8 +36,7 @@ def type_as_string(object):
     """
     if isinstance(object, list):
         return list_of(map(type_as_string, object))
-
-    return object.type_name
+    return CodeString(object.type_name)
 
 # :: ([SerializedObject], {SerializedObject: str}) -> [CodeString]
 def get_objects_collection_info(objs, assigned_names):
@@ -285,8 +284,8 @@ def constructor_as_string(object, assigned_names={}):
                 object.definition)
             return addimport(cs, import_for(object.definition))
         else:
-            return CodeString(todo_value('generator'), uncomplete=True)
+            return todo_value('generator')
     elif isinstance(object, UnknownObject):
-        return CodeString(todo_value(object.partial_reconstructor), uncomplete=True)
+        return todo_value(object.partial_reconstructor)
     else:
         raise TypeError("constructor_as_string expected SerializedObject at input, not %s" % object)

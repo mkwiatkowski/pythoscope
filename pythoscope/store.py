@@ -4,7 +4,7 @@ import re
 
 from pythoscope.astbuilder import regenerate
 from pythoscope.code_trees_manager import FilesystemCodeTreesManager
-from pythoscope.compat import set
+from pythoscope.compat import any, set
 from pythoscope.event import Event
 from pythoscope.localizable import Localizable
 from pythoscope.logger import log
@@ -728,6 +728,15 @@ class GeneratorObject(Callable, SerializedObject):
 
     def is_activated(self):
         return hasattr(self, 'args')
+
+    def raised_exception(self):
+        return any([c.raised_exception() for c in self.calls])
+
+    def _get_exception(self):
+        for invocation in self.calls:
+            if invocation.raised_exception():
+                return invocation.exception
+    exception = property(_get_exception)
 
     def __repr__(self):
         if self.is_activated():

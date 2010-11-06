@@ -44,7 +44,10 @@ class TestObject(unittest.TestCase):
 
 class TestDoSomethingSimpleWithSystem(unittest.TestCase):
     def test_do_something_simple_with_system_returns_None_for_system_instance(self):
-        alist = [Object('one'), Object('two'), Object('three')]
+        alist = []
+        alist.append(Object('one'))
+        alist.append(Object('two'))
+        alist.append(Object('three'))
         self.assertEqual(None, do_something_simple_with_system(System(Composite(alist))))
 
 class TestMain(unittest.TestCase):

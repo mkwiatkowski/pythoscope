@@ -7,6 +7,8 @@ from pythoscope.generator.code_string import combine, putinto
 from pythoscope.generator.selector import testable_objects, testable_calls
 from pythoscope.generator.constructor import call_as_string_for,\
     constructor_as_string, todo_value, type_as_string
+from pythoscope.generator.side_effect_assertions import UnittestTemplate,\
+    generate_test_case
 from pythoscope.generator.setup_and_teardown import assign_names_and_setup,\
     assign_names_and_setup_for_multiple_calls, can_be_constructed
 from pythoscope.serializer import ImmutableObject, UnknownObject,\
@@ -213,7 +215,7 @@ def type_of(string):
     return "type(%s)" % string
 
 def map_types(string):
-    return "map(type, %s)" % string
+    return putinto(string, "map(type, %s)")
 
 def call_with_args(callable, args):
     """Return an example of a call to callable with all its standard arguments.
@@ -313,6 +315,13 @@ class TestMethodDescription(object):
     def _has_complete_setup(self):
         return self.setup and not self.setup.startswith("#")
 
+class BareTestMethodDescription(object):
+    def __init__(self, name, code=""):
+        self.name = name
+        self.code = code
+    def contains_code(self):
+        return not all([line.startswith("#") for line in self.code.splitlines()])
+
 class TestGenerator(object):
     main_snippet = EmptyCode()
 
@@ -378,13 +387,17 @@ class TestGenerator(object):
         result = "%s\n" % (self.test_class_header(class_name))
         for method_description in method_descriptions:
             result += "    def %s(self):\n" % method_description.name
-            if method_description.setup:
-                result += indented_setup(method_description.setup, "        ")
-            for assertion in method_description.assertions:
-                if assertion.setup:
-                    result += indented_setup(assertion.setup, "        ")
-                apply_template = getattr(self, "%s_assertion" % assertion.type)
-                result += "        %s\n" % apply_template(*assertion.args)
+            if isinstance(method_description, BareTestMethodDescription):
+                result += indented_setup(method_description.code, "        ")
+                self.ensure_imports(method_description.code.imports)
+            else:
+                if method_description.setup:
+                    result += indented_setup(method_description.setup, "        ")
+                for assertion in method_description.assertions:
+                    if assertion.setup:
+                        result += indented_setup(assertion.setup, "        ")
+                    apply_template = getattr(self, "%s_assertion" % assertion.type)
+                    result += "        %s\n" % apply_template(*assertion.args)
             # We need at least one statement in a method to be syntatically correct.
             if not method_description.contains_code():
                 result += "        pass\n"
@@ -456,15 +469,8 @@ class TestGenerator(object):
 
     def _method_descriptions_from_function(self, function):
         for call in testable_calls(function.get_unique_calls()):
-            assigned_names = {}
-            setup = assign_names_and_setup_for_multiple_calls(to_pure_calls([call]), assigned_names)
             name = call2testname(call, function.name)
-            def assertions():
-                yield self._create_assertion(function.name, call,
-                                             stub=setup.uncomplete,
-                                             assigned_names=assigned_names)
-
-            yield TestMethodDescription(name, list(assertions()), setup)
+            yield BareTestMethodDescription(name, generate_test_case(call, UnittestTemplate()))
 
     def _method_description_from_user_object(self, user_object):
         init_call = user_object.get_init_call()
