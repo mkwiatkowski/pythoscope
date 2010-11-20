@@ -1,8 +1,8 @@
 from pythoscope.serializer import SequenceObject, ImmutableObject
 from pythoscope.store import Function, FunctionCall
 from pythoscope.side_effect import SideEffect, ListAppend
-from pythoscope.generator.side_effect_assertions import assertions_for_call,\
-    AssertionLine, \
+from pythoscope.generator.side_effect_assertions import assertions,\
+    AssertionLine, object_usage_counts,\
     EqualAssertionLine, expand_into_timeline, name_objects_on_timeline,\
     remove_objects_unworthy_of_naming, Assign, generate_test_contents,\
     UnittestTemplate, generate_test_case
@@ -40,8 +40,8 @@ class TestAssertionsForCall:
     def test_returns_one_assertion_if_output_object_didnt_exist_before_the_call(self):
         put_on_timeline(self.call, self.alist)
 
-        assertions = all_of_type(assertions_for_call(self.call), AssertionLine)
-        assertion = assert_one_element_and_return(assertions)
+        assertion_lines = all_of_type(assertions(self.call), AssertionLine)
+        assertion = assert_one_element_and_return(assertion_lines)
         assert_is_equal_assertion_line(assertion, expected_a_copy=True,
                                        expected=self.call.output,
                                        actual=self.call)
@@ -50,22 +50,22 @@ class TestAssertionsForCall:
     def test_returns_two_assertions_if_output_object_existed_before_the_call(self):
         put_on_timeline(self.alist, self.call)
 
-        assertions = all_of_type(assertions_for_call(self.call), AssertionLine)
-        assert_length(assertions, 2)
+        assertion_lines = all_of_type(assertions(self.call), AssertionLine)
+        assert_length(assertion_lines, 2)
 
-        assert_is_equal_assertion_line(assertions[0],
+        assert_is_equal_assertion_line(assertion_lines[0],
                                        expected=self.call.output, actual=self.call)
-        assert_is_equal_assertion_line(assertions[1], expected_a_copy=True,
+        assert_is_equal_assertion_line(assertion_lines[1], expected_a_copy=True,
                                        expected=self.call.output, actual=self.call.output)
-        assert assertions[0].timestamp < assertions[1].timestamp
+        assert assertion_lines[0].timestamp < assertion_lines[1].timestamp
 
     def test_assertion_gets_timestamp_075_higher_than_the_last_call_action(self):
         se = SideEffect([self.alist], [])
         self.call.add_side_effect(se)
         put_on_timeline(self.call, self.alist, se)
 
-        assertions = all_of_type(assertions_for_call(self.call), AssertionLine)
-        assertion = assert_one_element_and_return(assertions)
+        assertion_lines = all_of_type(assertions(self.call), AssertionLine)
+        assertion = assert_one_element_and_return(assertion_lines)
         assert_equal(se.timestamp+0.75, assertion.timestamp)
 
     def test_object_copy_includes_its_side_effects(self):
@@ -73,20 +73,17 @@ class TestAssertionsForCall:
         self.call.add_side_effect(se)
         put_on_timeline(self.alist, se, self.call)
 
-        timeline = assertions_for_call(self.call)
+        timeline = assertions(self.call)
 
         alists = all_of_type(timeline, SequenceObject)
         assert_length(alists, 2)
         assert alists[0] is not alists[1]
 
         side_effects = all_of_type(timeline, SideEffect)
-        assert_length(side_effects, 2)
-        assert side_effects[0] is not side_effects[1]
+        side_effect = assert_one_element_and_return(side_effects)
+        assert alists[1] in side_effect.affected_objects
 
-        assert alists[0] in side_effects[0].affected_objects
-        assert alists[1] in side_effects[1].affected_objects
-
-class TestExpandIntoTimeline:
+class TestObjectUsageCounts:
     def setUp(self):
         self.alist = create(SequenceObject)
         self.call = create(FunctionCall, args={'x': self.alist},
@@ -96,22 +93,22 @@ class TestExpandIntoTimeline:
     def test_returns_objects_in_assertion_sorted_by_timestamp(self):
         put_on_timeline(self.alist, self.call, self.aline)
 
-        assert_equal([self.alist, self.aline], expand_into_timeline(self.aline))
+        assert_equal([(self.alist, 2)], object_usage_counts(self.aline))
 
     def test_includes_relevant_side_effects_in_the_output(self):
         se = SideEffect([self.alist], [])
         create_parent_call_with_side_effects(self.call, [se])
         put_on_timeline(self.alist, se, self.call, self.aline)
 
-        assert_equal([self.alist, se, self.aline], expand_into_timeline(self.aline))
+        assert_equal([(self.alist, 2)], object_usage_counts(self.aline))
 
-    def test_includes_relevant_objects_affected_by_side_effects_in_the_output(self):
+    def test_doesnt_include_relevant_objects_affected_by_side_effects_in_the_output(self):
         alist2 = create(SequenceObject)
         se = SideEffect([self.alist, alist2], [])
         create_parent_call_with_side_effects(self.call, [se])
         put_on_timeline(self.alist, alist2, se, self.call, self.aline)
 
-        assert_equal([self.alist, alist2, se, self.aline], expand_into_timeline(self.aline))
+        assert_equal([(self.alist, 2)], object_usage_counts(self.aline))
 
 class TestRemoveObjectsUnworthyOfNaming:
     def test_keeps_objects_used_more_than_once(self):
@@ -219,7 +216,7 @@ class TestGenerateTestCase:
 
         assert_equal_strings("alist1 = []\n"
                              "alist2 = []\n"
-                             "alist2.append(1)\n"
                              "self.assertEqual(alist1, function(alist1))\n"
+                             "alist2.append(1)\n"
                              "self.assertEqual(alist2, alist1)\n",
                              generate_test_case(call, template=unittest_template))

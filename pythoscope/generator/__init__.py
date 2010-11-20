@@ -8,7 +8,7 @@ from pythoscope.generator.selector import testable_objects, testable_calls
 from pythoscope.generator.constructor import call_as_string_for,\
     constructor_as_string, todo_value, type_as_string
 from pythoscope.generator.side_effect_assertions import UnittestTemplate,\
-    generate_test_case
+    NoseTemplate, generate_test_case
 from pythoscope.generator.setup_and_teardown import assign_names_and_setup,\
     assign_names_and_setup_for_multiple_calls, can_be_constructed
 from pythoscope.serializer import ImmutableObject, UnknownObject,\
@@ -467,25 +467,20 @@ class TestGenerator(object):
                                                 method.get_call_args()))
         return TestMethodDescription(test_name, assertions=assertions, setup=setup)
 
+    def template(self):
+        if isinstance(self, UnittestTestGenerator):
+            return UnittestTemplate()
+        elif isinstance(self, NoseTestGenerator):
+            return NoseTemplate()
+
     def _method_descriptions_from_function(self, function):
         for call in testable_calls(function.get_unique_calls()):
             name = call2testname(call, function.name)
-            yield BareTestMethodDescription(name, generate_test_case(call, UnittestTemplate()))
+            yield BareTestMethodDescription(name, generate_test_case(call, self.template()))
 
     def _method_description_from_user_object(self, user_object):
         init_call = user_object.get_init_call()
         external_calls = testable_calls(user_object.get_external_calls())
-        local_name = underscore(user_object.klass.name)
-
-        assigned_names = {}
-        full_setup = assign_names_and_setup_for_multiple_calls(to_pure_calls(user_object.get_init_and_external_calls()),
-                                                               assigned_names)
-
-        constructor = constructor_as_string(user_object, assigned_names)
-        stub_all = constructor.uncomplete or full_setup.uncomplete
-
-        self.ensure_imports(constructor.imports)
-        self.ensure_imports(full_setup.imports)
 
         def test_name():
             if len(external_calls) == 0 and init_call:
@@ -512,31 +507,7 @@ class TestGenerator(object):
                     test_name += "_after_creation_with_%s" % arguments_as_string(init_call.input)
             return test_name
 
-        def assertions():
-            if init_call and len(external_calls) == 0:
-                # If the constructor raised an exception, object creation should be an assertion.
-                if init_call.raised_exception():
-                    yield self._create_assertion(user_object.klass.name, init_call, stub=stub_all, assigned_names=assigned_names)
-                else:
-                    yield(Assertion('comment', args=("# Make sure it doesn't raise any exceptions.",)))
-
-            for call in external_calls:
-                name = "%s.%s" % (local_name, call.definition.name)
-                yield(self._create_assertion(name, call, stub=stub_all, assigned_names=assigned_names))
-
-        def setup():
-            if init_call and init_call.raised_exception():
-                return ""
-            else:
-                setup = "%s = %s\n" % (local_name, constructor)
-                # Comment out the constructor if it isn't complete.
-                if stub_all:
-                    setup = "# %s" % setup
-                return setup
-
-        return TestMethodDescription(test_name(),
-                                     list(assertions()),
-                                     full_setup + setup())
+        return BareTestMethodDescription(test_name(), generate_test_case(user_object, self.template()))
 
     def _create_assertion(self, name, call, stub=False, assigned_names={}):
         """Create a new assertion based on a given call and a name provided

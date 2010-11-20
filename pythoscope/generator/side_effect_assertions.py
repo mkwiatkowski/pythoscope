@@ -4,35 +4,48 @@ from pythoscope.event import Event
 from pythoscope.generator.code_string import addimport, CodeString, combine,\
     putinto
 from pythoscope.generator.constructor import constructor_as_string,\
-    call_as_string_for, import_for, type_as_string, todo_value
+    call_as_string_for, type_as_string, todo_value
 from pythoscope.generator.dependencies import sorted_by_timestamp,\
-    objects_affected_by_side_effects, older_than
+    objects_affected_by_side_effects, older_than, side_effects_before,\
+    side_effects_of
 from pythoscope.generator.namer import assign_names_to_objects
+from pythoscope.generator.selector import testable_calls
 
 from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\
     UnknownObject, SequenceObject, SerializedObject, is_serialized_string
 from pythoscope.side_effect import SideEffect, BuiltinMethodWithPositionArgsSideEffect
 from pythoscope.store import FunctionCall, UserObject, MethodCall,\
-    GeneratorObject, GeneratorObjectInvocation, Call, CallToC
-from pythoscope.util import assert_argument_type, counted, flatten, all_of_type
+    GeneratorObject, GeneratorObjectInvocation, Call, CallToC, Method
+from pythoscope.util import assert_argument_type, compact, counted, flatten, all_of_type
 
+
+# :: Definition -> (str, str)
+def import_for(definition):
+    if isinstance(definition, Method):
+        return import_for(definition.klass)
+    return (definition.module.locator, definition.name)
 
 # :: GeneratorObject -> [SerializedObject]
 def generator_object_yields(gobject):
-    assert_argument_type(gobject, GeneratorObject)
+    assert_argument_type(gobject, (GeneratorObject, MethodCallContext))
     return [c.output for c in gobject.calls]
 
-# :: Call -> [Event]
-def assertions_for_call(call):
-    return test_timeline_for_call(expand_into_timeline(call), call)
+# :: Call | GeneratorObject | UserObject -> [Event]
+def assertions(call_or_user_object):
+    timeline = expand_into_timeline(call_or_user_object)
+    if isinstance(call_or_user_object, UserObject):
+        test_timeline = test_timeline_for_user_object(timeline, call_or_user_object)
+    else:
+        test_timeline = test_timeline_for_call(timeline, call_or_user_object)
+    return remove_duplicates_and_bare_method_contexts(sorted_by_timestamp(include_requirements(test_timeline, timeline)))
 
-# :: Call -> CodeString
-def generate_test_case(call, template):
+# :: Call | UserObject -> CodeString
+def generate_test_case(call_or_user_object, template):
     """This functions binds all other functions from this module together,
-    implementing full test generation process, from the object to a test case
+    implementing full test generation process, from an object to a test case
     string.
 
-    Call -> assertions_for_call ->
+    Call|UserObject -> assertions ->
       [Event] -> remove_objects_unworthy_of_naming ->
         [Event] -> name_objects_on_timeline ->
           [Event] -> generate_test_contents ->
@@ -40,10 +53,18 @@ def generate_test_case(call, template):
     """
     return \
         generate_test_contents(
-        name_objects_on_timeline(
-            remove_objects_unworthy_of_naming(
-                assertions_for_call(call))),
-        template)
+            name_objects_on_timeline(
+                remove_objects_unworthy_of_naming(
+                    assertions(call_or_user_object))),
+            template)
+
+# :: [Event] -> [Event]
+def remove_duplicates_and_bare_method_contexts(events):
+    new_events = list()
+    for event in events:
+        if not isinstance(event, MethodCallContext) and event not in new_events:
+            new_events.append(event)
+    return new_events
 
 class AssertionLine(Event):
     def __init__(self, timestamp):
@@ -66,6 +87,11 @@ class RaisesAssertionLine(AssertionLine):
         AssertionLine.__init__(self, timestamp)
         self.expected_exception = expected_exception
         self.call = call
+
+class CommentLine(AssertionLine):
+    def __init__(self, comment, timestamp):
+        AssertionLine.__init__(self, timestamp)
+        self.comment = comment
 
 # :: Event -> Event
 def event_copy(event):
@@ -116,6 +142,51 @@ def without_calls(events):
         return not isinstance(event, Call)
     return filter(not_call, events)
 
+# :: ([Event], UserObject) -> [Event]
+def test_timeline_for_user_object(execution_events, user_object):
+    """Construct a new timeline for a test case based on real execution timeline
+    and a user object that needs to be tested.
+
+    The new timeline in most cases will contain assertions.
+    """
+    init_call = user_object.get_init_call()
+    external_calls = testable_calls(user_object.get_external_calls())
+    # If the constructor raised an exception, object creation should be an assertion.
+    if init_call and init_call.raised_exception():
+        call_return_timestamp = last_call_action_timestamp(init_call)
+        return [RaisesAssertionLine(init_call.exception, MethodCallContext(init_call, user_object), call_return_timestamp+0.25)]
+    timeline = give_context_to_method_calls(compact([init_call]) + flatten(map(lambda call: test_timeline_for_call(execution_events, call), external_calls)), user_object)
+    if init_call and len(external_calls) == 0:
+        timeline.append(CommentLine("# Make sure it doesn't raise any exceptions.", timeline[-1].timestamp))
+    return timeline
+
+class MethodCallContext(object):
+    def __init__(self, call, user_object):
+        self.call = call
+        self.user_object = user_object
+
+    def __getattr__(self, name):
+        if name in ['input', 'definition', 'calls', 'args']:
+            return getattr(self.call, name)
+
+# :: ([Event], UserObject) -> [Event|MethodCallContext]
+def give_context_to_method_calls(events, user_object):
+    def contextize(event):
+        if isinstance(event, EqualAssertionLine) and isinstance(event.actual, Call):
+            event.actual = MethodCallContext(event.actual, user_object)
+            return event
+        elif isinstance(event, RaisesAssertionLine):
+            event.call = MethodCallContext(event.call, user_object)
+            return event
+        elif isinstance(event, GeneratorAssertionLine):
+            event.generator_call = MethodCallContext(event.generator_call, user_object)
+            return event
+        elif isinstance(event, MethodCall):
+            return MethodCallContext(event, user_object)
+        else:
+            return event
+    return map(contextize, events)
+
 # :: ([Event], Call) -> [Event]
 def test_timeline_for_call(execution_events, call):
     """Construct a new timeline for a test case based on real execution timeline
@@ -123,9 +194,11 @@ def test_timeline_for_call(execution_events, call):
 
     The new timeline in most cases will contain assertions.
     """
-    events = older_than(without_calls(execution_events), call.timestamp)
+    events = []
     def copy_object_at(obj, timestamp):
-        new_obj = event_copy(obj) # TODO use timestamp
+        if isinstance(obj, ImmutableObject):
+            return obj, []
+        new_obj = event_copy(obj)
         new_ses = older_than(side_effects_that_affect_object(execution_events, obj), timestamp)
         return new_obj, copy_side_effects(new_ses, obj, new_obj)
     call_return_timestamp = last_call_action_timestamp(call)
@@ -149,8 +222,39 @@ def test_timeline_for_call(execution_events, call):
                 events.extend([EqualAssertionLine(output_copy, call, call_return_timestamp+0.75)])
     return events
 
+# [Event] -> [Call]
+def explicit_calls(event):
+    if isinstance(event, list):
+        return flatten(map(explicit_calls, event))
+    if isinstance(event, Call):
+        return [event] + explicit_calls(event.subcalls)
+    elif isinstance(event, GeneratorObject):
+        return explicit_calls(event.calls)
+    elif isinstance(event, EqualAssertionLine) and isinstance(event.actual, Call):
+        return explicit_calls(event.actual)
+    elif isinstance(event, GeneratorAssertionLine):
+        return explicit_calls(event.generator_call)
+    elif isinstance(event, RaisesAssertionLine):
+        return explicit_calls(event.call)
+    elif isinstance(event, MethodCallContext):
+        return explicit_calls(event.call)
+    return []
+
+def include_requirements(test_events, execution_events):
+    ignored_side_effects = side_effects_of(explicit_calls(test_events))
+    new_events = []
+    for event in test_events:
+        for new_event in objects_required_for(event, event.timestamp, execution_events):
+            # If a call appears explicitly in the test body we should
+            # ignore all side effects caused by it.
+            if new_event not in ignored_side_effects:
+                new_events.append(new_event)
+    return new_events + test_events
+
 # :: (Event, ...) -> [Event]
 def expand_into_timeline(*events):
+    """Return a sorted list of all events related to given events in any way.
+    """
     return sorted_by_timestamp(set(enumerate_events(list(events))))
 
 # :: [Event] -> [SerializedObject]
@@ -192,6 +296,14 @@ class UnittestTemplate(Template):
     def raises_assertion(self, exception, call):
         return combine(exception, call, "self.assertRaises(%s, %s)")
 
+class NoseTemplate(Template):
+    def equal_assertion(self, expected, actual):
+        return addimport(combine(expected, actual, "assert_equal(%s, %s)"),
+                         ('nose.tools', 'assert_equal'))
+    def raises_assertion(self, exception, call):
+        return addimport(combine(exception, call, "assert_raises(%s, %s)"),
+                         ('nose.tools', 'assert_raises'))
+
 # :: CodeString -> CodeString
 def add_newline(code_string):
     return combine(code_string, "\n")
@@ -215,27 +327,29 @@ def equal_assertion_on_values_or_types(expected, actual, template):
     else:
         return template.equal_assertion(expected, actual)
 
-def call_input(call):
-    if isinstance(call, GeneratorObject):
-        return call.args
-    return call.input
+def call_name(call, assigned_names):
+    if isinstance(call, MethodCallContext):
+        if call.call.definition.is_creational():
+            return call.call.definition.klass.name
+        return "%s.%s" % (assigned_names[call.user_object], call.call.definition.name)
+    return call.definition.name
 
 def call_in_test(call, already_assigned_names):
-    if isinstance(call, GeneratorObject):
-        callstring = call_as_string_for(call.definition.name, call.args,
-                                    call.definition, already_assigned_names)
+    if isinstance(call, GeneratorObject) or (isinstance(call, MethodCallContext) and isinstance(call.call, GeneratorObject)):
+        callstring = call_as_string_for(call_name(call, already_assigned_names), call.args,
+                                        call.definition, already_assigned_names)
         callstring = combine(callstring, str(len(call.calls)), template="list(islice(%s, %s))")
         callstring = addimport(callstring, ("itertools", "islice"))
     else:
-        callstring = call_as_string_for(call.definition.name, call.input,
-                                    call.definition, already_assigned_names)
-        # TODO method calls should be different
+        callstring = call_as_string_for(call_name(call, already_assigned_names), call.input,
+                                        call.definition, already_assigned_names)
         callstring = addimport(callstring, import_for(call.definition))
     return callstring
 
 # :: ([Event], Template) -> CodeString
 def generate_test_contents(events, template):
     contents = CodeString("")
+    all_uncomplete = False
     already_assigned_names = {}
     for event in events:
         if isinstance(event, Assign):
@@ -244,7 +358,7 @@ def generate_test_contents(events, template):
             already_assigned_names[event.obj] = event.name
         elif isinstance(event, EqualAssertionLine):
             expected = constructor_as_string(event.expected, already_assigned_names)
-            if isinstance(event.actual, Call):
+            if isinstance(event.actual, (Call, MethodCallContext)):
                 actual = call_in_test(event.actual, already_assigned_names)
             else:
                 actual = constructor_as_string(event.actual, already_assigned_names)
@@ -272,6 +386,8 @@ def generate_test_contents(events, template):
                 exception = CodeString(event.expected_exception.type_name)
                 exception = addimport(exception, event.expected_exception.type_import)
             line = template.raises_assertion(exception, actual)
+        elif isinstance(event, CommentLine):
+            line = CodeString(event.comment)
         elif isinstance(event, BuiltinMethodWithPositionArgsSideEffect):
             # All objects affected by side effects are named.
             object_name = already_assigned_names[event.obj]
@@ -282,18 +398,34 @@ def generate_test_contents(events, template):
         else:
             raise TypeError("Don't know how to generate test contents for event %r." % event)
         if line.uncomplete:
+            all_uncomplete = True
+        if all_uncomplete:
             line = combine("# ", line)
         contents = combine(contents, add_newline(line))
     return contents
+
+# :: [Event] -> [SerializedObject]
+def objects_with_method_calls(events):
+    def objects_from_methods(event):
+        if isinstance(event, MethodCallContext):
+            return event.user_object
+        elif isinstance(event, EqualAssertionLine):
+            return objects_from_methods(event.actual)
+        elif isinstance(event, RaisesAssertionLine):
+            return objects_from_methods(event.call)
+        elif isinstance(event, GeneratorAssertionLine):
+            return objects_from_methods(event.generator_call)
+        else:
+            return None
+    return compact(map(objects_from_methods, events))
 
 # :: [Event] -> [Event]
 def remove_objects_unworthy_of_naming(events):
     new_events = list(events)
     side_effects = all_of_type(events, SideEffect)
     affected_objects = objects_affected_by_side_effects(side_effects)
-    objects_with_duplicates = objects_only(enumerate_events(not_objects_only(events)))
-    objects_usage_counts = dict(counted(objects_with_duplicates))
-    for obj, usage_count in objects_usage_counts.iteritems():
+    invoked_objects = objects_with_method_calls(events)
+    for obj, usage_count in object_usage_counts(events):
         # ImmutableObjects don't need to be named, as their identity is
         # always unambiguous.
         if not isinstance(obj, ImmutableObject):
@@ -303,11 +435,90 @@ def remove_objects_unworthy_of_naming(events):
             # Anything affected by side effects is also worth naming.
             if obj in affected_objects:
                 continue
+            # All user objects with method calls should also get names for
+            # readability.
+            if obj in invoked_objects:
+                continue
         try:
-            new_events.remove(obj)
+            while True:
+                new_events.remove(obj)
         except ValueError:
             pass # If the element wasn't on the timeline, even better.
     return new_events
+
+def new_only(affected, so_far):
+    for obj in affected:
+        if obj not in so_far:
+            yield obj
+
+# :: (Event, int, [Event]) -> [SerializedObject|SideEffect]
+def objects_required_for(test_event, timestamp, execution_events):
+    required_objects = []
+    required_side_effects = []
+    objects = resolve_dependencies(test_event)
+    while objects:
+        new_objects, new_side_effects = copy_events_over(objects, timestamp, execution_events)
+        required_objects.extend(new_objects)
+        required_side_effects.extend(new_side_effects)
+        objects = list(new_only(objects_affected_by_side_effects(new_side_effects), required_objects))
+    return required_objects + required_side_effects
+
+# :: ([SerializedObject], int, [Event]) -> ([SerializedObject], [SideEffect])
+def copy_events_over(objects, timestamp, execution_events):
+    copied_objects = []
+    copied_side_effects = []
+    def side_effects_of(obj):
+        return older_than(side_effects_that_affect_object(execution_events, obj), timestamp)
+    for obj in objects:
+        copied_objects.append(obj)
+        copied_side_effects.extend(side_effects_of(obj))
+    return copied_objects, copied_side_effects
+
+# :: [Event] -> [SerializedObject]
+def resolve_dependencies(events):
+    events_so_far = set()
+    def get_those_and_contained_objects(objs):
+        return all_of_type(objs, SerializedObject) + get_contained_objects(objs)
+    def get_contained_objects(obj):
+        if isinstance(obj, list):
+            return flatten(map(get_contained_objects, obj))
+        if obj in events_so_far:
+            return []
+        else:
+            events_so_far.add(obj)
+        if isinstance(obj, SequenceObject):
+            return get_those_and_contained_objects(obj.contained_objects)
+        elif isinstance(obj, MapObject):
+            return get_those_and_contained_objects(flatten(obj.mapping))
+        elif isinstance(obj, BuiltinException):
+            return get_those_and_contained_objects(obj.args)
+        elif isinstance(obj, UserObject):
+            return get_contained_objects(obj.get_init_call() or [])
+        elif isinstance(obj, (FunctionCall, MethodCall, GeneratorObjectInvocation)):
+            return get_those_and_contained_objects(obj.input.values())
+        elif isinstance(obj, GeneratorObject):
+            if obj.is_activated():
+                return get_those_and_contained_objects(obj.args.values() + obj.calls)
+            return []
+        elif isinstance(obj, SideEffect):
+            return get_those_and_contained_objects(list(obj.affected_objects))
+        elif isinstance(obj, MethodCallContext):
+            return get_those_and_contained_objects([obj.call, obj.user_object])
+        elif isinstance(obj, EqualAssertionLine):
+            return get_those_and_contained_objects([obj.expected, obj.actual])
+        elif isinstance(obj, GeneratorAssertionLine):
+            return get_contained_objects(obj.generator_call)
+        elif isinstance(obj, RaisesAssertionLine):
+            return get_those_and_contained_objects([obj.call, obj.expected_exception])
+        elif isinstance(obj, (ImmutableObject, UnknownObject, CallToC, CommentLine)):
+            return []
+        else:
+            raise TypeError("Wrong argument to get_contained_objects: %s." % repr(obj))
+    return get_contained_objects(events)
+
+# :: [Event] -> {SerializedObject: int}
+def object_usage_counts(timeline):
+    return counted(resolve_dependencies(timeline))
 
 # :: [Event] -> [Event]
 def enumerate_events(objs):
@@ -350,7 +561,7 @@ def enumerate_events(objs):
         elif isinstance(obj, (FunctionCall, MethodCall, GeneratorObjectInvocation)):
             ret = get_those_and_contained_events(obj.input.values() + list(obj.side_effects))
             if obj.caller:
-                ret += get_contained_events(obj.caller)
+                ret += side_effects_before_and_affected_objects(obj)
             return ret
         elif isinstance(obj, GeneratorObject):
             if obj.is_activated():
@@ -360,17 +571,12 @@ def enumerate_events(objs):
                 return []
         elif isinstance(obj, SideEffect):
             return [obj] + get_those_and_contained_events(list(obj.affected_objects))
-        elif isinstance(obj, EqualAssertionLine):
-            objs = [obj.expected]
-            if not isinstance(obj.actual, Call):
-                objs.append(obj.actual)
-            return objs + get_contained_events([obj.expected, obj.actual])
-        elif isinstance(obj, GeneratorAssertionLine):
-            return get_contained_events(obj.generator_call)
-        elif isinstance(obj, RaisesAssertionLine):
-            return [obj.expected_exception] + get_contained_events([obj.call, obj.expected_exception])
         elif isinstance(obj, CallToC):
-            return get_contained_events(obj.caller)
+            return side_effects_before_and_affected_objects(obj)
         else:
             raise TypeError("Wrong argument to get_contained_events: %s." % repr(obj))
     return get_those_and_contained_events(objs)
+
+def side_effects_before_and_affected_objects(call):
+    se = side_effects_before(call)
+    return se + objects_affected_by_side_effects(se)

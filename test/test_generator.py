@@ -82,12 +82,16 @@ def ClassWithInstanceWithoutReconstruction(name):
     # module.py.
     return Class(name), types.ClassType(name, (object,), {})()
 
+
 def FunctionWithCalls(funcname, calls):
+    def fc(function, args, output, execution):
+        call = FunctionCall(function, stable_serialize_call_arguments(execution, args))
+        # Output needs to be created after the Call object is created.
+        call.set_output(execution.serialize(output))
+        return call
     execution = EmptyProjectExecution()
     function = Function(funcname, sorted(calls[0][0].keys()))
-    function.calls = [FunctionCall(function,
-                                   stable_serialize_call_arguments(execution, i),
-                                   output=execution.serialize(o)) for (i,o) in calls]
+    function.calls = [fc(function, i, o, execution) for (i,o) in calls]
     return function
 
 def FunctionWithSingleCall(funcname, input, output):

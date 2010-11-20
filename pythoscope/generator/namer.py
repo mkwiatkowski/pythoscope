@@ -1,5 +1,5 @@
 from pythoscope.generator.dependencies import sorted_by_timestamp
-from pythoscope.util import key_for_value
+from pythoscope.util import key_for_value, underscore
 
 
 # :: SerializedObject -> str
@@ -9,7 +9,7 @@ def get_name_base_for_object(obj):
                     'array.array': 'array',
                     'types.FunctionType': 'function',
                     'types.GeneratorType': 'generator'}
-    return common_names.get(obj.type_name, 'obj')
+    return common_names.get(obj.type_name, underscore(obj.type_name))
 
 # :: [str], str -> str
 def get_next_name(names, base):
