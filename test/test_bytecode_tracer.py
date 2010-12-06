@@ -18,13 +18,14 @@ return_value = None
 class TestBytecodeTracer:
     def setup(self):
         self._traces = []
+        self._ignored_events = ['load_global', 'store_global']
         self.btracer = BytecodeTracer()
 
     def _trace(self, frame, event, arg):
         try:
             if arg is not sys.settrace:
                 for ret in self.btracer.trace(frame, event):
-                    if ret[0] is not None:
+                    if ret[0] is not None and ret[0] not in self._ignored_events:
                         self._traces.append(ret)
         except TypeError:
             pass
@@ -464,6 +465,82 @@ class TestBytecodeTracerAutomaticRewriting(TestBytecodeTracer):
                           ('c_return', return_value),
                           ('c_call', (abs, [-1], {})),
                           ('c_return', 1))
+
+class TestBytecodeTracerRebinding(TestBytecodeTracer):
+    def test_handles_instance_variable_rebinding(self):
+        class Class(object):
+            def method(self, x):
+                self.x = x
+        def fun():
+            global return_value
+            return_value = c = Class()
+            c.method(-1)
+        self.trace_function(fun)
+        self.assert_trace(('c_call', (Class, [], {})),
+                          ('c_return', return_value),
+                          ('store_attr', (return_value, 'x', -1)))
+
+    def test_handles_instance_variable_rebinding_with_setattr(self):
+        class Class(object):
+            def method(self, x):
+                setattr(self, 'x', x)
+        def fun():
+            global return_value
+            return_value = c = Class()
+            c.method(-1)
+        self.trace_function(fun)
+        self.assert_trace(('c_call', (Class, [], {})),
+                          ('c_return', return_value),
+                          ('c_call', (setattr, [return_value, 'x', -1], {})),
+                          ('c_return', None))
+
+    def test_handles_class_variable_rebinding_with_setattr(self):
+        class Class(object):
+            pass
+        def fun():
+            Class.x = 1
+        self.trace_function(fun)
+        self.assert_trace(('store_attr', (Class, 'x', 1)))
+
+    def test_handles_instance_variable_unbinding(self):
+        class Class(object):
+            def __init__(self):
+                self.x = 1
+            def method(self):
+                del self.x
+        def fun():
+            global return_value
+            return_value = c = Class()
+            c.method()
+        self.trace_function(fun)
+        self.assert_trace(('c_call', (Class, [], {})),
+                          ('c_return', return_value),
+                          ('delete_attr', (return_value, 'x')))
+
+class TestBytecodeTracerGlobalAccessAndRebinding(TestBytecodeTracer):
+    def setup(self):
+        TestBytecodeTracer.setup(self)
+        self._ignored_events = []
+
+    def test_handles_global_variable_reading(self):
+        def fun():
+            return return_value
+        self.trace_function(fun)
+        self.assert_trace(('load_global', 'return_value'))
+
+    def test_handles_global_variable_rebinding(self):
+        def fun():
+            global return_value
+            return_value = 123
+        self.trace_function(fun)
+        self.assert_trace(('store_global', ('return_value', 123)))
+
+    def test_handles_global_variable_unbinding(self):
+        def fun():
+            global return_value
+            del return_value
+        self.trace_function(fun)
+        self.assert_trace(('delete_global', 'return_value'))
 
 class TestRewriteFunction:
     def test_handles_functions_with_free_variables(self):

@@ -147,6 +147,9 @@ def is_c_func(func):
     """
     return not hasattr(func, 'func_code')
 
+def name_from_arg(frame, bcode):
+    return frame.f_code.co_names[bcode.arg1]
+
 
 class StandardBytecodeTracer(object):
     """A tracer that goes over each bytecode and reports events that couldn't
@@ -191,6 +194,13 @@ class StandardBytecodeTracer(object):
          * ('print', value)
          * ('print_to', (value, output))
            A print statement is about to be executed.
+         * ('store_attr', (object, name, value))
+         * ('delete_attr', (object, name))
+           An instance variable of object is about to be changed or deleted.
+         * ('load_global', name)
+         * ('store_global', (name, value))
+         * ('delete_global', name)
+           A global variable is about to be read, written or deleted.
 
         It is a generator and it yields a sequence of events, as a single
         bytecode may generate more than one event. Canonical example is
@@ -226,15 +236,24 @@ class StandardBytecodeTracer(object):
                 yield 'c_call', (function, pargs, kargs)
             elif bcode.name == "PRINT_NEWLINE":
                 yield 'print', os.linesep
-            elif bcode.name == "PRINT_NEWLINE_TO":
+            else:
                 stack = get_value_stack_top(frame)
-                yield 'print_to', (os.linesep, stack[-1])
-            elif bcode.name == "PRINT_ITEM":
-                stack = get_value_stack_top(frame)
-                yield 'print', stack[-1]
-            elif bcode.name == "PRINT_ITEM_TO":
-                stack = get_value_stack_top(frame)
-                yield 'print_to', (stack[-2], stack[-1])
+                if bcode.name == "PRINT_NEWLINE_TO":
+                    yield 'print_to', (os.linesep, stack[-1])
+                elif bcode.name == "PRINT_ITEM":
+                    yield 'print', stack[-1]
+                elif bcode.name == "PRINT_ITEM_TO":
+                    yield 'print_to', (stack[-2], stack[-1])
+                elif bcode.name == "STORE_ATTR":
+                    yield 'store_attr', (stack[-1], name_from_arg(frame, bcode), stack[-2])
+                elif bcode.name == "DELETE_ATTR":
+                    yield 'delete_attr', (stack[-1], name_from_arg(frame, bcode))
+                elif bcode.name == "LOAD_GLOBAL":
+                    yield 'load_global', name_from_arg(frame, bcode)
+                elif bcode.name == "STORE_GLOBAL":
+                    yield 'store_global', (name_from_arg(frame, bcode), stack[-1])
+                elif bcode.name == "DELETE_GLOBAL":
+                    yield 'delete_global', name_from_arg(frame, bcode)
         elif event == 'call':
             self.call_stack.append(False)
         # When an exception happens in Python >= 2.4 code, 'exception' and
