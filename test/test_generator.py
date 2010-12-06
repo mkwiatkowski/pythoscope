@@ -7,8 +7,8 @@ import types
 
 from nose import SkipTest
 
-from pythoscope.generator import add_tests_to_project, constructor_as_string, \
-    TestGenerator
+from pythoscope.generator import add_tests_to_project, TestGenerator
+from pythoscope.generator.constructor import constructor_as_string
 from pythoscope.inspector.static import inspect_code
 from pythoscope.serializer import ImmutableObject, SequenceObject
 from pythoscope.store import Class, Function, Method, ModuleNeedsAnalysis, \

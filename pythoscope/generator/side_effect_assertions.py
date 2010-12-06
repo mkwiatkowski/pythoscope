@@ -14,33 +14,14 @@ from pythoscope.generator.selector import testable_calls
 from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\
     UnknownObject, SequenceObject, SerializedObject, is_serialized_string
 from pythoscope.side_effect import SideEffect, BuiltinMethodWithPositionArgsSideEffect
-from pythoscope.store import FunctionCall, UserObject, MethodCall,\
+from pythoscope.store import Function, FunctionCall, UserObject, MethodCall,\
     GeneratorObject, GeneratorObjectInvocation, Call, CallToC, Method
-from pythoscope.util import assert_argument_type, compact, counted, flatten, all_of_type
+from pythoscope.util import assert_argument_type, compact, counted, flatten,\
+    underscore, all_of_type
 
 
-# :: Definition -> (str, str)
-def import_for(definition):
-    if isinstance(definition, Method):
-        return import_for(definition.klass)
-    return (definition.module.locator, definition.name)
-
-# :: GeneratorObject -> [SerializedObject]
-def generator_object_yields(gobject):
-    assert_argument_type(gobject, (GeneratorObject, MethodCallContext))
-    return [c.output for c in gobject.calls]
-
-# :: Call | GeneratorObject | UserObject -> [Event]
-def assertions(call_or_user_object):
-    timeline = expand_into_timeline(call_or_user_object)
-    if isinstance(call_or_user_object, UserObject):
-        test_timeline = test_timeline_for_user_object(timeline, call_or_user_object)
-    else:
-        test_timeline = test_timeline_for_call(timeline, call_or_user_object)
-    return remove_duplicates_and_bare_method_contexts(sorted_by_timestamp(include_requirements(test_timeline, timeline)))
-
-# :: Call | UserObject -> CodeString
-def generate_test_case(call_or_user_object, template):
+# :: Call | UserObject | Method | Function -> CodeString
+def generate_test_case(testable_interaction, template):
     """This functions binds all other functions from this module together,
     implementing full test generation process, from an object to a test case
     string.
@@ -55,8 +36,67 @@ def generate_test_case(call_or_user_object, template):
         generate_test_contents(
             name_objects_on_timeline(
                 remove_objects_unworthy_of_naming(
-                    assertions(call_or_user_object))),
+                    assertions(testable_interaction))),
             template)
+
+# :: Call | GeneratorObject | UserObject | Method | Function -> [Event]
+def assertions(testable_interaction):
+    if isinstance(testable_interaction, (Method, Function)):
+        timeline = []
+    else:
+        timeline = expand_into_timeline(testable_interaction)
+    if isinstance(testable_interaction, UserObject):
+        test_timeline = test_timeline_for_user_object(timeline, testable_interaction)
+    elif isinstance(testable_interaction, Method):
+        test_timeline = test_timeline_for_method(testable_interaction)
+    elif isinstance(testable_interaction, Function):
+        test_timeline = test_timeline_for_function(testable_interaction)
+    else:
+        test_timeline = test_timeline_for_call(timeline, testable_interaction)
+    return remove_duplicates_and_bare_method_contexts(sorted_by_timestamp(include_requirements(test_timeline, timeline)))
+
+def call_with_args(callable, args):
+    """Return an example of a call to callable with all its standard arguments.
+
+    >>> call_with_args('fun', ['x', 'y'])
+    'fun(x, y)'
+    >>> call_with_args('fun', [('a', 'b'), 'c'])
+    'fun((a, b), c)'
+    >>> call_with_args('fun', ['a', ('b', ('c', 'd'))])
+    'fun(a, (b, (c, d)))'
+    """
+    def call_arglist(args):
+        if isinstance(args, (list, tuple)):
+            return "(%s)" % ', '.join(map(call_arglist, args))
+        return args
+    return "%s%s" % (callable, call_arglist(args))
+
+def class_init_stub(klass):
+    """Create setup that contains stub of object creation for given class.
+    """
+    args = []
+    init_method = klass.get_creational_method()
+    if init_method:
+        args = init_method.get_call_args()
+    return call_with_args(klass.name, args)
+
+# :: Method -> [Event]
+def test_timeline_for_method(method):
+    object_name = underscore(method.klass.name)
+    init_stub = '# %s = %s' % (object_name, class_init_stub(method.klass))
+    timeline = [CommentLine(init_stub, 1)]
+    # Generate assertion stub, but only for non-creational methods.
+    if not method.is_creational():
+        actual = call_with_args("%s.%s" % (object_name, method.name),
+                                method.get_call_args())
+        timeline.append(EqualAssertionStubLine(actual, 2))
+    timeline.append(SkipTestLine(3))
+    return timeline
+
+# :: Function -> [Event]
+def test_timeline_for_function(function):
+    actual = call_with_args(function.name, function.args)
+    return [EqualAssertionStubLine(actual, 1), SkipTestLine(2)]
 
 # :: [Event] -> [Event]
 def remove_duplicates_and_bare_method_contexts(events):
@@ -77,6 +117,11 @@ class EqualAssertionLine(AssertionLine):
         self.expected = expected
         self.actual = actual
 
+class EqualAssertionStubLine(AssertionLine):
+    def __init__(self, actual, timestamp):
+        AssertionLine.__init__(self, timestamp)
+        self.actual = actual
+
 class GeneratorAssertionLine(AssertionLine):
     def __init__(self, generator_call, timestamp):
         AssertionLine.__init__(self, timestamp)
@@ -92,6 +137,10 @@ class CommentLine(AssertionLine):
     def __init__(self, comment, timestamp):
         AssertionLine.__init__(self, timestamp)
         self.comment = comment
+
+class SkipTestLine(AssertionLine):
+    def __init__(self, timestamp):
+        AssertionLine.__init__(self, timestamp)
 
 # :: Event -> Event
 def event_copy(event):
@@ -289,12 +338,17 @@ class Template(object):
     # :: (CodeString, CodeString) -> CodeString
     def raises_assertion(self, exception, call):
         raise NotImplementedError("Method raises_assertion() not defined.")
+    # :: () -> CodeString
+    def skip_test(self):
+        raise NotImplementedError("Method skip_test() not defined.")
 
 class UnittestTemplate(Template):
     def equal_assertion(self, expected, actual):
         return combine(expected, actual, "self.assertEqual(%s, %s)")
     def raises_assertion(self, exception, call):
         return combine(exception, call, "self.assertRaises(%s, %s)")
+    def skip_test(self):
+        return CodeString("assert False # TODO: implement your test here")
 
 class NoseTemplate(Template):
     def equal_assertion(self, expected, actual):
@@ -303,6 +357,9 @@ class NoseTemplate(Template):
     def raises_assertion(self, exception, call):
         return addimport(combine(exception, call, "assert_raises(%s, %s)"),
                          ('nose.tools', 'assert_raises'))
+    def skip_test(self):
+        return addimport(CodeString("raise SkipTest # TODO: implement your test here"),
+                         ('nose', 'SkipTest'))
 
 # :: CodeString -> CodeString
 def add_newline(code_string):
@@ -319,6 +376,12 @@ def type_of(string):
 # :: CodeString -> CodeString
 def in_lambda(string):
     return putinto(string, "lambda: %s")
+
+# :: Definition -> (str, str)
+def import_for(definition):
+    if isinstance(definition, Method):
+        return import_for(definition.klass)
+    return (definition.module.locator, definition.name)
 
 # :: (CodeString, CodeString, Template) -> CodeString
 def equal_assertion_on_values_or_types(expected, actual, template):
@@ -345,6 +408,11 @@ def call_in_test(call, already_assigned_names):
                                         call.definition, already_assigned_names)
         callstring = addimport(callstring, import_for(call.definition))
     return callstring
+
+# :: GeneratorObject -> [SerializedObject]
+def generator_object_yields(gobject):
+    assert_argument_type(gobject, (GeneratorObject, MethodCallContext))
+    return [c.output for c in gobject.calls]
 
 # :: ([Event], Template) -> CodeString
 def generate_test_contents(events, template):
@@ -388,6 +456,10 @@ def generate_test_contents(events, template):
             line = template.raises_assertion(exception, actual)
         elif isinstance(event, CommentLine):
             line = CodeString(event.comment)
+        elif isinstance(event, SkipTestLine):
+            line = template.skip_test()
+        elif isinstance(event, EqualAssertionStubLine):
+            line = template.equal_assertion(CodeString('expected', uncomplete=True), event.actual)
         elif isinstance(event, BuiltinMethodWithPositionArgsSideEffect):
             # All objects affected by side effects are named.
             object_name = already_assigned_names[event.obj]
@@ -399,7 +471,7 @@ def generate_test_contents(events, template):
             raise TypeError("Don't know how to generate test contents for event %r." % event)
         if line.uncomplete:
             all_uncomplete = True
-        if all_uncomplete:
+        if all_uncomplete and not isinstance(event, SkipTestLine):
             line = combine("# ", line)
         contents = combine(contents, add_newline(line))
     return contents
@@ -510,7 +582,8 @@ def resolve_dependencies(events):
             return get_contained_objects(obj.generator_call)
         elif isinstance(obj, RaisesAssertionLine):
             return get_those_and_contained_objects([obj.call, obj.expected_exception])
-        elif isinstance(obj, (ImmutableObject, UnknownObject, CallToC, CommentLine)):
+        elif isinstance(obj, (ImmutableObject, UnknownObject, CallToC, CommentLine,
+                              SkipTestLine, EqualAssertionStubLine)):
             return []
         else:
             raise TypeError("Wrong argument to get_contained_objects: %s." % repr(obj))

@@ -1,7 +1,7 @@
 import os
 
 from pythoscope.astbuilder import parse, EmptyCode
-from pythoscope.generator import TestMethodDescription, TestGenerator
+from pythoscope.generator import TestGenerator, BareTestMethodDescription
 from pythoscope.generator.adder import add_test_case_to_project, add_test_case, \
     find_test_module, module_path_to_test_path, replace_test_case
 from pythoscope.inspector.static import inspect_code
@@ -212,7 +212,7 @@ class TestGeneratorAdderOnCode:
 
     def _test_class_from_code(self, code, name, method):
         return self.generator._generate_test_class(name,
-            [TestMethodDescription(method)], self.module, code)
+            [BareTestMethodDescription(method, self.generator.template())], self.module, code)
 
     def test_appends_new_test_methods_to_test_classes_with_proper_indentation(self):
         module = self._test_module_from_code(
