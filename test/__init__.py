@@ -24,7 +24,8 @@ from pythoscope.generator import add_tests_to_project, TestGenerator
 from pythoscope.generator.adder import add_test_case, add_test_case_to_project, \
     find_test_module, module_path_to_test_path, replace_test_case
 from pythoscope.generator.side_effect_assertions import generate_test_contents,\
-    generate_test_case, test_timeline_for_call
+    generate_test_case
+from pythoscope.generator.assertions import test_timeline_for_call
 
 TestClass.__test__ = False
 TestMethod.__test__ = False

@@ -2,10 +2,10 @@ from pythoscope.serializer import SequenceObject, ImmutableObject
 from pythoscope.store import Function, FunctionCall
 from pythoscope.side_effect import SideEffect, ListAppend
 from pythoscope.generator.side_effect_assertions import assertions,\
-    AssertionLine, object_usage_counts,\
-    EqualAssertionLine, expand_into_timeline, name_objects_on_timeline,\
+    object_usage_counts, name_objects_on_timeline,\
     remove_objects_unworthy_of_naming, Assign, generate_test_contents,\
     UnittestTemplate, generate_test_case
+from pythoscope.generator.lines import AssertionLine, EqualAssertionLine
 from pythoscope.util import all_of_type
 
 from assertions import *

@@ -1,35 +1,12 @@
-from pythoscope.serializer import SerializedObject
+from pythoscope.generator.lines import *
+from pythoscope.generator.method_call_context import MethodCallContext
+from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\
+    UnknownObject, SequenceObject, SerializedObject
+from pythoscope.store import FunctionCall, UserObject, MethodCall,\
+    GeneratorObject, GeneratorObjectInvocation, CallToC
 from pythoscope.side_effect import SideEffect
-from pythoscope.util import flatten
+from pythoscope.util import all_of_type, flatten
 
-
-class Dependencies(object):
-    def __init__(self, all=None):
-        if all is None:
-            all = []
-        self.all = all
-
-    def get_objects(self):
-        return filter(lambda x: isinstance(x, SerializedObject), self.all)
-
-    def replace_pair_with_event(self, event1, event2, new_event):
-        """Replaces pair of events with a single event. The second event
-        must be a SideEffect.
-
-        Optimizer only works on values with names, which means we don't really
-        have to traverse the whole Project tree and replace all occurences
-        of an object. It is sufficient to replace it on the dependencies
-        timeline, which will be used as a base for naming objects and their
-        later usage.
-        """
-        if not isinstance(event2, SideEffect):
-            raise TypeError("Second argument to replace_pair_with_object has to be a SideEffect, was %r instead." % event2)
-        new_event.timestamp = event1.timestamp
-        self.all[self.all.index(event1)] = new_event
-        if isinstance(event1, SerializedObject):
-            if not isinstance(new_event, SerializedObject):
-                raise TypeError("Expected new_event to be of the same type as event1 in a call to replace_pair_with_object, got %r instead." % new_event)
-        self.all.remove(event2)
 
 # :: [SerializedObject|Call] -> [SerializedObject|Call]
 def sorted_by_timestamp(objects):
@@ -92,14 +69,49 @@ def side_effects_of(calls):
 def side_effects_before(call):
     return older_than(side_effects_of(calls_before(call)), call.timestamp)
 
-# :: ([SideEffect], set([SerializedObject])) -> [SideEffect]
-def side_effects_that_affect_objects(side_effects, objects):
-    "Filter out side effects that are irrelevant to given set of objects."
-    for side_effect in side_effects:
-        for obj in side_effect.affected_objects:
-            if obj in objects:
-                yield side_effect
-
 # :: [SideEffect] -> [SerializedObject]
 def objects_affected_by_side_effects(side_effects):
     return flatten(map(lambda se: se.affected_objects, side_effects))
+
+# :: [Event] -> [SerializedObject]
+def resolve_dependencies(events):
+    events_so_far = set()
+    def get_those_and_contained_objects(objs):
+        return all_of_type(objs, SerializedObject) + get_contained_objects(objs)
+    def get_contained_objects(obj):
+        if isinstance(obj, list):
+            return flatten(map(get_contained_objects, obj))
+        if obj in events_so_far:
+            return []
+        else:
+            events_so_far.add(obj)
+        if isinstance(obj, SequenceObject):
+            return get_those_and_contained_objects(obj.contained_objects)
+        elif isinstance(obj, MapObject):
+            return get_those_and_contained_objects(flatten(obj.mapping))
+        elif isinstance(obj, BuiltinException):
+            return get_those_and_contained_objects(obj.args)
+        elif isinstance(obj, UserObject):
+            return get_contained_objects(obj.get_init_call() or [])
+        elif isinstance(obj, (FunctionCall, MethodCall, GeneratorObjectInvocation)):
+            return get_those_and_contained_objects(obj.input.values())
+        elif isinstance(obj, GeneratorObject):
+            if obj.is_activated():
+                return get_those_and_contained_objects(obj.args.values() + obj.calls)
+            return []
+        elif isinstance(obj, SideEffect):
+            return get_those_and_contained_objects(list(obj.affected_objects))
+        elif isinstance(obj, MethodCallContext):
+            return get_those_and_contained_objects([obj.call, obj.user_object])
+        elif isinstance(obj, EqualAssertionLine):
+            return get_those_and_contained_objects([obj.expected, obj.actual])
+        elif isinstance(obj, GeneratorAssertionLine):
+            return get_contained_objects(obj.generator_call)
+        elif isinstance(obj, RaisesAssertionLine):
+            return get_those_and_contained_objects([obj.call, obj.expected_exception])
+        elif isinstance(obj, (ImmutableObject, UnknownObject, CallToC, CommentLine,
+                              SkipTestLine, EqualAssertionStubLine)):
+            return []
+        else:
+            raise TypeError("Wrong argument to get_contained_objects: %s." % repr(obj))
+    return get_contained_objects(events)
