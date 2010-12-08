@@ -1,5 +1,7 @@
+from pythoscope.event import Event
 from pythoscope.generator.dependencies import sorted_by_timestamp
-from pythoscope.util import key_for_value, underscore
+from pythoscope.serializer import SerializedObject
+from pythoscope.util import all_of_type, key_for_value, underscore
 
 
 # :: SerializedObject -> str
@@ -56,3 +58,24 @@ def assign_names_to_objects(objects, names, rename=True):
     """
     for obj in sorted_by_timestamp(objects):
         assign_name_to_object(obj, names, rename)
+
+# :: [Event] -> [SerializedObject]
+def objects_only(events):
+    return all_of_type(events, SerializedObject)
+
+class Assign(Event):
+    def __init__(self, name, obj, timestamp):
+        self.name = name
+        self.obj = obj
+        # We don't call Event.__init__ on purpose, we set our own timestamp.
+        self.timestamp = timestamp
+
+# :: [Event] -> [Event]
+def name_objects_on_timeline(events):
+    names = {}
+    assign_names_to_objects(objects_only(events), names)
+    def map_object_to_assign(event):
+        if isinstance(event, SerializedObject):
+            return Assign(names[event], event, event.timestamp)
+        return event
+    return map(map_object_to_assign, events)

@@ -1,11 +1,14 @@
 from pythoscope.serializer import SequenceObject, ImmutableObject
 from pythoscope.store import Function, FunctionCall
 from pythoscope.side_effect import SideEffect, ListAppend
-from pythoscope.generator.side_effect_assertions import assertions,\
-    object_usage_counts, name_objects_on_timeline,\
-    remove_objects_unworthy_of_naming, Assign, generate_test_contents,\
-    UnittestTemplate, generate_test_case
+from pythoscope.generator.assertions import assertions_for_interaction
+from pythoscope.generator.namer import name_objects_on_timeline, Assign
+from pythoscope.generator.cleaner import remove_objects_unworthy_of_naming,\
+    object_usage_counts
+from pythoscope.generator.builder import generate_test_contents, UnittestTemplate
 from pythoscope.generator.lines import AssertionLine, EqualAssertionLine
+from pythoscope.generator import generate_test_case
+
 from pythoscope.util import all_of_type
 
 from assertions import *
@@ -40,7 +43,7 @@ class TestAssertionsForCall:
     def test_returns_one_assertion_if_output_object_didnt_exist_before_the_call(self):
         put_on_timeline(self.call, self.alist)
 
-        assertion_lines = all_of_type(assertions(self.call), AssertionLine)
+        assertion_lines = all_of_type(assertions_for_interaction(self.call), AssertionLine)
         assertion = assert_one_element_and_return(assertion_lines)
         assert_is_equal_assertion_line(assertion, expected_a_copy=True,
                                        expected=self.call.output,
@@ -50,7 +53,7 @@ class TestAssertionsForCall:
     def test_returns_two_assertions_if_output_object_existed_before_the_call(self):
         put_on_timeline(self.alist, self.call)
 
-        assertion_lines = all_of_type(assertions(self.call), AssertionLine)
+        assertion_lines = all_of_type(assertions_for_interaction(self.call), AssertionLine)
         assert_length(assertion_lines, 2)
 
         assert_is_equal_assertion_line(assertion_lines[0],
@@ -64,7 +67,7 @@ class TestAssertionsForCall:
         self.call.add_side_effect(se)
         put_on_timeline(self.call, self.alist, se)
 
-        assertion_lines = all_of_type(assertions(self.call), AssertionLine)
+        assertion_lines = all_of_type(assertions_for_interaction(self.call), AssertionLine)
         assertion = assert_one_element_and_return(assertion_lines)
         assert_equal(se.timestamp+0.75, assertion.timestamp)
 
@@ -73,7 +76,7 @@ class TestAssertionsForCall:
         self.call.add_side_effect(se)
         put_on_timeline(self.alist, se, self.call)
 
-        timeline = assertions(self.call)
+        timeline = assertions_for_interaction(self.call)
 
         alists = all_of_type(timeline, SequenceObject)
         assert_length(alists, 2)

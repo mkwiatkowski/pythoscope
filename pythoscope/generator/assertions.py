@@ -15,7 +15,7 @@ from pythoscope.util import all_of_type, compact, flatten, underscore
 
 
 # :: Call | GeneratorObject | UserObject | Method | Function -> [Event]
-def assertions(testable_interaction):
+def assertions_for_interaction(testable_interaction):
     if isinstance(testable_interaction, (Method, Function)):
         timeline = []
     else:

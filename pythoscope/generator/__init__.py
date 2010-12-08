@@ -2,9 +2,12 @@ from pythoscope.astvisitor import descend, ASTVisitor
 from pythoscope.astbuilder import parse_fragment, EmptyCode
 from pythoscope.logger import log
 from pythoscope.generator.adder import add_test_case_to_project
+from pythoscope.generator.assertions import assertions_for_interaction
+from pythoscope.generator.builder import UnittestTemplate, NoseTemplate,\
+    generate_test_contents
+from pythoscope.generator.cleaner import remove_objects_unworthy_of_naming
+from pythoscope.generator.namer import name_objects_on_timeline
 from pythoscope.generator.selector import testable_objects, testable_calls
-from pythoscope.generator.side_effect_assertions import UnittestTemplate,\
-    NoseTemplate, generate_test_case
 from pythoscope.serializer import SerializedObject, ImmutableObject,\
     UnknownObject
 from pythoscope.store import Class, Function, TestClass, TestMethod,\
@@ -13,6 +16,26 @@ from pythoscope.compat import all, sorted
 from pythoscope.util import assert_argument_type, camelize, counted, \
     key_for_value, pluralize, underscore
 
+
+# :: Call | UserObject | Method | Function -> CodeString
+def generate_test_case(testable_interaction, template):
+    """This functions binds all other functions from generator submodules
+    together (assertions, cleaner, namer and builder), implementing full
+    test generation process, from a testable interaction object to a test
+    case string.
+
+    Call|UserObject|Method|Function -> assertions_for_interaction ->
+      [Event] -> remove_objects_unworthy_of_naming ->
+        [Event] -> name_objects_on_timeline ->
+          [Event] -> generate_test_contents ->
+            CodeString
+    """
+    return \
+        generate_test_contents(
+            name_objects_on_timeline(
+                remove_objects_unworthy_of_naming(
+                    assertions_for_interaction(testable_interaction))),
+            template)
 
 # :: GeneratorObject -> SerializedObject | None
 def generator_object_exception(gobject):
