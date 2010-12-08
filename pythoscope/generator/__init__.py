@@ -255,7 +255,7 @@ def indented_setup(setup, indentation):
     """
     return ''.join([indentation + line for line in setup.splitlines(True)])
 
-class BareTestMethodDescription(object):
+class TestMethodDescription(object):
     def __init__(self, name, code=""):
         self.name = name
         self.code = code
@@ -276,12 +276,6 @@ class TestGenerator(object):
 
     def __init__(self):
         self.imports = []
-
-    def template(self):
-        if isinstance(self, UnittestTestGenerator):
-            return UnittestTemplate()
-        elif isinstance(self, NoseTestGenerator):
-            return NoseTemplate()
 
     def ensure_import(self, import_):
         if import_ is not None and import_ not in self.imports:
@@ -367,7 +361,7 @@ class TestGenerator(object):
             # No calls were traced, so we'll go for a single test stub.
             log.debug("Detected _no_ testable calls in function %s." % function.name)
             name = name2testname(underscore(function.name))
-            return [BareTestMethodDescription(name, generate_test_case(function, self.template()))]
+            return [TestMethodDescription(name, generate_test_case(function, self.template))]
 
     def _generate_test_method_descriptions_for_class(self, klass, module):
         if klass.user_objects:
@@ -385,12 +379,12 @@ class TestGenerator(object):
 
     def _generate_test_method_description_for_method(self, method):
         test_name = name2testname(method.name)
-        return BareTestMethodDescription(test_name, generate_test_case(method, self.template()))
+        return TestMethodDescription(test_name, generate_test_case(method, self.template))
 
     def _method_descriptions_from_function(self, function):
         for call in testable_calls(function.get_unique_calls()):
             name = call2testname(call, function.name)
-            yield BareTestMethodDescription(name, generate_test_case(call, self.template()))
+            yield TestMethodDescription(name, generate_test_case(call, self.template))
 
     def _method_description_from_user_object(self, user_object):
         init_call = user_object.get_init_call()
@@ -421,39 +415,21 @@ class TestGenerator(object):
                     test_name += "_after_creation_with_%s" % arguments_as_string(init_call.input)
             return test_name
 
-        return BareTestMethodDescription(test_name(), generate_test_case(user_object, self.template()))
+        return TestMethodDescription(test_name(), generate_test_case(user_object, self.template))
 
 class UnittestTestGenerator(TestGenerator):
     main_snippet = parse_fragment("if __name__ == '__main__':\n    unittest.main()\n")
+    template = UnittestTemplate()
 
     def test_class_header(self, name):
         self.ensure_import('unittest')
         return "class %s(unittest.TestCase):" % name
 
-    def equal_assertion(self, expected, actual):
-        return "self.assertEqual(%s, %s)" % (expected, actual)
-
-    def raises_assertion(self, exception, code):
-        return "self.assertRaises(%s, %s)" % (exception, code)
-
-    def missing_assertion(self):
-        return "assert False # TODO: implement your test here"
-
 class NoseTestGenerator(TestGenerator):
+    template = NoseTemplate()
+
     def test_class_header(self, name):
         return "class %s:" % name
-
-    def equal_assertion(self, expected, actual):
-        self.ensure_import(('nose.tools', 'assert_equal'))
-        return "assert_equal(%s, %s)" % (expected, actual)
-
-    def raises_assertion(self, exception, code):
-        self.ensure_import(('nose.tools', 'assert_raises'))
-        return "assert_raises(%s, %s)" % (exception, code)
-
-    def missing_assertion(self):
-        self.ensure_import(('nose', 'SkipTest'))
-        return "raise SkipTest # TODO: implement your test here"
 
 def add_tests_to_project(project, modnames, template, force=False):
     generator = TestGenerator.from_template(template)
