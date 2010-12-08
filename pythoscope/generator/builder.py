@@ -4,7 +4,7 @@ from pythoscope.generator.code_string import addimport, CodeString, combine,\
 from pythoscope.generator.constructor import constructor_as_string,\
     call_as_string_for, type_as_string, todo_value
 from pythoscope.generator.method_call_context import MethodCallContext
-from pythoscope.generator.namer import Assign
+from pythoscope.generator.objects_namer import Assign
 
 from pythoscope.serializer import is_serialized_string
 from pythoscope.side_effect import BuiltinMethodWithPositionArgsSideEffect

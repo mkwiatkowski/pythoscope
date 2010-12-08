@@ -2,7 +2,7 @@ from pythoscope.serializer import SequenceObject, ImmutableObject
 from pythoscope.store import Function, FunctionCall
 from pythoscope.side_effect import SideEffect, ListAppend
 from pythoscope.generator.assertions import assertions_for_interaction
-from pythoscope.generator.namer import name_objects_on_timeline, Assign
+from pythoscope.generator.objects_namer import name_objects_on_timeline, Assign
 from pythoscope.generator.cleaner import remove_objects_unworthy_of_naming,\
     object_usage_counts
 from pythoscope.generator.builder import generate_test_contents, UnittestTemplate

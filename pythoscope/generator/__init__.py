@@ -6,7 +6,7 @@ from pythoscope.generator.assertions import assertions_for_interaction
 from pythoscope.generator.builder import UnittestTemplate, NoseTemplate,\
     generate_test_contents
 from pythoscope.generator.cleaner import remove_objects_unworthy_of_naming
-from pythoscope.generator.namer import name_objects_on_timeline
+from pythoscope.generator.objects_namer import name_objects_on_timeline
 from pythoscope.generator.selector import testable_objects, testable_calls
 from pythoscope.serializer import SerializedObject, ImmutableObject,\
     UnknownObject
@@ -20,7 +20,7 @@ from pythoscope.util import assert_argument_type, camelize, counted, \
 # :: Call | UserObject | Method | Function -> CodeString
 def generate_test_case(testable_interaction, template):
     """This functions binds all other functions from generator submodules
-    together (assertions, cleaner, namer and builder), implementing full
+    together (assertions, cleaner, objects_namer and builder), implementing full
     test generation process, from a testable interaction object to a test
     case string.
 
