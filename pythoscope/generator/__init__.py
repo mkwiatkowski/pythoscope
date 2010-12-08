@@ -264,6 +264,7 @@ class TestMethodDescription(object):
 
 class TestGenerator(object):
     main_snippet = EmptyCode()
+    template = None
 
     def from_template(cls, template):
         if template == 'unittest':
@@ -276,6 +277,9 @@ class TestGenerator(object):
 
     def __init__(self):
         self.imports = []
+
+    def test_class_header(self, name):
+        raise NotImplementedError("Method test_class_header() not defined.")
 
     def ensure_import(self, import_):
         if import_ is not None and import_ not in self.imports:
