@@ -26,6 +26,7 @@ from pythoscope.generator.adder import add_test_case, add_test_case_to_project, 
 from pythoscope.generator import generate_test_case
 from pythoscope.generator.builder import generate_test_contents
 from pythoscope.generator.assertions import test_timeline_for_call
+from pythoscope.generator.selector import testable_calls
 
 TestClass.__test__ = False
 TestMethod.__test__ = False
@@ -42,3 +43,4 @@ replace_test_case.__test__ = False
 generate_test_contents.__test__ = False
 generate_test_case.__test__ = False
 test_timeline_for_call.__test__ = False
+testable_calls.__test__ = False
