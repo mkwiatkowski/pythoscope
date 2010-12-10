@@ -1,12 +1,12 @@
 from pythoscope.serializer import SequenceObject, ImmutableObject
 from pythoscope.store import Function, FunctionCall
-from pythoscope.side_effect import SideEffect, ListAppend
+from pythoscope.side_effect import SideEffect, ListAppend, GlobalRebind
 from pythoscope.generator.assertions import assertions_for_interaction
 from pythoscope.generator.objects_namer import name_objects_on_timeline, Assign
 from pythoscope.generator.cleaner import remove_objects_unworthy_of_naming,\
     object_usage_counts
 from pythoscope.generator.builder import generate_test_contents, UnittestTemplate
-from pythoscope.generator.lines import AssertionLine, EqualAssertionLine
+from pythoscope.generator.lines import Line, EqualAssertionLine, VariableReference
 from pythoscope.generator import generate_test_case
 
 from pythoscope.util import all_of_type
@@ -43,7 +43,7 @@ class TestAssertionsForCall:
     def test_returns_one_assertion_if_output_object_didnt_exist_before_the_call(self):
         put_on_timeline(self.call, self.alist)
 
-        assertion_lines = all_of_type(assertions_for_interaction(self.call), AssertionLine)
+        assertion_lines = all_of_type(assertions_for_interaction(self.call), Line)
         assertion = assert_one_element_and_return(assertion_lines)
         assert_is_equal_assertion_line(assertion, expected_a_copy=True,
                                        expected=self.call.output,
@@ -53,7 +53,7 @@ class TestAssertionsForCall:
     def test_returns_two_assertions_if_output_object_existed_before_the_call(self):
         put_on_timeline(self.alist, self.call)
 
-        assertion_lines = all_of_type(assertions_for_interaction(self.call), AssertionLine)
+        assertion_lines = all_of_type(assertions_for_interaction(self.call), Line)
         assert_length(assertion_lines, 2)
 
         assert_is_equal_assertion_line(assertion_lines[0],
@@ -67,7 +67,7 @@ class TestAssertionsForCall:
         self.call.add_side_effect(se)
         put_on_timeline(self.call, self.alist, se)
 
-        assertion_lines = all_of_type(assertions_for_interaction(self.call), AssertionLine)
+        assertion_lines = all_of_type(assertions_for_interaction(self.call), Line)
         assertion = assert_one_element_and_return(assertion_lines)
         assert_equal(se.timestamp+0.75, assertion.timestamp)
 
@@ -85,6 +85,22 @@ class TestAssertionsForCall:
         side_effects = all_of_type(timeline, SideEffect)
         side_effect = assert_one_element_and_return(side_effects)
         assert alists[1] in side_effect.affected_objects
+
+class TestSideEffectSetupTeardownAndAssertions:
+    def test_creates_assertion_for_global_rebind_side_effect(self):
+        call = create(FunctionCall, args={})
+        new_value = ImmutableObject('new_value')
+        se = GlobalRebind('mod', 'var', new_value)
+        call.add_side_effect(se)
+        put_on_timeline(se, call, call.output)
+
+        timeline = assertions_for_interaction(call)
+        assert_length(timeline, 4)
+        rebind_assertion = timeline[1]
+        assert_equal(new_value, rebind_assertion.expected)
+        assert_instance(rebind_assertion.actual, VariableReference)
+        assert_equal('mod', rebind_assertion.actual.module)
+        assert_equal('var', rebind_assertion.actual.name)
 
 class TestObjectUsageCounts:
     def setUp(self):
@@ -199,6 +215,13 @@ class TestGenerateTestContents:
         se = ListAppend(alist, create(ImmutableObject, obj=1))
         assert_equal_strings("alist = []\nalist.append(1)\n",
                              generate_test_contents([assign, se], None))
+
+    def test_generates_line_with_variable_reference(self):
+        line = EqualAssertionLine(ImmutableObject('string'),
+            VariableReference('mod', 'var', 1.5), 2)
+        result = generate_test_contents([line], unittest_template)
+        assert_equal_strings("self.assertEqual('string', mod.var)\n", result)
+        assert_equal(set(['mod']), result.imports)
 
 class TestGenerateTestCase:
     def test_generates_full_test_case_for_a_call(self):

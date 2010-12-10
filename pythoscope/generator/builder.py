@@ -109,6 +109,9 @@ def generate_test_contents(events, template):
             expected = constructor_as_string(event.expected, already_assigned_names)
             if isinstance(event.actual, (Call, MethodCallContext)):
                 actual = call_in_test(event.actual, already_assigned_names)
+            elif isinstance(event.actual, VariableReference):
+                actual = CodeString("%s.%s" % (event.actual.module, event.actual.name),
+                                    imports=set([event.actual.module]))
             else:
                 actual = constructor_as_string(event.actual, already_assigned_names)
             if expected.uncomplete:

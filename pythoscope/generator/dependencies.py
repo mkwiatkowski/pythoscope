@@ -110,7 +110,7 @@ def resolve_dependencies(events):
         elif isinstance(obj, RaisesAssertionLine):
             return get_those_and_contained_objects([obj.call, obj.expected_exception])
         elif isinstance(obj, (ImmutableObject, UnknownObject, CallToC, CommentLine,
-                              SkipTestLine, EqualAssertionStubLine)):
+                              SkipTestLine, EqualAssertionStubLine, VariableReference)):
             return []
         else:
             raise TypeError("Wrong argument to get_contained_objects: %s." % repr(obj))

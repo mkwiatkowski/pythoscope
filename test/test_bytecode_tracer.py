@@ -526,21 +526,21 @@ class TestBytecodeTracerGlobalAccessAndRebinding(TestBytecodeTracer):
         def fun():
             return return_value
         self.trace_function(fun)
-        self.assert_trace(('load_global', 'return_value'))
+        self.assert_trace(('load_global', ('test.test_bytecode_tracer', 'return_value')))
 
     def test_handles_global_variable_rebinding(self):
         def fun():
             global return_value
             return_value = 123
         self.trace_function(fun)
-        self.assert_trace(('store_global', ('return_value', 123)))
+        self.assert_trace(('store_global', ('test.test_bytecode_tracer', 'return_value', 123)))
 
     def test_handles_global_variable_unbinding(self):
         def fun():
             global return_value
             del return_value
         self.trace_function(fun)
-        self.assert_trace(('delete_global', 'return_value'))
+        self.assert_trace(('delete_global', ('test.test_bytecode_tracer', 'return_value')))
 
 class TestRewriteFunction:
     def test_handles_functions_with_free_variables(self):

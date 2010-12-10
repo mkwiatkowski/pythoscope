@@ -1,7 +1,8 @@
 import os
 import sys
 
-from pythoscope.side_effect import recognize_side_effect, MissingSideEffectType
+from pythoscope.side_effect import recognize_side_effect, MissingSideEffectType,\
+    GlobalRebind
 from pythoscope.store import CallToC, UnknownCall
 from pythoscope.tracer import ICallback, Tracer
 
@@ -34,7 +35,7 @@ class CallStack(object):
             # Register a side effect when applicable.
             if isinstance(caller, CallToC) and caller.side_effect:
                 if not caller.raised_exception():
-                    self._side_effect(caller.side_effect)
+                    self.side_effect(caller.side_effect)
                 caller.clear_side_effect()
 
     def raised(self, exception, traceback):
@@ -57,7 +58,7 @@ class CallStack(object):
         if self.stack:
             return self.stack[-1]
 
-    def _side_effect(self, side_effect):
+    def side_effect(self, side_effect):
         if self.stack:
             self.stack[-1].add_side_effect(side_effect)
         else:
@@ -121,6 +122,10 @@ class Inspector(ICallback):
         else:
             self.call_stack.called(UnknownCall())
         return True
+
+    def global_rebound(self, module, name, value):
+        se = GlobalRebind(module, name, self.execution.serialize(value))
+        self.call_stack.side_effect(se)
 
 def inspect_point_of_entry(point_of_entry):
     projects_root = point_of_entry.project.path

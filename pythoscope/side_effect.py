@@ -34,6 +34,16 @@ class SideEffect(Event):
         self.affected_objects = affected_objects
         self.referenced_objects = affected_objects + only_referenced_objects
 
+class GlobalRebind(SideEffect):
+    def __init__(self, module, name, value):
+        super(GlobalRebind, self).__init__([], []) # TODO: module's __dict__ is affected
+        self.module = module
+        self.name = name
+        self.value = value
+
+    def get_full_name(self):
+        return "%s.%s" % (self.module, self.name)
+
 class BuiltinMethodWithPositionArgsSideEffect(SideEffect):
     definition = None # set in a subclass
 

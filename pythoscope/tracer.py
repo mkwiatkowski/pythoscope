@@ -194,6 +194,19 @@ class StandardTracer(object):
         elif event == 'print_to':
             value, output = args
             pass # TODO
+        elif event == 'store_attr':
+            object, name, value = args
+            pass # TODO
+        elif event == 'delete_attr':
+            object, name = args
+            pass # TODO
+        elif event == 'load_global':
+            pass # TODO
+        elif event == 'store_global':
+            module, name, value = args
+            self.callback.global_rebound(module, name, value)
+        elif event == 'delete_global':
+            pass # TODO
 
     def handle_standard_tracer_event(self, frame, event, arg):
         if event == 'call':
@@ -376,3 +389,11 @@ class ICallback(object):
         Return value is ignored.
         """
         raise NotImplementedError("Method raised() not defined.")
+
+    # :: (str, str, object) -> None
+    def global_rebound(self, module, name, value):
+        """Reported when a global variable is rebound.
+
+        Return value is ignored.
+        """
+        raise NotImplementedError("Method global_rebound() not defined.")

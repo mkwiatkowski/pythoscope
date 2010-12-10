@@ -1,4 +1,5 @@
-from pythoscope.side_effect import ListAppend, ListExtend, ListInsert, ListPop
+from pythoscope.side_effect import ListAppend, ListExtend, ListInsert, ListPop,\
+    GlobalRebind
 
 from assertions import *
 from inspector_assertions import *
@@ -14,7 +15,7 @@ def function_doing_to_list(action, *args, **kwds):
     return fun
 
 def assert_builtin_method_side_effects(se, klass, obj, *args):
-    assert isinstance(se, klass)
+    assert_instance(se, klass)
     assert_serialized(obj, se.obj)
     assert_collection_of_serialized(list(args), list(se.args))
 
@@ -59,3 +60,17 @@ class TestMutation:
             foo([])
         call = inspect_returning_single_call(fun)
         assert_equal([], call.side_effects)
+
+class TestGlobalVariables:
+    def test_handles_rebinding(self):
+        def function_rebinding_global_variable():
+            def function():
+                global was_run
+                was_run = False
+            function()
+        call = inspect_returning_single_call(function_rebinding_global_variable)
+        se = assert_one_element_and_return(call.side_effects)
+        assert_instance(se, GlobalRebind)
+        assert_equal('test.test_tracing_side_effects', se.module)
+        assert_equal('was_run', se.name)
+        assert_serialized(False, se.value)

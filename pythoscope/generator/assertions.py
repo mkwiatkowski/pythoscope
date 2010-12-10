@@ -1,5 +1,7 @@
 from copy import copy
 
+from pythoscope.compat import set
+from pythoscope.generator.code_string import CodeString
 from pythoscope.generator.dependencies import sorted_by_timestamp,\
     side_effects_before, objects_affected_by_side_effects, side_effects_of,\
     older_than, resolve_dependencies
@@ -8,7 +10,8 @@ from pythoscope.generator.lines import *
 from pythoscope.generator.selector import testable_calls
 from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\
     UnknownObject, SequenceObject
-from pythoscope.side_effect import SideEffect, BuiltinMethodWithPositionArgsSideEffect
+from pythoscope.side_effect import SideEffect, GlobalRebind,\
+    BuiltinMethodWithPositionArgsSideEffect
 from pythoscope.store import Function, FunctionCall, UserObject, MethodCall,\
     GeneratorObject, GeneratorObjectInvocation, Call, CallToC, Method
 from pythoscope.util import all_of_type, compact, flatten, underscore
@@ -117,14 +120,8 @@ def give_context_to_method_calls(events, user_object):
             return event
     return map(contextize, events)
 
-# :: ([Event], Call) -> [Event]
-def test_timeline_for_call(execution_events, call):
-    """Construct a new timeline for a test case based on real execution timeline
-    and a call that needs to be tested.
-
-    The new timeline in most cases will contain assertions.
-    """
-    events = []
+# :: ([Event], [Event], Call|GeneratorObject) -> None
+def add_test_events_for_output(events, execution_events, call):
     def copy_object_at(obj, timestamp):
         if isinstance(obj, ImmutableObject):
             return obj, []
@@ -150,6 +147,37 @@ def test_timeline_for_call(execution_events, call):
             else:
                 # If it didn't exist before the call we just need a value assertion.
                 events.extend([EqualAssertionLine(output_copy, call, call_return_timestamp+0.75)])
+
+# :: ([Event], [SideEffect]) -> None
+def add_test_events_for_side_effects(events, side_effects):
+    last_timestamp = events[-1].timestamp
+    for side_effect in side_effects:
+        if isinstance(side_effect, GlobalRebind):
+            events.append(EqualAssertionLine(side_effect.value,
+                VariableReference(side_effect.module, side_effect.name, last_timestamp+0.5),
+                last_timestamp+1))
+        # ref = CodeString("%s.%s" % (side_effect.module, side_effect.name),
+        #                  imports=set([side_effect.module]))
+        # TODO global read should cause setup & teardown
+        # events.insert(0, Assign(side_effect.get_full_name(), ) # TODO setup
+        # events.append(None) # TODO teardown
+
+# :: Call|GeneratorObject -> [SideEffect]
+def side_effects_of_call(call):
+    if isinstance(call, GeneratorObject):
+        return flatten([c.side_effects for c in call.calls])
+    return call.side_effects
+
+# :: ([Event], Call|GeneratorObject) -> [Event]
+def test_timeline_for_call(execution_events, call):
+    """Construct a new timeline for a test case based on real execution timeline
+    and a call that needs to be tested.
+
+    The new timeline in most cases will contain assertions.
+    """
+    events = []
+    add_test_events_for_output(events, execution_events, call)
+    add_test_events_for_side_effects(events, side_effects_of_call(call))
     return events
 
 # :: Event -> Event
