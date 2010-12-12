@@ -150,23 +150,29 @@ def add_test_events_for_output(events, execution_events, call):
 
 # :: ([Event], [SideEffect]) -> None
 def add_test_events_for_side_effects(events, side_effects):
+    globals_already_setup = set()
+    step = 0
     first_timestamp = events[0].timestamp
     last_timestamp = events[-1].timestamp
     for side_effect in side_effects:
-        # TODO support multiple assertions and setups/teardowns for global accesses.
-        if isinstance(side_effect, GlobalRead):
+        if isinstance(side_effect, GlobalRead) and\
+                side_effect.get_full_name() not in globals_already_setup:
             tmp_name = "old_%s_%s" % (side_effect.module, side_effect.name)
-            ref = VariableReference(side_effect.module, side_effect.name, first_timestamp-4.2)
+            ref = VariableReference(side_effect.module, side_effect.name, first_timestamp-4.2-step)
             # SETUP: old_module_variable = module.variable
-            events.insert(0, Assign(tmp_name, ref, first_timestamp-3.2))
+            events.insert(0, Assign(tmp_name, ref, first_timestamp-3.2-step))
             # SETUP: module.variable = value
-            events.insert(1, Assign(side_effect.get_full_name(), side_effect.value, first_timestamp-2.2))
+            events.insert(1, Assign(side_effect.get_full_name(), side_effect.value, first_timestamp-2.2-step))
             # TEARDOWN: module.variable = old_module_variable
-            events.append(Assign(side_effect.get_full_name(), tmp_name, last_timestamp+3.2))
+            # TODO: Crazy hack, teardowns should always be at the end, I'll fix
+            # that someday.
+            events.append(Assign(side_effect.get_full_name(), tmp_name, last_timestamp+300.2+step))
+            globals_already_setup.add((side_effect.get_full_name()))
         elif isinstance(side_effect, GlobalRebind):
             events.append(EqualAssertionLine(side_effect.value,
-                VariableReference(side_effect.module, side_effect.name, last_timestamp+1.1),
-                last_timestamp+2.1))
+                VariableReference(side_effect.module, side_effect.name, last_timestamp+1.1+step),
+                last_timestamp+2.1+step))
+        step += 5
 
 # :: Call|GeneratorObject -> [SideEffect]
 def side_effects_of_call(call):

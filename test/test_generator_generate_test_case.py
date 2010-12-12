@@ -87,6 +87,23 @@ class TestAssertionsForCall:
         side_effect = assert_one_element_and_return(side_effects)
         assert alists[1] in side_effect.affected_objects
 
+def assert_timeline_length_and_return_elements(timeline, expected_length, indexes):
+    assert_length(timeline, expected_length)
+    ret = []
+    for idx in indexes:
+        ret.append(timeline[idx])
+    return ret
+
+def assert_assignment(event, expected_name, expected_object):
+    assert_instance(event, Assign)
+    assert_equal(expected_name, event.name)
+    assert_equal(expected_object, event.obj)
+
+def assert_assignment_with_variable_reference(event, expected_name, expected_var_module, expected_var_name):
+    assert_instance(event, Assign)
+    assert_equal(expected_name, event.name)
+    assert_variable_reference(event.obj, expected_var_module, expected_var_name)
+
 class TestSideEffectSetupTeardownAndAssertions:
     def test_creates_setup_and_teardown_for_global_read_side_effect(self):
         call = create(FunctionCall, args={})
@@ -96,12 +113,43 @@ class TestSideEffectSetupTeardownAndAssertions:
         put_on_timeline(se, call, call.output)
 
         timeline = assertions_for_interaction(call)
-        assert_length(timeline, 6)
-        setup_1, setup_2 = timeline[0:2]
-        teardown = timeline[4]
-        assert_instance(setup_1, Assign)
-        assert_equal('old_mod_var', setup_1.name)
-        assert_variable_reference(setup_1.obj, 'mod', 'var')
+        setup_1, setup_2, teardown = assert_timeline_length_and_return_elements(timeline, 6, [0, 1, 4])
+        assert_assignment_with_variable_reference(setup_1, 'old_mod_var', 'mod', 'var')
+        assert_assignment(setup_2, 'mod.var', old_value)
+        assert_assignment(teardown, 'mod.var', 'old_mod_var')
+
+    def test_creates_setup_and_teardown_for_two_different_global_read_side_effects(self):
+        call = create(FunctionCall, args={})
+        old_value = ImmutableObject('old_value')
+        se = GlobalRead('mod', 'var', old_value)
+        se2 = GlobalRead('mod', 'other_var', old_value)
+        call.add_side_effect(se)
+        call.add_side_effect(se2)
+        put_on_timeline(se, se2, call, call.output)
+
+        timeline = assertions_for_interaction(call)
+        varSetup1, varSetup2, varTeardown = assert_timeline_length_and_return_elements(timeline, 9, [2, 3, 6])
+        assert_assignment_with_variable_reference(varSetup1, 'old_mod_var', 'mod', 'var')
+        assert_assignment(varSetup2, 'mod.var', old_value)
+        assert_assignment(varTeardown, 'mod.var', 'old_mod_var')
+
+        otherVarSetup1, otherVarSetup2, otherVarTeardown = assert_timeline_length_and_return_elements(timeline, 9, [0, 1, 7])
+        assert_assignment_with_variable_reference(otherVarSetup1, 'old_mod_other_var', 'mod', 'other_var')
+        assert_assignment(otherVarSetup2, 'mod.other_var', old_value)
+        assert_assignment(otherVarTeardown, 'mod.other_var', 'old_mod_other_var')
+
+    def test_creates_only_one_setup_and_teardown_for_multiple_global_read_side_effects_of_the_same_variable(self):
+        call = create(FunctionCall, args={})
+        old_value = ImmutableObject('old_value')
+        se = GlobalRead('mod', 'var', old_value)
+        se2 = GlobalRead('mod', 'var', old_value)
+        call.add_side_effect(se)
+        call.add_side_effect(se2)
+        put_on_timeline(se, se2, call, call.output)
+
+        timeline = assertions_for_interaction(call)
+        setup_1, setup_2, teardown = assert_timeline_length_and_return_elements(timeline, 6, [0, 1, 4])
+        assert_assignment_with_variable_reference(setup_1, 'old_mod_var', 'mod', 'var')
         assert_assignment(setup_2, 'mod.var', old_value)
         assert_assignment(teardown, 'mod.var', 'old_mod_var')
 
@@ -193,11 +241,6 @@ class TestRemoveObjectsUnworthyOfNaming:
 
         assert_equal([output, se, call],
                      remove_objects_unworthy_of_naming([seq, output, se, call]))
-
-def assert_assignment(event, expected_name, expected_object):
-    assert_instance(event, Assign)
-    assert_equal(expected_name, event.name)
-    assert_equal(expected_object, event.obj)
 
 class TestNameObjectsOnTimeline:
     def test_names_objects_appropriatelly(self):

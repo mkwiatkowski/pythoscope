@@ -39,7 +39,7 @@ class GlobalVariableSideEffect(SideEffect):
         return "%s.%s" % (self.module, self.name)
 
     def __repr__(self):
-        return "%s(%r, %r, %r)" % (self.__class__.name, self.module, self.name, self.value)
+        return "%s(%r, %r, %r)" % (self.__class__.__name__, self.module, self.name, self.value)
 
 class GlobalRead(GlobalVariableSideEffect):
     def __init__(self, module, name, value):
