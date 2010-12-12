@@ -1,5 +1,5 @@
 from pythoscope.side_effect import ListAppend, ListExtend, ListInsert, ListPop,\
-    GlobalRebind
+    GlobalRebind, GlobalRead
 
 from assertions import *
 from inspector_assertions import *
@@ -62,15 +62,29 @@ class TestMutation:
         assert_equal([], call.side_effects)
 
 class TestGlobalVariables:
+    def test_handles_reading(self):
+        global was_run
+        was_run = False
+        def function_reading_global_variable():
+            def function():
+                return was_run
+            function()
+        call = inspect_returning_single_call(function_reading_global_variable)
+        se = assert_one_element_and_return(call.side_effects)
+        assert_instance(se, GlobalRead)
+        assert_equal('test.test_tracing_side_effects', se.module)
+        assert_equal('was_run', se.name)
+        assert_serialized(False, se.value)
+
     def test_handles_rebinding(self):
         def function_rebinding_global_variable():
             def function():
                 global was_run
-                was_run = False
+                was_run = 0
             function()
         call = inspect_returning_single_call(function_rebinding_global_variable)
         se = assert_one_element_and_return(call.side_effects)
         assert_instance(se, GlobalRebind)
         assert_equal('test.test_tracing_side_effects', se.module)
         assert_equal('was_run', se.name)
-        assert_serialized(False, se.value)
+        assert_serialized(0, se.value)

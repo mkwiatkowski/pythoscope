@@ -523,10 +523,12 @@ class TestBytecodeTracerGlobalAccessAndRebinding(TestBytecodeTracer):
         self._ignored_events = []
 
     def test_handles_global_variable_reading(self):
+        global return_value
+        return_value = 42
         def fun():
             return return_value
         self.trace_function(fun)
-        self.assert_trace(('load_global', ('test.test_bytecode_tracer', 'return_value')))
+        self.assert_trace(('load_global', ('test.test_bytecode_tracer', 'return_value', 42)))
 
     def test_handles_global_variable_rebinding(self):
         def fun():

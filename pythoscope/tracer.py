@@ -119,6 +119,9 @@ def is_generator_exit(obj):
     except NameError:
         return False
 
+import __builtin__
+builtins_names = dir(__builtin__)
+
 class StandardTracer(object):
     """Wrapper around basic C{sys.settrace} mechanism that maps 'call', 'return'
     and 'exception' events into more meaningful callbacks.
@@ -201,7 +204,9 @@ class StandardTracer(object):
             object, name = args
             pass # TODO
         elif event == 'load_global':
-            pass # TODO
+            module, name, value = args
+            if name not in builtins_names:
+                self.callback.global_read(module, name, value)
         elif event == 'store_global':
             module, name, value = args
             self.callback.global_rebound(module, name, value)
@@ -389,6 +394,14 @@ class ICallback(object):
         Return value is ignored.
         """
         raise NotImplementedError("Method raised() not defined.")
+
+    # :: (str, str, object) -> None
+    def global_read(self, module, name, value):
+        """Reported when a global variable is read.
+
+        Return value is ignored.
+        """
+        raise NotImplementedError("Method global_read() not defined.")
 
     # :: (str, str, object) -> None
     def global_rebound(self, module, name, value):

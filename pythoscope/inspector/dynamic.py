@@ -2,9 +2,10 @@ import os
 import sys
 
 from pythoscope.side_effect import recognize_side_effect, MissingSideEffectType,\
-    GlobalRebind
+    GlobalRebind, GlobalRead
 from pythoscope.store import CallToC, UnknownCall
 from pythoscope.tracer import ICallback, Tracer
+from pythoscope.util import get_names
 
 
 class CallStack(object):
@@ -64,6 +65,11 @@ class CallStack(object):
         else:
             self.top_level_side_effects.append(side_effect)
 
+# :: (Module, str) -> bool
+def has_defined_name(module, name):
+    # TODO: also look at the list of imports
+    return name in get_names(module.objects)
+
 class Inspector(ICallback):
     """Controller of the dynamic inspection process. It receives information
     from the tracer and propagates it to Execution and CallStack objects.
@@ -122,6 +128,15 @@ class Inspector(ICallback):
         else:
             self.call_stack.called(UnknownCall())
         return True
+
+    def global_read(self, module_name, name, value):
+        try:
+            if has_defined_name(self.execution.project[module_name], name):
+                return
+        except:
+            pass
+        se = GlobalRead(module_name, name, self.execution.serialize(value))
+        self.call_stack.side_effect(se)
 
     def global_rebound(self, module, name, value):
         se = GlobalRebind(module, name, self.execution.serialize(value))

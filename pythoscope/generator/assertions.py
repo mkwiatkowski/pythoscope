@@ -10,7 +10,7 @@ from pythoscope.generator.lines import *
 from pythoscope.generator.selector import testable_calls
 from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\
     UnknownObject, SequenceObject
-from pythoscope.side_effect import SideEffect, GlobalRebind,\
+from pythoscope.side_effect import SideEffect, GlobalRead, GlobalRebind,\
     BuiltinMethodWithPositionArgsSideEffect
 from pythoscope.store import Function, FunctionCall, UserObject, MethodCall,\
     GeneratorObject, GeneratorObjectInvocation, Call, CallToC, Method
@@ -150,17 +150,23 @@ def add_test_events_for_output(events, execution_events, call):
 
 # :: ([Event], [SideEffect]) -> None
 def add_test_events_for_side_effects(events, side_effects):
+    first_timestamp = events[0].timestamp
     last_timestamp = events[-1].timestamp
     for side_effect in side_effects:
-        if isinstance(side_effect, GlobalRebind):
+        # TODO support multiple assertions and setups/teardowns for global accesses.
+        if isinstance(side_effect, GlobalRead):
+            tmp_name = "old_%s_%s" % (side_effect.module, side_effect.name)
+            ref = VariableReference(side_effect.module, side_effect.name, first_timestamp-4.2)
+            # SETUP: old_module_variable = module.variable
+            events.insert(0, Assign(tmp_name, ref, first_timestamp-3.2))
+            # SETUP: module.variable = value
+            events.insert(1, Assign(side_effect.get_full_name(), side_effect.value, first_timestamp-2.2))
+            # TEARDOWN: module.variable = old_module_variable
+            events.append(Assign(side_effect.get_full_name(), tmp_name, last_timestamp+3.2))
+        elif isinstance(side_effect, GlobalRebind):
             events.append(EqualAssertionLine(side_effect.value,
-                VariableReference(side_effect.module, side_effect.name, last_timestamp+0.5),
-                last_timestamp+1))
-        # ref = CodeString("%s.%s" % (side_effect.module, side_effect.name),
-        #                  imports=set([side_effect.module]))
-        # TODO global read should cause setup & teardown
-        # events.insert(0, Assign(side_effect.get_full_name(), ) # TODO setup
-        # events.append(None) # TODO teardown
+                VariableReference(side_effect.module, side_effect.name, last_timestamp+1.1),
+                last_timestamp+2.1))
 
 # :: Call|GeneratorObject -> [SideEffect]
 def side_effects_of_call(call):

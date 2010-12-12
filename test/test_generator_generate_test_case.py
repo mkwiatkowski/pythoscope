@@ -1,6 +1,7 @@
 from pythoscope.serializer import SequenceObject, ImmutableObject
 from pythoscope.store import Function, FunctionCall
-from pythoscope.side_effect import SideEffect, ListAppend, GlobalRebind
+from pythoscope.side_effect import SideEffect, ListAppend, GlobalRead,\
+    GlobalRebind
 from pythoscope.generator.assertions import assertions_for_interaction
 from pythoscope.generator.objects_namer import name_objects_on_timeline, Assign
 from pythoscope.generator.cleaner import remove_objects_unworthy_of_naming,\
@@ -87,6 +88,23 @@ class TestAssertionsForCall:
         assert alists[1] in side_effect.affected_objects
 
 class TestSideEffectSetupTeardownAndAssertions:
+    def test_creates_setup_and_teardown_for_global_read_side_effect(self):
+        call = create(FunctionCall, args={})
+        old_value = ImmutableObject('old_value')
+        se = GlobalRead('mod', 'var', old_value)
+        call.add_side_effect(se)
+        put_on_timeline(se, call, call.output)
+
+        timeline = assertions_for_interaction(call)
+        assert_length(timeline, 6)
+        setup_1, setup_2 = timeline[0:2]
+        teardown = timeline[4]
+        assert_instance(setup_1, Assign)
+        assert_equal('old_mod_var', setup_1.name)
+        assert_variable_reference(setup_1.obj, 'mod', 'var')
+        assert_assignment(setup_2, 'mod.var', old_value)
+        assert_assignment(teardown, 'mod.var', 'old_mod_var')
+
     def test_creates_assertion_for_global_rebind_side_effect(self):
         call = create(FunctionCall, args={})
         new_value = ImmutableObject('new_value')
@@ -96,11 +114,14 @@ class TestSideEffectSetupTeardownAndAssertions:
 
         timeline = assertions_for_interaction(call)
         assert_length(timeline, 4)
-        rebind_assertion = timeline[1]
+        rebind_assertion = timeline[2]
         assert_equal(new_value, rebind_assertion.expected)
-        assert_instance(rebind_assertion.actual, VariableReference)
-        assert_equal('mod', rebind_assertion.actual.module)
-        assert_equal('var', rebind_assertion.actual.name)
+        assert_variable_reference(rebind_assertion.actual, 'mod', 'var')
+
+def assert_variable_reference(ref, expected_module, expected_name):
+    assert_instance(ref, VariableReference)
+    assert_equal(expected_module, ref.module)
+    assert_equal(expected_name, ref.name)
 
 class TestObjectUsageCounts:
     def setUp(self):
@@ -194,9 +215,19 @@ class TestNameObjectsOnTimeline:
 unittest_template = UnittestTemplate()
 
 class TestGenerateTestContents:
-    def test_generates_assignment_line(self):
+    def test_generates_assignment_line_with_object(self):
         assign = Assign('foo', create(SequenceObject), 1)
         assert_equal_strings("foo = []\n",
+                             generate_test_contents([assign], None))
+
+    def test_generates_assignment_line_with_name(self):
+        assign = Assign('foo', 'bar', 1)
+        assert_equal_strings("foo = bar\n",
+                             generate_test_contents([assign], None))
+
+    def test_generates_assignment_line_with_variable_reference(self):
+        assign = Assign('foo', VariableReference('mod', 'var', 0), 1)
+        assert_equal_strings("foo = mod.var\n",
                              generate_test_contents([assign], None))
 
     def test_generates_assertion_line(self):

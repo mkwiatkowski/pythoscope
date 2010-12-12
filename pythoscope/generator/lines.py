@@ -53,3 +53,6 @@ class Assign(Line):
         Line.__init__(self, timestamp)
         self.name = name
         self.obj = obj
+
+    def __repr__(self):
+        return "Assign(%r, %r)" % (self.name, self.obj)

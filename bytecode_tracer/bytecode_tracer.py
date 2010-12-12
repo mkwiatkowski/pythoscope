@@ -256,8 +256,12 @@ class StandardBytecodeTracer(object):
                 elif bcode.name == "LOAD_GLOBAL":
                     module = frame_module(frame)
                     if module:
-                        yield 'load_global', (module.__name__,
-                                              name_from_arg(frame, bcode))
+                        try:
+                            name = name_from_arg(frame, bcode)
+                            value = frame.f_globals[name]
+                            yield 'load_global', (module.__name__, name, value)
+                        except KeyError:
+                            pass
                 elif bcode.name == "STORE_GLOBAL":
                     module = frame_module(frame)
                     if module:

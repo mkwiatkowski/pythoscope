@@ -6,7 +6,7 @@ from pythoscope.generator.constructor import constructor_as_string,\
 from pythoscope.generator.method_call_context import MethodCallContext
 from pythoscope.generator.objects_namer import Assign
 
-from pythoscope.serializer import is_serialized_string
+from pythoscope.serializer import SerializedObject, is_serialized_string
 from pythoscope.side_effect import BuiltinMethodWithPositionArgsSideEffect
 from pythoscope.store import GeneratorObject, Call, Method
 from pythoscope.util import assert_argument_type
@@ -95,6 +95,9 @@ def generator_object_yields(gobject):
     assert_argument_type(gobject, (GeneratorObject, MethodCallContext))
     return [c.output for c in gobject.calls]
 
+def code_string_from_variable_reference(ref):
+    return CodeString("%s.%s" % (ref.module, ref.name), imports=set([ref.module]))
+
 # :: ([Event], Template) -> CodeString
 def generate_test_contents(events, template):
     contents = CodeString("")
@@ -102,16 +105,20 @@ def generate_test_contents(events, template):
     already_assigned_names = {}
     for event in events:
         if isinstance(event, Assign):
-            constructor = constructor_as_string(event.obj, already_assigned_names)
+            if isinstance(event.obj, VariableReference):
+                constructor = code_string_from_variable_reference(event.obj)
+            elif isinstance(event.obj, str):
+                constructor = CodeString(event.obj)
+            else:
+                constructor = constructor_as_string(event.obj, already_assigned_names)
+                already_assigned_names[event.obj] = event.name
             line = combine(event.name, constructor, "%s = %s")
-            already_assigned_names[event.obj] = event.name
         elif isinstance(event, EqualAssertionLine):
             expected = constructor_as_string(event.expected, already_assigned_names)
             if isinstance(event.actual, (Call, MethodCallContext)):
                 actual = call_in_test(event.actual, already_assigned_names)
             elif isinstance(event.actual, VariableReference):
-                actual = CodeString("%s.%s" % (event.actual.module, event.actual.name),
-                                    imports=set([event.actual.module]))
+                actual = code_string_from_variable_reference(event.actual)
             else:
                 actual = constructor_as_string(event.actual, already_assigned_names)
             if expected.uncomplete:

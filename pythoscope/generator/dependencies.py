@@ -109,6 +109,10 @@ def resolve_dependencies(events):
             return get_contained_objects(obj.generator_call)
         elif isinstance(obj, RaisesAssertionLine):
             return get_those_and_contained_objects([obj.call, obj.expected_exception])
+        elif isinstance(obj, Assign):
+            if isinstance(obj.obj, SerializedObject):
+                return get_those_and_contained_objects([obj.obj])
+            return []
         elif isinstance(obj, (ImmutableObject, UnknownObject, CallToC, CommentLine,
                               SkipTestLine, EqualAssertionStubLine, VariableReference)):
             return []
