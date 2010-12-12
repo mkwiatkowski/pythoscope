@@ -15,14 +15,23 @@ class TestBefore(unittest.TestCase):
 
 class TestAfter(unittest.TestCase):
     def test_after_returns_alist_for_alist_equal_list(self):
-        alist = [1]
-        alist.extend([3, 2])
-        alist.insert(0, 4)
-        alist.pop()
-        alist.remove(3)
-        alist.sort()
-        self.assertEqual(alist, after(alist))
-        self.assertEqual([4, 1], alist)
+        alist1 = []
+        alist2 = []
+        alist1.append(1)
+        alist2.append(1)
+        alist1.extend([3, 2])
+        alist2.extend([3, 2])
+        alist1.insert(0, 4)
+        alist2.insert(0, 4)
+        alist1.pop()
+        alist2.pop()
+        alist1.remove(3)
+        alist2.remove(3)
+        alist1.sort()
+        alist2.sort()
+        self.assertEqual(alist1, after(alist1))
+        alist2.reverse()
+        self.assertEqual(alist2, alist1)
 
 class TestMain(unittest.TestCase):
     def test_main_returns_None(self):

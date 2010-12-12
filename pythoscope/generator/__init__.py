@@ -5,10 +5,11 @@ from pythoscope.generator.adder import add_test_case_to_project
 from pythoscope.generator.assertions import assertions_for_interaction
 from pythoscope.generator.builder import UnittestTemplate, NoseTemplate,\
     generate_test_contents
-from pythoscope.generator.cleaner import remove_objects_unworthy_of_naming
-from pythoscope.generator.objects_namer import name_objects_on_timeline
 from pythoscope.generator.case_namer import call2testname, name2testname,\
     userobject2testname
+from pythoscope.generator.cleaner import remove_objects_unworthy_of_naming
+from pythoscope.generator.objects_namer import name_objects_on_timeline
+from pythoscope.generator.optimizer import optimize
 from pythoscope.generator.selector import testable_objects, testable_calls
 from pythoscope.store import Class, Function, TestClass, TestMethod,\
     ModuleNotFound
@@ -19,21 +20,23 @@ from pythoscope.util import camelize, pluralize, underscore
 # :: Call | UserObject | Method | Function -> CodeString
 def generate_test_case(testable_interaction, template):
     """This functions binds all other functions from generator submodules
-    together (assertions, cleaner, objects_namer and builder), implementing full
-    test generation process, from a testable interaction object to a test
-    case string.
+    together (assertions, cleaner, optimizer, objects_namer and builder),
+    implementing full test generation process, from a testable interaction
+    object to a test case string.
 
     Call|UserObject|Method|Function -> assertions_for_interaction ->
       [Event] -> remove_objects_unworthy_of_naming ->
-        [Event] -> name_objects_on_timeline ->
-          [Event] -> generate_test_contents ->
-            CodeString
+        [Event] -> optimize ->
+          [Event] -> name_objects_on_timeline ->
+            [Event] -> generate_test_contents ->
+              CodeString
     """
     return \
         generate_test_contents(
             name_objects_on_timeline(
-                remove_objects_unworthy_of_naming(
-                    assertions_for_interaction(testable_interaction))),
+                optimize(
+                    remove_objects_unworthy_of_naming(
+                        assertions_for_interaction(testable_interaction)))),
             template)
 
 # :: [TestMethodDescription] -> [TestMethodDescription]

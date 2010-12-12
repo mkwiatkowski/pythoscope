@@ -76,7 +76,6 @@ class TestObjectsIdentityPreservation(TestAcceptanceWithPointOfEntry):
 
 class TestSideEffectsCaptureAndGeneration(TestAcceptanceWithPointOfEntry):
     def test_captures_and_generates_tests_for_code_with_side_effects_on_lists(self):
-        raise SkipTest("Broken.")
         self.execute_with_point_of_entry_and_assert("side_effects_on_lists")
 
 class TestGlobalVariables(TestAcceptanceWithPointOfEntry):
