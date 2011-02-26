@@ -303,11 +303,11 @@ def is_immutable(obj):
     return False
 
 def is_mapping(obj):
-    return isinstance(obj, dict)
+    return type(obj) in [dict]
 
 def is_sequence(obj):
-    return isinstance(obj, (array.array, list, frozenset, set,
-                            sets.ImmutableSet, sets.Set, tuple))
+    return type(obj) in [array.array, list, frozenset, set,
+                         sets.ImmutableSet, sets.Set, tuple]
 
 def is_builtin_exception(obj):
     """Return True if given object is an instance of a built-in exception, like
