@@ -21,15 +21,17 @@ from inspector.dynamic import Inspector
 
 
 project = None
+tracer = None
 inspector = None
 
 def start():
-    global project, inspector
+    global project, tracer, inspector
     try:
         project = Project.from_directory(find_project_directory(os.getcwd()))
         execution = Execution(project)
         inspector = Inspector(execution)
         tracer = Tracer(inspector)
+        tracer.btracer.setup()
         sys.settrace(tracer.tracer)
     except PythoscopeDirectoryMissing:
         print "Can't find .pythoscope/ directory for this project. " \
@@ -37,12 +39,12 @@ def start():
             "Pythoscope tracing disabled for this run."
 
 def stop():
-    global project, inspector
-    if project is None or inspector is None:
+    global project, tracer, inspector
+    if project is None or tracer is None or inspector is None:
         return
     sys.settrace(None)
+    tracer.btracer.teardown()
     inspector.finalize()
     project.remember_execution_from_snippet(inspector.execution)
     project.save()
-    project = None
-    inspector = None
+    project, tracer, inspector = None, None, None
