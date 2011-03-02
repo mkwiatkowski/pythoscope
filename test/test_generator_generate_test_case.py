@@ -118,6 +118,19 @@ class TestSideEffectSetupTeardownAndAssertions:
         assert_assignment(setup_2, 'mod.var', old_value)
         assert_assignment(teardown, 'mod.var', 'old_mod_var')
 
+    def test_names_globals_from_submodules_properly(self):
+        call = create(FunctionCall, args={})
+        old_value = ImmutableObject('old_value')
+        se = GlobalRead('mod.submod', 'var', old_value)
+        call.add_side_effect(se)
+        put_on_timeline(se, call, call.output)
+
+        timeline = assertions_for_interaction(call)
+        setup_1, setup_2, teardown = assert_timeline_length_and_return_elements(timeline, 6, [0, 1, 4])
+        assert_assignment_with_variable_reference(setup_1, 'old_mod_submod_var', 'mod.submod', 'var')
+        assert_assignment(setup_2, 'mod.submod.var', old_value)
+        assert_assignment(teardown, 'mod.submod.var', 'old_mod_submod_var')
+
     def test_creates_setup_and_teardown_for_two_different_global_read_side_effects(self):
         call = create(FunctionCall, args={})
         old_value = ImmutableObject('old_value')

@@ -157,7 +157,7 @@ def add_test_events_for_side_effects(events, side_effects):
     for side_effect in side_effects:
         if isinstance(side_effect, GlobalRead) and\
                 side_effect.get_full_name() not in globals_already_setup:
-            tmp_name = "old_%s_%s" % (side_effect.module, side_effect.name)
+            tmp_name = "old_%s_%s" % (side_effect.module.replace(".", "_"), side_effect.name)
             ref = VariableReference(side_effect.module, side_effect.name, first_timestamp-4.2-step)
             # SETUP: old_module_variable = module.variable
             events.insert(0, Assign(tmp_name, ref, first_timestamp-3.2-step))
