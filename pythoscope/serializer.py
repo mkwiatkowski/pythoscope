@@ -192,19 +192,18 @@ class UnknownObject(SerializedObject):
     """
     def __init__(self, obj):
         SerializedObject.__init__(self, obj)
-        self.partial_reconstructor = UnknownObject.get_partial_reconstructor(obj)
+        self.partial_reconstructor = get_partial_reconstructor(obj)
 
     def __repr__(self):
         return "UnknownObject(%r)" % self.partial_reconstructor
 
-    # :: object -> string
-    def get_partial_reconstructor(obj):
-        mapping = {types.FunctionType: 'function',
-                   types.GeneratorType: 'generator'}
-        objtype = type(obj)
-        default = "%s.%s" % (objtype.__module__, objtype.__name__)
-        return mapping.get(objtype, default)
-    get_partial_reconstructor = staticmethod(get_partial_reconstructor)
+# :: object -> string
+def get_partial_reconstructor(obj):
+    mapping = {types.FunctionType: 'function',
+               types.GeneratorType: 'generator'}
+    objtype = class_of(obj)
+    default = "%s.%s" % (objtype.__module__, objtype.__name__)
+    return mapping.get(objtype, default)
 
 class CompositeObject(SerializedObject):
     """An object of a builtin type that may contain other objects, e.g. a list
