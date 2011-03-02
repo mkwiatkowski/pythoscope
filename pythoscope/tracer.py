@@ -1,11 +1,13 @@
 import inspect
+import re
 import sys
 import types
 
+from pythoscope.compat import any
 from pythoscope.util import compact, get_self_from_method
 
 from bytecode_tracer import BytecodeTracer, rewrite_function,\
-    has_been_rewritten, rewrite_lnotab
+    has_been_rewritten, rewrite_lnotab, code_rewriting_importer
 
 
 # Pythons <= 2.4 surround `exec`uted code with a block named "?",
@@ -122,6 +124,18 @@ def is_generator_exit(obj):
 import __builtin__
 builtins_names = dir(__builtin__)
 
+def without_extension(path):
+    return re.sub(r'.py[co]?$', '', path)
+def whole_stack(frame):
+    if frame is None:
+        return []
+    return [frame] + whole_stack(frame.f_back)
+def is_frame_from_code_rewriting_importer(frame):
+    code = frame.f_code
+    return without_extension(code_rewriting_importer.__file__) == without_extension(code.co_filename)
+def is_called_from_code_rewriting_importer(frame):
+    return any([is_frame_from_code_rewriting_importer(f) for f in whole_stack(frame)])
+
 class StandardTracer(object):
     """Wrapper around basic C{sys.settrace} mechanism that maps 'call', 'return'
     and 'exception' events into more meaningful callbacks.
@@ -174,6 +188,9 @@ class StandardTracer(object):
         # to ignore all interactions inside that code. That usually concerns
         # modules that were imported before the tracer started.
         if not has_been_rewritten(frame.f_code):
+            return
+        # We don't want to trace our own internals.
+        if is_called_from_code_rewriting_importer(frame):
             return
         bytecode_events = list(self.btracer.trace(frame, event))
         if bytecode_events:
