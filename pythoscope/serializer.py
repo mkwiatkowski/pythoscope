@@ -205,6 +205,25 @@ def get_partial_reconstructor(obj):
     default = "%s.%s" % (objtype.__module__, objtype.__name__)
     return mapping.get(objtype, default)
 
+class LibraryObject(SerializedObject):
+    type_formats_with_imports = {
+        ('xml.dom.minidom', 'Element'):
+            ("Element(%s)",
+             ["tagName", "namespaceURI", "prefix"],
+             set([("xml.dom.minidom", "Element")])),
+    }
+
+    def __init__(self, obj, serialize):
+        con, argnames, imp = self.type_formats_with_imports[id_of_class_of(obj)]
+
+        self.constructor_format = con
+        self.arguments = map(serialize, [getattr(obj, a) for a in argnames])
+        self.imports = imp
+
+        # Arguments were serialized first, before a call to super, so that they
+        # get a lower timestamp than the whole object.
+        SerializedObject.__init__(self, obj)
+
 class CompositeObject(SerializedObject):
     """An object of a builtin type that may contain other objects, e.g. a list
     or a dictionary.
@@ -300,6 +319,13 @@ def is_immutable(obj):
     elif isinstance(obj, types.FunctionType) and obj.func_name != '<lambda>':
         return True
     return False
+
+def id_of_class_of(obj):
+    klass = class_of(obj)
+    return (klass.__module__, klass.__name__)
+
+def is_library_object(obj):
+    return id_of_class_of(obj) in LibraryObject.type_formats_with_imports.keys()
 
 def is_mapping(obj):
     return type(obj) in [dict]

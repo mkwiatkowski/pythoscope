@@ -7,7 +7,7 @@ from pythoscope.inspector.static import inspect_code
 from pythoscope.inspector.dynamic import inspect_code_in_context,\
     inspect_point_of_entry
 from pythoscope.serializer import BuiltinException, ImmutableObject,\
-    SequenceObject, MapObject
+    SequenceObject, MapObject, LibraryObject
 from pythoscope.store import Class, Function, FunctionCall, GeneratorObject,\
     GeneratorObjectInvocation, Method, UserObject
 from pythoscope.compat import all
@@ -964,6 +964,14 @@ class TestRaisedExceptions(IgnoredWarnings):
             foo()
         call = inspect_returning_single_call(fun)
         assert_call({}, None, call)
+
+class TestHandlingLibraryObjects:
+    def test_xml_dom_minidom_elements_are_serialized_properly_with_its_arguments(self):
+        from xml.dom.minidom import Element
+        element = serialize_value(Element("tag", "uri", "prefix"))
+
+        assert_instance(element, LibraryObject)
+        assert_collection_of_serialized(("tag", "uri", "prefix"), element.arguments)
 
 class TestExceptionsPassedAsValues:
     def test_builtin_exceptions_are_serialized_as_builin_exception_type_with_args_attribute(self):

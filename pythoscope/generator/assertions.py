@@ -1,7 +1,6 @@
 from copy import copy
 
 from pythoscope.compat import set
-from pythoscope.generator.code_string import CodeString
 from pythoscope.generator.dependencies import sorted_by_timestamp,\
     side_effects_before, objects_affected_by_side_effects, side_effects_of,\
     older_than, resolve_dependencies
@@ -9,7 +8,7 @@ from pythoscope.generator.method_call_context import MethodCallContext
 from pythoscope.generator.lines import *
 from pythoscope.generator.selector import testable_calls
 from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\
-    UnknownObject, SequenceObject
+    UnknownObject, SequenceObject, LibraryObject
 from pythoscope.side_effect import SideEffect, GlobalRead, GlobalRebind,\
     BuiltinMethodWithPositionArgsSideEffect
 from pythoscope.store import Function, FunctionCall, UserObject, MethodCall,\
@@ -260,6 +259,8 @@ def enumerate_events(objs):
             return get_those_and_contained_events(obj.contained_objects)
         elif isinstance(obj, MapObject):
             return get_those_and_contained_events(flatten(obj.mapping))
+        elif isinstance(obj, LibraryObject):
+            return get_those_and_contained_events(obj.arguments)
         elif isinstance(obj, BuiltinException):
             return get_those_and_contained_events(obj.args)
         elif isinstance(obj, UserObject):
@@ -358,4 +359,3 @@ def side_effects_that_affect_object(events, obj):
     for side_effect in all_of_type(events, SideEffect):
         if obj in side_effect.affected_objects:
             yield side_effect
-

@@ -1,7 +1,7 @@
 from pythoscope.generator.lines import *
 from pythoscope.generator.method_call_context import MethodCallContext
 from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\
-    UnknownObject, SequenceObject, SerializedObject
+    UnknownObject, SequenceObject, SerializedObject, LibraryObject
 from pythoscope.store import FunctionCall, UserObject, MethodCall,\
     GeneratorObject, GeneratorObjectInvocation, CallToC
 from pythoscope.side_effect import SideEffect
@@ -89,6 +89,8 @@ def resolve_dependencies(events):
             return get_those_and_contained_objects(obj.contained_objects)
         elif isinstance(obj, MapObject):
             return get_those_and_contained_objects(flatten(obj.mapping))
+        elif isinstance(obj, LibraryObject):
+            return get_those_and_contained_objects(obj.arguments)
         elif isinstance(obj, BuiltinException):
             return get_those_and_contained_objects(obj.args)
         elif isinstance(obj, UserObject):

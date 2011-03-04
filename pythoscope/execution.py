@@ -3,8 +3,8 @@ import time
 import types
 
 from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\
-    UnknownObject, SequenceObject, is_immutable, is_sequence,\
-    is_mapping, is_builtin_exception
+    UnknownObject, SequenceObject, LibraryObject, is_immutable, is_sequence,\
+    is_mapping, is_builtin_exception, is_library_object
 from pythoscope.store import Call, Class, Function, FunctionCall,\
     GeneratorObject, GeneratorObjectInvocation, MethodCall, Project, UserObject
 from pythoscope.util import all_of_type, assert_argument_type, class_name,\
@@ -134,6 +134,8 @@ class Execution(object):
             return MapObject(obj, self.serialize)
         elif is_builtin_exception(obj):
             return BuiltinException(obj, self.serialize)
+        elif is_library_object(obj):
+            return LibraryObject(obj, self.serialize)
         else:
             return UnknownObject(obj)
 

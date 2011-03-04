@@ -2,7 +2,7 @@ from pythoscope.compat import sorted
 from pythoscope.generator.code_string import CodeString, combine, join, \
     putinto, addimport
 from pythoscope.serializer import BuiltinException, CompositeObject,\
-    ImmutableObject, MapObject, UnknownObject, SequenceObject
+    ImmutableObject, MapObject, UnknownObject, SequenceObject, LibraryObject
 from pythoscope.store import Class, Function, UserObject, MethodCall, Method,\
     GeneratorObject
 
@@ -61,6 +61,8 @@ def get_contained_objects_info(obj, assigned_names):
         return list(get_objects_mapping_info(obj.mapping, assigned_names))
     elif isinstance(obj, BuiltinException):
         return list(get_objects_collection_info(obj.args, assigned_names))
+    elif isinstance(obj, LibraryObject):
+        return list(get_objects_collection_info(obj.arguments, assigned_names))
     else:
         raise TypeError("Wrong argument to get_contained_objects_info: %r." % obj)
 
@@ -260,6 +262,11 @@ def constructor_as_string(object, assigned_names={}):
     Empty tuples are recreated properly:
         >>> constructor_as_string(serialize((((42,),),)))
         '(((42,),),)'
+
+    Library objects like xml.dom.minidom.Element are recreated properly as well:
+        >>> from xml.dom.minidom import Element
+        >>> constructor_as_string(serialize(Element("tag", "uri", "prefix")))
+        "Element('tag', 'uri', 'prefix')"
     """
     if isinstance(object, list):
         return list_of(map(constructor_as_string, object))
@@ -275,7 +282,7 @@ def constructor_as_string(object, assigned_names={}):
             return call_as_string(object.klass.name, {})
     elif isinstance(object, ImmutableObject):
         return CodeString(object.reconstructor, imports=object.imports)
-    elif isinstance(object, CompositeObject):
+    elif isinstance(object, (CompositeObject, LibraryObject)):
         arguments = join(', ', get_contained_objects_info(object, assigned_names))
         return putinto(arguments, object.constructor_format, object.imports)
     elif isinstance(object, GeneratorObject):
