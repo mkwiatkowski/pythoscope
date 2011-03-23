@@ -7,7 +7,8 @@ from pythoscope.generator.method_call_context import MethodCallContext
 from pythoscope.generator.objects_namer import Assign
 
 from pythoscope.serializer import SerializedObject, is_serialized_string
-from pythoscope.side_effect import BuiltinMethodWithPositionArgsSideEffect
+from pythoscope.side_effect import BuiltinMethodWithPositionArgsSideEffect,\
+    AttributeRebind
 from pythoscope.store import GeneratorObject, Call, Method
 from pythoscope.util import assert_argument_type
 
@@ -95,8 +96,28 @@ def generator_object_yields(gobject):
     assert_argument_type(gobject, (GeneratorObject, MethodCallContext))
     return [c.output for c in gobject.calls]
 
-def code_string_from_variable_reference(ref):
+def code_string_from_module_variable_reference(ref):
     return CodeString("%s.%s" % (ref.module, ref.name), imports=set([ref.module]))
+
+def code_string_from_object_attribute_reference(ref, assigned_names):
+    return CodeString("%s.%s" % (assigned_names[ref.obj], ref.name))
+
+def variable_assignment_line(left, right, already_assigned_names):
+    if isinstance(right, ModuleVariableReference):
+        constructor = code_string_from_module_variable_reference(right)
+    elif isinstance(right, str):
+        constructor = CodeString(right)
+    else:
+        constructor = constructor_as_string(right, already_assigned_names)
+        already_assigned_names[right] = left
+    return combine(left, constructor, "%s = %s")
+
+def attribute_assignment_line(left, right, already_assigned_names):
+    try:
+        constructor = CodeString(already_assigned_names[right])
+    except KeyError:
+        constructor = constructor_as_string(right, already_assigned_names)
+    return combine(left, constructor, "%s = %s")
 
 # :: ([Event], Template) -> CodeString
 def generate_test_contents(events, template):
@@ -105,20 +126,15 @@ def generate_test_contents(events, template):
     already_assigned_names = {}
     for event in events:
         if isinstance(event, Assign):
-            if isinstance(event.obj, VariableReference):
-                constructor = code_string_from_variable_reference(event.obj)
-            elif isinstance(event.obj, str):
-                constructor = CodeString(event.obj)
-            else:
-                constructor = constructor_as_string(event.obj, already_assigned_names)
-                already_assigned_names[event.obj] = event.name
-            line = combine(event.name, constructor, "%s = %s")
+            line = variable_assignment_line(event.name, event.obj, already_assigned_names)
         elif isinstance(event, EqualAssertionLine):
             expected = constructor_as_string(event.expected, already_assigned_names)
             if isinstance(event.actual, (Call, MethodCallContext)):
                 actual = call_in_test(event.actual, already_assigned_names)
-            elif isinstance(event.actual, VariableReference):
-                actual = code_string_from_variable_reference(event.actual)
+            elif isinstance(event.actual, ModuleVariableReference):
+                actual = code_string_from_module_variable_reference(event.actual)
+            elif isinstance(event.actual, ObjectAttributeReference):
+                actual = code_string_from_object_attribute_reference(event.actual, already_assigned_names)
             else:
                 actual = constructor_as_string(event.actual, already_assigned_names)
             if expected.uncomplete:
@@ -158,6 +174,13 @@ def generate_test_contents(events, template):
                                       event.args_mapping(),
                                       event.definition,
                                       already_assigned_names)
+        elif isinstance(event, AttributeRebind):
+            # All objects affected by side effects are named.
+            object_name = already_assigned_names[event.obj]
+            line = attribute_assignment_line("%s.%s" % (object_name, event.name),
+                                             event.value,
+                                             already_assigned_names)
+
         else:
             raise TypeError("Don't know how to generate test contents for event %r." % event)
         if line.uncomplete:

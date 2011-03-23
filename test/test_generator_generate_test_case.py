@@ -1,13 +1,14 @@
-from pythoscope.serializer import SequenceObject, ImmutableObject
-from pythoscope.store import Function, FunctionCall
+from pythoscope.serializer import SequenceObject, ImmutableObject, SerializedObject
+from pythoscope.store import Function, FunctionCall, Class, UserObject, Method,\
+    MethodCall
 from pythoscope.side_effect import SideEffect, ListAppend, GlobalRead,\
-    GlobalRebind
+    GlobalRebind, AttributeRebind
 from pythoscope.generator.assertions import assertions_for_interaction
 from pythoscope.generator.objects_namer import name_objects_on_timeline, Assign
 from pythoscope.generator.cleaner import remove_objects_unworthy_of_naming,\
     object_usage_counts
 from pythoscope.generator.builder import generate_test_contents, UnittestTemplate
-from pythoscope.generator.lines import Line, EqualAssertionLine, VariableReference
+from pythoscope.generator.lines import Line, EqualAssertionLine, ModuleVariableReference
 from pythoscope.generator import generate_test_case
 
 from pythoscope.util import all_of_type
@@ -16,6 +17,11 @@ from assertions import *
 from factories import create
 from generator_helper import put_on_timeline, create_parent_call_with_side_effects
 
+
+def filter_out_objects(events):
+    def is_not_object(event):
+        return not isinstance(event, SerializedObject)
+    return filter(is_not_object, events)
 
 def assert_is_copy_of(obj, copy):
     assert copy is not obj,\
@@ -36,10 +42,46 @@ def assert_is_equal_assertion_line(assertion, expected, actual, expected_a_copy=
         assert_equal(expected, assertion.expected)
     assert_equal(actual, assertion.actual)
 
-class TestAssertionsForCall:
+def assert_equal_types(collection, expected_types):
+    for element, expected_type in zip(collection, expected_types):
+        assert_instance(element, expected_type)
+
+class TestAssertionsForInteraction:
     def setUp(self):
         self.alist = create(SequenceObject)
         self.call = create(FunctionCall, args={}, output=self.alist)
+
+    def test_doesnt_include_side_effects_of_method_calls_into_user_object_test_case(self):
+        klass = Class("UserClass")
+        user_obj = UserObject(None, klass)
+
+        init = Method("__init__", klass=klass)
+        init_call = MethodCall(definition=init, args={}, output=user_obj)
+
+        method1 = Method("method1", klass=klass)
+        method1_call = MethodCall(definition=method1, args={}, output=create(ImmutableObject))
+        se1 = GlobalRebind('mod', 'var', ImmutableObject('new_value'))
+        method1_call.add_side_effect(se1)
+
+        method2 = Method("method2", klass=klass)
+        method2_call = MethodCall(definition=method2, args={}, output=create(ImmutableObject))
+        se2 = AttributeRebind(user_obj, 'attr', create(ImmutableObject, obj=1))
+        method2_call.add_side_effect(se2)
+
+        user_obj.add_call(init_call)
+        user_obj.add_call(method1_call)
+        user_obj.add_call(method2_call)
+
+        put_on_timeline(user_obj, init_call, method1_call, se1, method2_call, se2)
+
+        assert_equal_types(assertions_for_interaction(user_obj),
+                           [UserObject,
+                            EqualAssertionLine,
+                            EqualAssertionLine,
+                            EqualAssertionLine,
+                            EqualAssertionLine,
+                            ImmutableObject,
+                            ImmutableObject])
 
     def test_returns_one_assertion_if_output_object_didnt_exist_before_the_call(self):
         put_on_timeline(self.call, self.alist)
@@ -99,10 +141,10 @@ def assert_assignment(event, expected_name, expected_object):
     assert_equal(expected_name, event.name)
     assert_equal(expected_object, event.obj)
 
-def assert_assignment_with_variable_reference(event, expected_name, expected_var_module, expected_var_name):
+def assert_assignment_with_module_variable_reference(event, expected_name, expected_var_module, expected_var_name):
     assert_instance(event, Assign)
     assert_equal(expected_name, event.name)
-    assert_variable_reference(event.obj, expected_var_module, expected_var_name)
+    assert_module_variable_reference(event.obj, expected_var_module, expected_var_name)
 
 class TestSideEffectSetupTeardownAndAssertions:
     def test_creates_setup_and_teardown_for_global_read_side_effect(self):
@@ -113,8 +155,9 @@ class TestSideEffectSetupTeardownAndAssertions:
         put_on_timeline(se, call, call.output)
 
         timeline = assertions_for_interaction(call)
-        setup_1, setup_2, teardown = assert_timeline_length_and_return_elements(timeline, 6, [0, 1, 4])
-        assert_assignment_with_variable_reference(setup_1, 'old_mod_var', 'mod', 'var')
+        setup_1, setup_2, teardown = assert_timeline_length_and_return_elements(
+            filter_out_objects(timeline), 4, [0, 1, 3])
+        assert_assignment_with_module_variable_reference(setup_1, 'old_mod_var', 'mod', 'var')
         assert_assignment(setup_2, 'mod.var', old_value)
         assert_assignment(teardown, 'mod.var', 'old_mod_var')
 
@@ -126,8 +169,9 @@ class TestSideEffectSetupTeardownAndAssertions:
         put_on_timeline(se, call, call.output)
 
         timeline = assertions_for_interaction(call)
-        setup_1, setup_2, teardown = assert_timeline_length_and_return_elements(timeline, 6, [0, 1, 4])
-        assert_assignment_with_variable_reference(setup_1, 'old_mod_submod_var', 'mod.submod', 'var')
+        setup_1, setup_2, teardown = assert_timeline_length_and_return_elements(
+            filter_out_objects(timeline), 4, [0, 1, 3])
+        assert_assignment_with_module_variable_reference(setup_1, 'old_mod_submod_var', 'mod.submod', 'var')
         assert_assignment(setup_2, 'mod.submod.var', old_value)
         assert_assignment(teardown, 'mod.submod.var', 'old_mod_submod_var')
 
@@ -141,13 +185,15 @@ class TestSideEffectSetupTeardownAndAssertions:
         put_on_timeline(se, se2, call, call.output)
 
         timeline = assertions_for_interaction(call)
-        varSetup1, varSetup2, varTeardown = assert_timeline_length_and_return_elements(timeline, 9, [2, 3, 6])
-        assert_assignment_with_variable_reference(varSetup1, 'old_mod_var', 'mod', 'var')
+        varSetup1, varSetup2, varTeardown = assert_timeline_length_and_return_elements(
+            filter_out_objects(timeline), 7, [2, 3, 5])
+        assert_assignment_with_module_variable_reference(varSetup1, 'old_mod_var', 'mod', 'var')
         assert_assignment(varSetup2, 'mod.var', old_value)
         assert_assignment(varTeardown, 'mod.var', 'old_mod_var')
 
-        otherVarSetup1, otherVarSetup2, otherVarTeardown = assert_timeline_length_and_return_elements(timeline, 9, [0, 1, 7])
-        assert_assignment_with_variable_reference(otherVarSetup1, 'old_mod_other_var', 'mod', 'other_var')
+        otherVarSetup1, otherVarSetup2, otherVarTeardown = assert_timeline_length_and_return_elements(
+            filter_out_objects(timeline), 7, [0, 1, 6])
+        assert_assignment_with_module_variable_reference(otherVarSetup1, 'old_mod_other_var', 'mod', 'other_var')
         assert_assignment(otherVarSetup2, 'mod.other_var', old_value)
         assert_assignment(otherVarTeardown, 'mod.other_var', 'old_mod_other_var')
 
@@ -161,8 +207,9 @@ class TestSideEffectSetupTeardownAndAssertions:
         put_on_timeline(se, se2, call, call.output)
 
         timeline = assertions_for_interaction(call)
-        setup_1, setup_2, teardown = assert_timeline_length_and_return_elements(timeline, 6, [0, 1, 4])
-        assert_assignment_with_variable_reference(setup_1, 'old_mod_var', 'mod', 'var')
+        setup_1, setup_2, teardown = assert_timeline_length_and_return_elements(
+            filter_out_objects(timeline), 4, [0, 1, 3])
+        assert_assignment_with_module_variable_reference(setup_1, 'old_mod_var', 'mod', 'var')
         assert_assignment(setup_2, 'mod.var', old_value)
         assert_assignment(teardown, 'mod.var', 'old_mod_var')
 
@@ -177,10 +224,10 @@ class TestSideEffectSetupTeardownAndAssertions:
         assert_length(timeline, 4)
         rebind_assertion = timeline[2]
         assert_equal(new_value, rebind_assertion.expected)
-        assert_variable_reference(rebind_assertion.actual, 'mod', 'var')
+        assert_module_variable_reference(rebind_assertion.actual, 'mod', 'var')
 
-def assert_variable_reference(ref, expected_module, expected_name):
-    assert_instance(ref, VariableReference)
+def assert_module_variable_reference(ref, expected_module, expected_name):
+    assert_instance(ref, ModuleVariableReference)
     assert_equal(expected_module, ref.module)
     assert_equal(expected_name, ref.name)
 
@@ -282,7 +329,7 @@ class TestGenerateTestContents:
                              generate_test_contents([assign], None))
 
     def test_generates_assignment_line_with_variable_reference(self):
-        assign = Assign('foo', VariableReference('mod', 'var', 0), 1)
+        assign = Assign('foo', ModuleVariableReference('mod', 'var', 0), 1)
         assert_equal_strings("foo = mod.var\n",
                              generate_test_contents([assign], None))
 
@@ -296,16 +343,24 @@ class TestGenerateTestContents:
         assert_equal(set([('module', 'function')]),
                      generate_test_contents([aline], unittest_template).imports)
 
-    def test_generates_side_effect_line(self):
+    def test_generates_side_effect_line_for_builtin_method_call(self):
         alist = create(SequenceObject)
         assign = Assign('alist', alist, 1)
         se = ListAppend(alist, create(ImmutableObject, obj=1))
         assert_equal_strings("alist = []\nalist.append(1)\n",
                              generate_test_contents([assign, se], None))
 
+    def test_generates_side_effect_line_for_user_object_attribute_change(self):
+        klass = Class("UserClass")
+        user_obj = UserObject(None, klass)
+        assign = Assign('user_obj', user_obj, 1)
+        se = AttributeRebind(user_obj, 'attr', create(ImmutableObject, obj=1))
+        assert_equal_strings("user_obj = UserClass()\nuser_obj.attr = 1\n",
+                             generate_test_contents([assign, se], None))
+
     def test_generates_line_with_variable_reference(self):
         line = EqualAssertionLine(ImmutableObject('string'),
-            VariableReference('mod', 'var', 1.5), 2)
+            ModuleVariableReference('mod', 'var', 1.5), 2)
         result = generate_test_contents([line], unittest_template)
         assert_equal_strings("self.assertEqual('string', mod.var)\n", result)
         assert_equal(set(['mod']), result.imports)

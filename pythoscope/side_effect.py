@@ -55,6 +55,13 @@ class GlobalRebind(GlobalVariableSideEffect):
         self.name = name
         self.value = value
 
+class AttributeRebind(SideEffect):
+    def __init__(self, obj, name, value):
+        super(AttributeRebind, self).__init__([obj], [value])
+        self.obj = obj
+        self.name = name
+        self.value = value
+
 class BuiltinMethodWithPositionArgsSideEffect(SideEffect):
     definition = None # set in a subclass
 

@@ -215,10 +215,10 @@ class StandardTracer(object):
             value, output = args
             pass # TODO
         elif event == 'store_attr':
-            object, name, value = args
-            pass # TODO
+            obj, name, value = args
+            self.callback.attribute_rebound(obj, name, value)
         elif event == 'delete_attr':
-            object, name = args
+            obj, name = args
             pass # TODO
         elif event == 'load_global':
             module, name, value = args
@@ -411,6 +411,14 @@ class ICallback(object):
         Return value is ignored.
         """
         raise NotImplementedError("Method raised() not defined.")
+
+    # :: (object, str, object) -> None
+    def attribute_rebound(self, obj, name, value):
+        """Reported when an attribute of an object is rebound.
+
+        Return value is ignored.
+        """
+        raise NotImplementedError("Method attribute_rebound() not defined.")
 
     # :: (str, str, object) -> None
     def global_read(self, module, name, value):

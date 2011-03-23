@@ -2,7 +2,7 @@ import os
 import sys
 
 from pythoscope.side_effect import recognize_side_effect, MissingSideEffectType,\
-    GlobalRebind, GlobalRead
+    GlobalRebind, GlobalRead, AttributeRebind
 from pythoscope.store import CallToC, UnknownCall
 from pythoscope.tracer import ICallback, Tracer
 from pythoscope.util import get_names
@@ -128,6 +128,10 @@ class Inspector(ICallback):
         else:
             self.call_stack.called(UnknownCall())
         return True
+
+    def attribute_rebound(self, obj, name, value):
+        se = AttributeRebind(self.execution.serialize(obj), name, self.execution.serialize(value))
+        self.call_stack.side_effect(se)
 
     def global_read(self, module_name, name, value):
         try:

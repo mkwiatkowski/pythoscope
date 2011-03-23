@@ -6,3 +6,6 @@ class MethodCallContext(object):
     def __getattr__(self, name):
         if name in ['input', 'definition', 'calls', 'args']:
             return getattr(self.call, name)
+
+    def __repr__(self):
+        return "MethodCallContext(call=%r)" % self.call

@@ -4,7 +4,7 @@ from pythoscope.event import Event
 __all__ = ['EqualAssertionLine', 'EqualAssertionStubLine',
            'GeneratorAssertionLine', 'RaisesAssertionLine',
            'CommentLine', 'SkipTestLine',
-           'VariableReference', 'Assign']
+           'ModuleVariableReference', 'ObjectAttributeReference', 'Assign']
 
 class Line(Event):
     def __init__(self, timestamp):
@@ -16,6 +16,9 @@ class EqualAssertionLine(Line):
         Line.__init__(self, timestamp)
         self.expected = expected
         self.actual = actual
+
+    def __repr__(self):
+        return "EqualAssertionLine(expected=%r, actual=%r)" % (self.expected, self.actual)
 
 class EqualAssertionStubLine(Line):
     def __init__(self, actual, timestamp):
@@ -42,10 +45,16 @@ class SkipTestLine(Line):
     def __init__(self, timestamp):
         Line.__init__(self, timestamp)
 
-class VariableReference(Line):
+class ModuleVariableReference(Line):
     def __init__(self, module, name, timestamp):
         Line.__init__(self, timestamp)
         self.module = module
+        self.name = name
+
+class ObjectAttributeReference(Line):
+    def __init__(self, obj, name, timestamp):
+        Line.__init__(self, timestamp)
+        self.obj = obj
         self.name = name
 
 class Assign(Line):

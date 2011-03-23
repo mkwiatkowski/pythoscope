@@ -10,9 +10,9 @@ from pythoscope.generator.selector import testable_calls
 from pythoscope.serializer import BuiltinException, ImmutableObject, MapObject,\
     UnknownObject, SequenceObject, LibraryObject
 from pythoscope.side_effect import SideEffect, GlobalRead, GlobalRebind,\
-    BuiltinMethodWithPositionArgsSideEffect
+    BuiltinMethodWithPositionArgsSideEffect, AttributeRebind
 from pythoscope.store import Function, FunctionCall, UserObject, MethodCall,\
-    GeneratorObject, GeneratorObjectInvocation, Call, CallToC, Method
+    GeneratorObject, GeneratorObjectInvocation, Call, CallToC, Method, Callable
 from pythoscope.util import all_of_type, compact, flatten, underscore
 
 
@@ -88,7 +88,9 @@ def test_timeline_for_user_object(execution_events, user_object):
     if init_call and init_call.raised_exception():
         call_return_timestamp = last_call_action_timestamp(init_call)
         return [RaisesAssertionLine(init_call.exception, MethodCallContext(init_call, user_object), call_return_timestamp+0.25)]
+
     timeline = give_context_to_method_calls(compact([init_call]) + flatten(map(lambda call: test_timeline_for_call(execution_events, call), external_calls)), user_object)
+
     if init_call and len(external_calls) == 0:
         timeline.append(CommentLine("# Make sure it doesn't raise any exceptions.", timeline[-1].timestamp))
     return timeline
@@ -157,7 +159,7 @@ def add_test_events_for_side_effects(events, side_effects):
         if isinstance(side_effect, GlobalRead) and\
                 side_effect.get_full_name() not in globals_already_setup:
             tmp_name = "old_%s_%s" % (side_effect.module.replace(".", "_"), side_effect.name)
-            ref = VariableReference(side_effect.module, side_effect.name, first_timestamp-4.2-step)
+            ref = ModuleVariableReference(side_effect.module, side_effect.name, first_timestamp-4.2-step)
             # SETUP: old_module_variable = module.variable
             events.insert(0, Assign(tmp_name, ref, first_timestamp-3.2-step))
             # SETUP: module.variable = value
@@ -169,8 +171,12 @@ def add_test_events_for_side_effects(events, side_effects):
             globals_already_setup.add((side_effect.get_full_name()))
         elif isinstance(side_effect, GlobalRebind):
             events.append(EqualAssertionLine(side_effect.value,
-                VariableReference(side_effect.module, side_effect.name, last_timestamp+1.1+step),
+                ModuleVariableReference(side_effect.module, side_effect.name, last_timestamp+1.1+step),
                 last_timestamp+2.1+step))
+        elif isinstance(side_effect, AttributeRebind):
+            events.append(EqualAssertionLine(side_effect.value,
+                ObjectAttributeReference(side_effect.obj, side_effect.name, last_timestamp+1.3+step),
+                last_timestamp+2.3+step))
         step += 5
 
 # :: Call|GeneratorObject -> [SideEffect]
@@ -296,6 +302,7 @@ def remove_duplicates_and_bare_method_contexts(events):
             new_events.append(event)
     return new_events
 
+# :: ([Event], [Event]) -> [Event]
 def include_requirements(test_events, execution_events):
     ignored_side_effects = side_effects_of(explicit_calls(test_events))
     new_events = []
@@ -312,10 +319,10 @@ def explicit_calls(event):
     if isinstance(event, list):
         return flatten(map(explicit_calls, event))
     if isinstance(event, Call):
-        return [event] + explicit_calls(event.subcalls)
-    elif isinstance(event, GeneratorObject):
+        return [event] + explicit_calls(event.subcalls) + explicit_calls(event.input.values())
+    elif isinstance(event, Callable):
         return explicit_calls(event.calls)
-    elif isinstance(event, EqualAssertionLine) and isinstance(event.actual, Call):
+    elif isinstance(event, EqualAssertionLine) and isinstance(event.actual, (Call, MethodCallContext)):
         return explicit_calls(event.actual)
     elif isinstance(event, GeneratorAssertionLine):
         return explicit_calls(event.generator_call)

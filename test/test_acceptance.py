@@ -81,3 +81,7 @@ class TestSideEffectsCaptureAndGeneration(TestAcceptanceWithPointOfEntry):
 class TestGlobalVariables(TestAcceptanceWithPointOfEntry):
     def test_handles_global_variables(self):
         self.execute_with_point_of_entry_and_assert("global_variables")
+
+class TestAttributesRebind(TestAcceptanceWithPointOfEntry):
+    def test_handles_attribute_rebind(self):
+        self.execute_with_point_of_entry_and_assert("attributes_rebind")

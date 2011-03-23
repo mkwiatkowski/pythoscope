@@ -115,8 +115,10 @@ def resolve_dependencies(events):
             if isinstance(obj.obj, SerializedObject):
                 return get_those_and_contained_objects([obj.obj])
             return []
+        elif isinstance(obj, ObjectAttributeReference):
+            return get_those_and_contained_objects([obj.obj])
         elif isinstance(obj, (ImmutableObject, UnknownObject, CallToC, CommentLine,
-                              SkipTestLine, EqualAssertionStubLine, VariableReference)):
+                              SkipTestLine, EqualAssertionStubLine, ModuleVariableReference)):
             return []
         else:
             raise TypeError("Wrong argument to get_contained_objects: %s." % repr(obj))
