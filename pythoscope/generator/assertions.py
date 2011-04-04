@@ -3,7 +3,7 @@ from copy import copy
 from pythoscope.compat import set
 from pythoscope.generator.dependencies import sorted_by_timestamp,\
     side_effects_before, objects_affected_by_side_effects, side_effects_of,\
-    older_than, resolve_dependencies
+    older_than, newer_than, resolve_dependencies
 from pythoscope.generator.method_call_context import MethodCallContext
 from pythoscope.generator.lines import *
 from pythoscope.generator.selector import testable_calls
@@ -30,7 +30,10 @@ def assertions_for_interaction(testable_interaction):
         test_timeline = test_timeline_for_function(testable_interaction)
     else:
         test_timeline = test_timeline_for_call(timeline, testable_interaction)
-    return remove_duplicates_and_bare_method_contexts(sorted_by_timestamp(include_requirements(test_timeline, timeline)))
+    return remove_duplicates_and_bare_method_contexts(
+        sorted_by_timestamp(
+            fix_tests_using_call_outputs(
+                include_requirements(test_timeline, timeline))))
 
 # :: Method -> [Event]
 def test_timeline_for_method(method):
@@ -97,11 +100,37 @@ def test_timeline_for_user_object(execution_events, user_object):
 
 # :: Call | GeneratorObject -> int
 def last_call_action_timestamp(call):
+    """ Return timestamp of the last action executed within a call just before
+    it returned.
+
+    >>> mc1 = MethodCall(Method('m'), {})
+    >>> mc2 = MethodCall(Method('m2'), {})
+    >>> se = SideEffect([], [])
+    >>> mc1.timestamp = 1
+    >>> mc1.add_subcall(mc2)
+    >>> mc1.add_side_effect(se)
+
+    >>> mc2.timestamp = 2
+    >>> se.timestamp = 3
+    >>> last_call_action_timestamp(mc1)
+    3
+
+    >>> mc2.timestamp = 3
+    >>> se.timestamp = 2
+    >>> last_call_action_timestamp(mc1)
+    3
+    """
     if isinstance(call, GeneratorObject):
         return max(map(last_call_action_timestamp, call.calls))
+    # Either last action of a subcall or last side effect should be taken into
+    # account here.
+    last_subcall_action_timestamp = 0
+    last_side_effect_timestamp = 0
+    if call.subcalls:
+        last_subcall_action_timestamp = last_call_action_timestamp(call.subcalls[-1])
     if call.side_effects:
-        return call.side_effects[-1].timestamp
-    return call.timestamp
+        last_side_effect_timestamp = call.side_effects[-1].timestamp
+    return max(last_subcall_action_timestamp, last_side_effect_timestamp, call.timestamp)
 
 # :: ([Event], UserObject) -> [Event|MethodCallContext]
 def give_context_to_method_calls(events, user_object):
@@ -156,7 +185,8 @@ def add_test_events_for_side_effects(events, side_effects):
     first_timestamp = events[0].timestamp
     last_timestamp = events[-1].timestamp
     for side_effect in side_effects:
-        if isinstance(side_effect, GlobalRead) and\
+        if isinstance(side_effect, GlobalRead) and \
+                not isinstance(side_effect.value, UnknownObject) and \
                 side_effect.get_full_name() not in globals_already_setup:
             tmp_name = "old_%s_%s" % (side_effect.module.replace(".", "_"), side_effect.name)
             ref = ModuleVariableReference(side_effect.module, side_effect.name, first_timestamp-4.2-step)
@@ -313,6 +343,35 @@ def include_requirements(test_events, execution_events):
             if new_event not in ignored_side_effects:
                 new_events.append(new_event)
     return new_events + test_events
+
+# :: (Event, [Event], int) -> bool
+def used_later_than(event, timeline, timestamp):
+    return not isinstance(event, ImmutableObject) and \
+        event in resolve_dependencies(newer_than(timeline, timestamp))
+
+# :: [Event] -> [Event]
+def fix_tests_using_call_outputs(timeline):
+    """If a tested call output is used later in the test and it was created by
+    the call we have to assign it a name.
+
+    E.g. we can't just do that:
+        assert_equal(expected, call())
+        assert_equal(?call_output?, something.somewhere)
+    so sometimes we need this:
+        output = call()
+        assert_equal(expected, output)
+        assert_equal(output, something.somewhere)
+    """
+    for event in timeline:
+        if isinstance(event, EqualAssertionLine) and \
+                isinstance(event.actual, (MethodCallContext, Call)) and \
+                event.actual.output.timestamp > event.actual.timestamp and \
+                used_later_than(event.actual.output, timeline, event.timestamp):
+            yield Assign('result', event.actual, event.actual.timestamp-0.0001)
+            event.actual = 'result'
+            yield event
+        else:
+            yield event
 
 # [Event] -> [Call]
 def explicit_calls(event):

@@ -4,7 +4,7 @@ from pythoscope.generator.code_string import CodeString, combine, join, \
 from pythoscope.serializer import BuiltinException, CompositeObject,\
     ImmutableObject, MapObject, UnknownObject, SequenceObject, LibraryObject
 from pythoscope.store import Class, Function, UserObject, MethodCall, Method,\
-    GeneratorObject
+    GeneratorObject, Module
 
 
 # :: Definition -> (str, str)
@@ -121,6 +121,16 @@ def call_as_string_for(object_name, args, definition, assigned_names={}):
         >>> call_as_string_for('sum', {'x': serialize(1), 'rest': serialize((2, 3))},
         ...     Function('sum', ['x', '*rest']))
         'sum(1, 2, 3)'
+
+    When argument type requires import, the import is present in the imports list.
+        >>> m = Module(None, 'myclasses')
+        >>> cs = call_as_string_for('display',
+        ...     {'obj': UserObject(None, Class('MyWindow', module=m))},
+        ...     Function('display', ['obj']))
+        >>> cs
+        'display(MyWindow())'
+        >>> cs.imports
+        set([('myclasses', 'MyWindow')])
     """
     positional_args = []
     keyword_args = []
@@ -209,6 +219,7 @@ def constructor_as_string(object, assigned_names={}):
 
     >>> from test.helper import make_fresh_serialize
     >>> serialize = make_fresh_serialize()
+    >>> m = Module(None, 'myclasses')
 
     It handles built-in types
         >>> constructor_as_string(serialize(123))
@@ -219,7 +230,7 @@ def constructor_as_string(object, assigned_names={}):
         "[1, 'two']"
 
     as well as instances of user-defined classes
-        >>> obj = UserObject(None, Class('SomeClass'))
+        >>> obj = UserObject(None, Class('SomeClass', module=m))
         >>> constructor_as_string(obj)
         'SomeClass()'
 
@@ -229,14 +240,14 @@ def constructor_as_string(object, assigned_names={}):
         "SomeClass('whatever')"
 
     even if they're user objects themselves:
-        >>> otherobj = UserObject(None, Class('SomeOtherClass'))
+        >>> otherobj = UserObject(None, Class('SomeOtherClass', module=m))
         >>> otherobj.add_call(MethodCall(Method('__init__', ['self', 'object']), {'object': obj}, serialize(None)))
         >>> constructor_as_string(otherobj)
         "SomeOtherClass(SomeClass('whatever'))"
 
     or they are already named:
         >>> s = serialize("string")
-        >>> anotherobj = UserObject(None, Class('AnotherClass'))
+        >>> anotherobj = UserObject(None, Class('AnotherClass', module=m))
         >>> anotherobj.add_call(MethodCall(Method('__init__', ['self', 's']), {'s': s}, serialize(None)))
         >>> constructor_as_string(anotherobj, {s: 's'})
         'AnotherClass(s)'
@@ -263,6 +274,13 @@ def constructor_as_string(object, assigned_names={}):
         >>> constructor_as_string(serialize((((42,),),)))
         '(((42,),),)'
 
+    Recreated objects keep their import information:
+        >>> cs = constructor_as_string(UserObject(None, Class('MyClass', module=m)))
+        >>> cs
+        'MyClass()'
+        >>> cs.imports
+        set([('myclasses', 'MyClass')])
+
     Library objects like xml.dom.minidom.Element are recreated properly as well:
         >>> from xml.dom.minidom import Element
         >>> constructor_as_string(serialize(Element("tag", "uri", "prefix")))
@@ -276,10 +294,11 @@ def constructor_as_string(object, assigned_names={}):
         # Look for __init__ call and base the constructor on that.
         init_call = object.get_init_call()
         if init_call:
-            return call_as_string_for(object.klass.name, init_call.input,
+            cs = call_as_string_for(object.klass.name, init_call.input,
                 init_call.definition, assigned_names)
         else:
-            return call_as_string(object.klass.name, {})
+            cs = call_as_string(object.klass.name, {})
+        return addimport(cs, import_for(object.klass))
     elif isinstance(object, ImmutableObject):
         return CodeString(object.reconstructor, imports=object.imports)
     elif isinstance(object, (CompositeObject, LibraryObject)):

@@ -16,6 +16,10 @@ def sorted_by_timestamp(objects):
 def older_than(events, reference_timestamp):
     return filter(lambda e: e.timestamp < reference_timestamp, events)
 
+# :: ([Event], int) -> [Event]
+def newer_than(events, reference_timestamp):
+    return filter(lambda e: e.timestamp > reference_timestamp, events)
+
 # :: Call -> Call
 def top_caller(call):
     if call.caller is None:
@@ -106,6 +110,9 @@ def resolve_dependencies(events):
         elif isinstance(obj, MethodCallContext):
             return get_those_and_contained_objects([obj.call, obj.user_object])
         elif isinstance(obj, EqualAssertionLine):
+            # Actual may be just a variable name, so just skip that.
+            if isinstance(obj.actual, str):
+                return get_those_and_contained_objects([obj.expected])
             return get_those_and_contained_objects([obj.expected, obj.actual])
         elif isinstance(obj, GeneratorAssertionLine):
             return get_contained_objects(obj.generator_call)

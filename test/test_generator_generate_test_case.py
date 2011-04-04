@@ -1,6 +1,6 @@
 from pythoscope.serializer import SequenceObject, ImmutableObject, SerializedObject
 from pythoscope.store import Function, FunctionCall, Class, UserObject, Method,\
-    MethodCall
+    MethodCall, Module
 from pythoscope.side_effect import SideEffect, ListAppend, GlobalRead,\
     GlobalRebind, AttributeRebind
 from pythoscope.generator.assertions import assertions_for_interaction
@@ -351,7 +351,7 @@ class TestGenerateTestContents:
                              generate_test_contents([assign, se], None))
 
     def test_generates_side_effect_line_for_user_object_attribute_change(self):
-        klass = Class("UserClass")
+        klass = Class("UserClass", module=Module(None, 'user_module'))
         user_obj = UserObject(None, klass)
         assign = Assign('user_obj', user_obj, 1)
         se = AttributeRebind(user_obj, 'attr', create(ImmutableObject, obj=1))

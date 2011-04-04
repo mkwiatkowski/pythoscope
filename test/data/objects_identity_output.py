@@ -1,8 +1,8 @@
 from module import Facade
 import unittest
-from module import System
-from module import Composite
 from module import Object
+from module import Composite
+from module import System
 from module import do_something_simple_with_system
 from module import main
 

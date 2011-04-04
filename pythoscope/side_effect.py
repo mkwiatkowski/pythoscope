@@ -61,6 +61,8 @@ class AttributeRebind(SideEffect):
         self.obj = obj
         self.name = name
         self.value = value
+    def __repr__(self):
+        return "%s(id=%r, %r, %s, %r)" % (self.__class__.__name__, id(self), self.obj, self.name, self.value)
 
 class BuiltinMethodWithPositionArgsSideEffect(SideEffect):
     definition = None # set in a subclass

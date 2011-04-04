@@ -217,7 +217,7 @@ class LibraryObject(SerializedObject):
         con, argnames, imp = self.type_formats_with_imports[id_of_class_of(obj)]
 
         self.constructor_format = con
-        self.arguments = map(serialize, [getattr(obj, a) for a in argnames])
+        self.arguments = map(serialize, [getattr(obj, a, None) for a in argnames])
         self.imports = imp
 
         # Arguments were serialized first, before a call to super, so that they

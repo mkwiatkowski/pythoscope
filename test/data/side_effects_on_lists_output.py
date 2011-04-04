@@ -29,8 +29,8 @@ class TestAfter(unittest.TestCase):
         alist2.remove(3)
         alist1.sort()
         alist2.sort()
-        self.assertEqual(alist1, after(alist1))
         alist2.reverse()
+        self.assertEqual(alist1, after(alist1))
         self.assertEqual(alist2, alist1)
 
 class TestMain(unittest.TestCase):

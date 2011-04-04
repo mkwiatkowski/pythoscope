@@ -636,9 +636,9 @@ class Call(Event):
                      tuple(self.side_effects)))
 
     def __repr__(self):
-        return "%s(definition=%s, input=%r, output=%r, exception=%r, side_effects=%r)" % \
+        return "%s(definition=%s, input=%r, output=%r, exception=%r, side_effects=[..(%d)..])" % \
             (class_name(self), self.definition.name, self.input, self.output,
-             self.exception, self.side_effects)
+             self.exception, len(self.side_effects))
 
 class CFunction(Definition):
     pass
@@ -781,7 +781,7 @@ class UserObject(Callable, SerializedObject):
         return filter(self.is_external_call, self.calls)
 
     def __repr__(self):
-        return "UserObject(klass=%r, calls=%r)" % (self.klass.name, self.calls)
+        return "UserObject(id=%s, klass=%r)" % (id(self), self.klass.name)
 
     def is_external_call(self, call):
         if isinstance(call, GeneratorObject):

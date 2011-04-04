@@ -107,6 +107,10 @@ def variable_assignment_line(left, right, already_assigned_names):
         constructor = code_string_from_module_variable_reference(right)
     elif isinstance(right, str):
         constructor = CodeString(right)
+    elif isinstance(right, (Call, MethodCallContext)):
+        constructor = call_in_test(right, already_assigned_names)
+        # Associate the name with the call's output, not the call itself.
+        already_assigned_names[right.output] = left
     else:
         constructor = constructor_as_string(right, already_assigned_names)
         already_assigned_names[right] = left
@@ -135,6 +139,8 @@ def generate_test_contents(events, template):
                 actual = code_string_from_module_variable_reference(event.actual)
             elif isinstance(event.actual, ObjectAttributeReference):
                 actual = code_string_from_object_attribute_reference(event.actual, already_assigned_names)
+            elif isinstance(event.actual, str):
+                actual = CodeString(event.actual)
             else:
                 actual = constructor_as_string(event.actual, already_assigned_names)
             if expected.uncomplete:
