@@ -335,6 +335,7 @@ def remove_duplicates_and_bare_method_contexts(events):
 # :: ([Event], [Event]) -> [Event]
 def include_requirements(test_events, execution_events):
     ignored_side_effects = side_effects_of(explicit_calls(test_events))
+    ignored_objects = []
     new_events = []
     for event in test_events:
         for new_event in objects_required_for(event, event.timestamp, execution_events):
@@ -342,7 +343,16 @@ def include_requirements(test_events, execution_events):
             # ignore all side effects caused by it.
             if new_event not in ignored_side_effects:
                 new_events.append(new_event)
-    return new_events + test_events
+            elif isinstance(new_event, AttributeRebind) and not isinstance(new_event.value, ImmutableObject):
+                change = BindingChange(ObjectAttributeReference(new_event.obj, new_event.name, new_event.timestamp),
+                                       new_event.value,
+                                       new_event.timestamp)
+                new_events.append(change)
+                # We can ignore the object that already has an assigned name,
+                # unless it was needed earlier.
+                if new_event.value not in new_events:
+                    ignored_objects.append(new_event.value)
+    return filter(lambda e: e not in ignored_objects, new_events + test_events)
 
 # :: (Event, [Event], int) -> bool
 def used_later_than(event, timeline, timestamp):
@@ -367,6 +377,7 @@ def fix_tests_using_call_outputs(timeline):
                 isinstance(event.actual, (MethodCallContext, Call)) and \
                 event.actual.output.timestamp > event.actual.timestamp and \
                 used_later_than(event.actual.output, timeline, event.timestamp):
+            # TODO use unique names
             yield Assign('result', event.actual, event.actual.timestamp-0.0001)
             event.actual = 'result'
             yield event

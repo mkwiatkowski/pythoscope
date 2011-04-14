@@ -9,13 +9,16 @@ from module import main
 class TestFacade(unittest.TestCase):
     def test_just_do_it_returns_None_after_creation_with_system_instance(self):
         alist = [Object('one'), Object('two'), Object('three')]
-        facade = Facade(System(Composite(alist)))
+        composite = Composite(alist)
+        system = System(composite)
+        facade = Facade(system)
         self.assertEqual(None, facade.just_do_it())
 
 class TestSystem(unittest.TestCase):
     def test_do_that_and_do_this_after_creation_with_composite_instance(self):
         alist = [Object('one'), Object('two'), Object('three')]
-        system = System(Composite(alist))
+        composite = Composite(alist)
+        system = System(composite)
         self.assertEqual(None, system.do_this())
         self.assertEqual(None, system.do_that())
 
@@ -45,7 +48,8 @@ class TestObject(unittest.TestCase):
 class TestDoSomethingSimpleWithSystem(unittest.TestCase):
     def test_do_something_simple_with_system_returns_None_for_system_instance(self):
         alist = [Object('one'), Object('two'), Object('three')]
-        self.assertEqual(None, do_something_simple_with_system(System(Composite(alist))))
+        composite = Composite(alist)
+        self.assertEqual(None, do_something_simple_with_system(System(composite)))
 
 class TestMain(unittest.TestCase):
     def test_main_returns_None(self):

@@ -4,7 +4,8 @@ from pythoscope.event import Event
 __all__ = ['EqualAssertionLine', 'EqualAssertionStubLine',
            'GeneratorAssertionLine', 'RaisesAssertionLine',
            'CommentLine', 'SkipTestLine',
-           'ModuleVariableReference', 'ObjectAttributeReference', 'Assign']
+           'ModuleVariableReference', 'ObjectAttributeReference',
+           'BindingChange', 'Assign']
 
 class Line(Event):
     def __init__(self, timestamp):
@@ -57,11 +58,21 @@ class ObjectAttributeReference(Line):
         self.obj = obj
         self.name = name
 
-class Assign(Line):
+    def __repr__(self):
+        return "ObjectAttributeReference(obj=%r, name=%r)" % (self.obj, self.name)
+
+# This is a virtual line, not necessarily appearing in a test case. It is used
+# to notify builder of a change in name bidning that happened under-the-hood,
+# e.g. during a function call.
+class BindingChange(Line):
     def __init__(self, name, obj, timestamp):
         Line.__init__(self, timestamp)
         self.name = name
         self.obj = obj
 
     def __repr__(self):
-        return "Assign(name=%r, obj=%r)" % (self.name, self.obj)
+        return "%s(name=%r, obj=%r)" % (self.__class__.__name__, self.name, self.obj)
+
+# Assignment statement.
+class Assign(BindingChange):
+    pass

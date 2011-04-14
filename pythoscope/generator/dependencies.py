@@ -124,8 +124,11 @@ def resolve_dependencies(events):
             return []
         elif isinstance(obj, ObjectAttributeReference):
             return get_those_and_contained_objects([obj.obj])
-        elif isinstance(obj, (ImmutableObject, UnknownObject, CallToC, CommentLine,
-                              SkipTestLine, EqualAssertionStubLine, ModuleVariableReference)):
+        elif isinstance(obj, BindingChange):
+            return get_those_and_contained_objects([obj.obj, obj.name])
+        elif isinstance(obj, (ImmutableObject, UnknownObject, CallToC,
+                              CommentLine, SkipTestLine, EqualAssertionStubLine,
+                              ModuleVariableReference)):
             return []
         else:
             raise TypeError("Wrong argument to get_contained_objects: %s." % repr(obj))

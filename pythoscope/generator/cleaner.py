@@ -12,7 +12,7 @@ def remove_objects_unworthy_of_naming(events):
     new_events = list(events)
     side_effects = all_of_type(events, SideEffect)
     affected_objects = objects_affected_by_side_effects(side_effects)
-    invoked_objects = objects_with_method_calls(events)
+    invoked_objects = objects_with_method_calls(events) + objects_with_attribute_references(events)
     for obj, usage_count in object_usage_counts(events):
         # ImmutableObjects don't need to be named, as their identity is
         # always unambiguous.
@@ -48,6 +48,21 @@ def objects_with_method_calls(events):
         else:
             return None
     return compact(map(objects_from_methods, events))
+
+# :: [Event] -> [SerializedObject]
+def objects_with_attribute_references(events):
+    def objects_from_references(event):
+        if isinstance(event, ObjectAttributeReference):
+            return event.obj
+        elif isinstance(event, EqualAssertionLine):
+            return objects_from_references(event.actual)
+        elif isinstance(event, RaisesAssertionLine):
+            return objects_from_references(event.call)
+        elif isinstance(event, GeneratorAssertionLine):
+            return objects_from_references(event.generator_call)
+        else:
+            return None
+    return compact(map(objects_from_references, events))
 
 # :: [Event] -> {SerializedObject: int}
 def object_usage_counts(timeline):

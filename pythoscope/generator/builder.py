@@ -131,6 +131,10 @@ def generate_test_contents(events, template):
     for event in events:
         if isinstance(event, Assign):
             line = variable_assignment_line(event.name, event.obj, already_assigned_names)
+        elif isinstance(event, BindingChange):
+            if event.name.obj in already_assigned_names.keys():
+                already_assigned_names[event.obj] = code_string_from_object_attribute_reference(event.name, already_assigned_names)
+            continue # This is not a real test line, so just go directly to the next line.
         elif isinstance(event, EqualAssertionLine):
             expected = constructor_as_string(event.expected, already_assigned_names)
             if isinstance(event.actual, (Call, MethodCallContext)):
