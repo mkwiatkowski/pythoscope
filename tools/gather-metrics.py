@@ -69,7 +69,7 @@ def run_nosetests(project_dir, test_path):
     notify("Running nosetests on the generated test module...")
     status, output = commands.getstatusoutput("nosetests -w %s %s" % (project_dir, test_path))
     print output
-    if status != 0:
+    if status not in [0, 256]:
         raise GatheringError("Failed during test run: nosetests exited with code=%d." % status)
     counts = get_test_counts(output)
     notify("Done.")
@@ -87,7 +87,7 @@ def run_nosetests_with_coverage(project_dir, test_path):
     notify("Running nosetests with coverage on the generated test module...")
     status, output = commands.getstatusoutput("nosetests --with-coverage --cover-package=reverend -w %s %s" % (project_dir, test_path))
     print output
-    if status != 0:
+    if status not in [0, 256]:
         raise GatheringError("Failed during test run: nosetests+coverage exited with code=%d." % status)
     coverage = extract_coverage_percent(output)
     notify("Done.")
