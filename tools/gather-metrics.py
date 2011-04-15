@@ -1,4 +1,5 @@
 import commands
+import glob
 import os
 import shutil
 import sys
@@ -52,6 +53,13 @@ def put_point_of_entry(poe, project_dir):
         os.path.join(project_dir, ".pythoscope", "points-of-entry"))
     notify("Done.")
 
+def run_snippet(snippet, project_dir):
+    notify("Copying and running snippet %s..." % snippet)
+    shutil.copy(os.path.join(PREFIX, snippet), project_dir)
+    status, output = commands.getstatusoutput("(cd %s ; python %s)" % (project_dir, snippet))
+    print output
+    notify("Done.")
+
 def generate_tests_for_file(project_dir, appfile):
     notify("Generating tests for %s..." % appfile)
     status, output = commands.getstatusoutput("pythoscope --verbose -t nose %s" % os.path.join(project_dir, appfile))
@@ -67,7 +75,9 @@ def contains_dynamic_inspection_error(output):
 
 def run_nosetests(project_dir, test_path):
     notify("Running nosetests on the generated test module...")
-    status, output = commands.getstatusoutput("nosetests -w %s %s" % (project_dir, test_path))
+    command = "nosetests -w %s %s" % (project_dir, test_path)
+    print "    $", command
+    status, output = commands.getstatusoutput(command)
     print output
     if status not in [0, 256]:
         raise GatheringError("Failed during test run: nosetests exited with code=%d." % status)
@@ -83,9 +93,11 @@ def get_test_counts(output):
         line = lines[0]
     return line.count('.'), line.count('S'), line.count('E'), line.count('F')
 
-def run_nosetests_with_coverage(project_dir, test_path):
+def run_nosetests_with_coverage(project_dir, test_path, cover_package):
     notify("Running nosetests with coverage on the generated test module...")
-    status, output = commands.getstatusoutput("nosetests --with-coverage --cover-package=reverend -w %s %s" % (project_dir, test_path))
+    command = "nosetests --with-coverage --cover-package=%s -w %s %s" % (cover_package, project_dir, test_path)
+    print "    $", command
+    status, output = commands.getstatusoutput(command)
     print output
     if status not in [0, 256]:
         raise GatheringError("Failed during test run: nosetests+coverage exited with code=%d." % status)
@@ -104,7 +116,10 @@ def cleanup_project(project_dir):
     shutil.rmtree(project_dir)
     notify("Done.")
 
-def gather_metrics_from_project(project, poes, appfile, testfile):
+def path_exists(path):
+    return os.path.exists(path) or glob.glob(path) != []
+
+def gather_metrics_from_project(project, poes, snippets, appfile, testfile, cover_package, python_path=None):
     check_environment()
     temp_dir = prepare_project(project)
     project_dir = os.path.join(temp_dir, project)
@@ -112,27 +127,50 @@ def gather_metrics_from_project(project, poes, appfile, testfile):
         do_pythoscope_init(project_dir)
         for poe in poes:
             put_point_of_entry(poe, project_dir)
+        for snippet in snippets:
+            run_snippet(snippet, project_dir)
         generate_tests_for_file(project_dir, appfile)
         test_path = os.path.join(project_dir, testfile)
-        if not os.path.exists(test_path):
+        if not path_exists(test_path):
             raise GatheringError("Failed at test generation: test file not generated.")
         passed, skipped, errors, failures = run_nosetests(project_dir, test_path)
-        coverage = run_nosetests_with_coverage(project_dir, test_path)
+        coverage = run_nosetests_with_coverage(project_dir, test_path, cover_package)
         return GatheringResults(passed, skipped, errors, failures, coverage)
     finally:
         cleanup_project(temp_dir)
 
 def main():
+    projects = [
+        dict(project="Reverend-r17924",
+             poes=["Reverend_poe_from_readme.py", "Reverend_poe_from_homepage.py"],
+             snippets=[],
+             appfile="reverend/thomas.py",
+             testfile="tests/test_reverend_thomas.py",
+             cover_package="reverend"),
+        dict(project="freshwall-1.1.2-lib",
+             poes=[],
+             snippets=["freshwall_bin_with_snippet.py"],
+             appfile="freshwall/*.py",
+             testfile="tests/*.py",
+             cover_package="freshwall"),
+        dict(project="http-parser-0.2.0",
+             poes=[],
+             snippets=["http-parser-example-1.py", "http-parser-example-2.py"],
+             appfile="http_parser/*.py",
+             testfile="tests/*.py",
+             cover_package="http_parser"),
+        ]
     try:
-        results = gather_metrics_from_project(project="Reverend-r17924",
-            poes=["Reverend_poe_from_readme.py", "Reverend_poe_from_homepage.py"],
-            appfile="reverend/thomas.py",
-            testfile="tests/test_reverend_thomas.py")
-        print "%d test cases:" % results.total
-        print "  %d passing" % results.passed
-        print "  %d failing" % (results.failures + results.errors)
-        print "  %d stubs" % results.skipped
-        print "%s coverage" % results.coverage
+        results = map(lambda p: gather_metrics_from_project(**p), projects)
+        for project, result in zip(projects, results):
+            print
+            print project['project']
+            print "-"*40
+            print "%d test cases:" % result.total
+            print "  %d passing" % result.passed
+            print "  %d failing" % (result.failures + result.errors)
+            print "  %d stubs" % result.skipped
+            print "%s coverage" % result.coverage
     except GatheringError, e:
         print e.args[0]
 

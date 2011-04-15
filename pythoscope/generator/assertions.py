@@ -386,21 +386,29 @@ def fix_tests_using_call_outputs(timeline):
 
 # [Event] -> [Call]
 def explicit_calls(event):
-    if isinstance(event, list):
-        return flatten(map(explicit_calls, event))
-    if isinstance(event, Call):
-        return [event] + explicit_calls(event.subcalls) + explicit_calls(event.input.values())
-    elif isinstance(event, Callable):
-        return explicit_calls(event.calls)
-    elif isinstance(event, EqualAssertionLine) and isinstance(event.actual, (Call, MethodCallContext)):
-        return explicit_calls(event.actual)
-    elif isinstance(event, GeneratorAssertionLine):
-        return explicit_calls(event.generator_call)
-    elif isinstance(event, RaisesAssertionLine):
-        return explicit_calls(event.call)
-    elif isinstance(event, MethodCallContext):
-        return explicit_calls(event.call)
-    return []
+    events_so_far = set()
+    def ec(event):
+        if isinstance(event, list):
+            return flatten(map(ec, event))
+        # Avoid infinite recursion.
+        if event in events_so_far:
+            return []
+        else:
+            events_so_far.add(event)
+        if isinstance(event, Call):
+            return [event] + ec(event.subcalls) + ec(event.input.values())
+        elif isinstance(event, Callable):
+            return ec(event.calls)
+        elif isinstance(event, EqualAssertionLine) and isinstance(event.actual, (Call, MethodCallContext)):
+            return ec(event.actual)
+        elif isinstance(event, GeneratorAssertionLine):
+            return ec(event.generator_call)
+        elif isinstance(event, RaisesAssertionLine):
+            return ec(event.call)
+        elif isinstance(event, MethodCallContext):
+            return ec(event.call)
+        return []
+    return ec(event)
 
 # :: (Event, int, [Event]) -> [SerializedObject|SideEffect]
 def objects_required_for(test_event, timestamp, execution_events):
