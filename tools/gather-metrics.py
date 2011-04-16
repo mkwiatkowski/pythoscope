@@ -75,7 +75,7 @@ def contains_dynamic_inspection_error(output):
 
 def run_nosetests(project_dir, test_path):
     notify("Running nosetests on the generated test module...")
-    command = "nosetests -w %s %s" % (project_dir, test_path)
+    command = "PYTHONPATH=%s nosetests -w %s %s" % (project_dir, project_dir, test_path)
     print "    $", command
     status, output = commands.getstatusoutput(command)
     print output
@@ -95,7 +95,7 @@ def get_test_counts(output):
 
 def run_nosetests_with_coverage(project_dir, test_path, cover_package):
     notify("Running nosetests with coverage on the generated test module...")
-    command = "nosetests --with-coverage --cover-package=%s -w %s %s" % (cover_package, project_dir, test_path)
+    command = "PYTHONPATH=%s nosetests --with-coverage --cover-package=%s -w %s %s" % (project_dir, cover_package, project_dir, test_path)
     print "    $", command
     status, output = commands.getstatusoutput(command)
     print output
@@ -109,6 +109,11 @@ def extract_coverage_percent(output):
     for line in output.splitlines():
         if line.startswith("TOTAL"):
             return line.split()[3]
+    else:
+        # If there was only one module, coverage doesn't report TOTAL.
+        for line in output.splitlines():
+            if "%" in line:
+                return line.split()[3]
     raise GatheringError("Can't find coverage in the output.")
 
 def cleanup_project(project_dir):
@@ -165,6 +170,12 @@ def main():
              appfile="isodate/*.py",
              testfile="tests/*.py",
              cover_package="isodate"),
+        dict(project="pyatom-1.2",
+             poes=["pyatom_poe_from_readme.py"],
+             snippets=[],
+             appfile="pyatom.py",
+             testfile="tests/*.py",
+             cover_package="pyatom"),
         ]
     try:
         results = map(lambda p: gather_metrics_from_project(**p), projects)

@@ -211,6 +211,10 @@ class LibraryObject(SerializedObject):
             ("Element(%s)",
              ["tagName", "namespaceURI", "prefix"],
              set([("xml.dom.minidom", "Element")])),
+        ('datetime', 'datetime'):
+            ("datetime.datetime(%s)",
+             ["year", "month", "day", "hour", "minute", "second", "microsecond", "tzinfo"],
+             set(["datetime"])),
     }
 
     def __init__(self, obj, serialize):

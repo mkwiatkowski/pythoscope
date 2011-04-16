@@ -27,10 +27,15 @@ def unindent(string):
     """Remove the initial part of whitespace from string.
 
     >>> unindent("1 + 2 + 3\\n")
-    '1 + 2 + 3\\n'
+    '1 + 2 + 3'
     >>> unindent("  def fun():\\n    return 42\\n")
-    'def fun():\\n  return 42\\n'
+    'def fun():\\n  return 42'
+    >>> unindent("\\n  def fun():\\n    return 42\\n")
+    'def fun():\\n  return 42'
+    >>> unindent("  def fun():\\n    return 42\\n\\n")
+    'def fun():\\n  return 42'
     """
+    string = re.sub(r'^\n*', '', string.rstrip()) # ignore leading and trailing newlines
     match = re.match(r'^([\t ]+)', string)
     if not match:
         return string
@@ -60,6 +65,8 @@ def is_generator_definition(definition):
     >>> is_generator_definition("def g():\\n  yield 2\\n")
     True
     >>> is_generator_definition("  def indented_gen():\\n    yield 3\\n")
+    True
+    >>> is_generator_definition("\\n  def indented_gen():\\n    yield 3\\n")
     True
     """
     try:

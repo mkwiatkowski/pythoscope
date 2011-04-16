@@ -9,6 +9,7 @@ def get_name_base_for_object(obj):
     common_names = {'list': 'alist',
                     'dict': 'adict',
                     'array.array': 'array',
+                    'datetime': 'dt', # we can't name it 'datetime', because that is module's name
                     'types.FunctionType': 'function',
                     'types.GeneratorType': 'generator'}
     return common_names.get(obj.type_name, underscore(obj.type_name))
