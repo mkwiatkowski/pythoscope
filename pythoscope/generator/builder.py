@@ -150,7 +150,6 @@ def generate_test_contents(events, template):
             if expected.uncomplete:
                 expected = type_as_string(event.expected)
                 actual = type_of(actual)
-                actual = addimport(actual, 'types')
             line = template.equal_assertion(expected, actual)
         elif isinstance(event, GeneratorAssertionLine):
             call = event.generator_call

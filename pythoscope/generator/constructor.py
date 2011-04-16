@@ -28,15 +28,29 @@ def map_as_kwargs(mapobject):
     return sorted([(eval(k.reconstructor), v) for k,v in mapobject.mapping])
 
 # :: SerializedObject | [SerializedObject] -> CodeString
-def type_as_string(object):
+def type_as_string(obj):
     """Return a most common representation of the wrapped object type.
 
     >>> type_as_string([SequenceObject((), None), MapObject({}, None)])
     '[tuple, dict]'
+    >>> cs = type_as_string(UnknownObject(lambda: None))
+    >>> cs
+    'types.FunctionType'
+    >>> cs.imports
+    set(['types'])
     """
-    if isinstance(object, list):
-        return list_of(map(type_as_string, object))
-    return CodeString(object.type_name)
+    if isinstance(obj, list):
+        return list_of(map(type_as_string, obj)) # TODO join preserving code strings attributes
+    type2import = {'time': ('datetime', 'time'),
+                   'datetime': ('datetime', 'datetime'),
+                   'date': ('datetime', 'date')}
+    cs = CodeString(obj.type_name)
+    if cs.startswith('types.'):
+        return addimport(cs, 'types')
+    elif str(cs) in type2import.keys():
+        # TODO it should be done in the serializer
+        return addimport(cs, type2import[str(cs)])
+    return cs
 
 # :: ([SerializedObject], {SerializedObject: str}) -> [CodeString]
 def get_objects_collection_info(objs, assigned_names):

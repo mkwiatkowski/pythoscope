@@ -159,6 +159,12 @@ def main():
              appfile="http_parser/*.py",
              testfile="tests/*.py",
              cover_package="http_parser"),
+        dict(project="isodate-0.4.4-src",
+             poes=["isodate_poe.py"],
+             snippets=[],
+             appfile="isodate/*.py",
+             testfile="tests/*.py",
+             cover_package="isodate"),
         ]
     try:
         results = map(lambda p: gather_metrics_from_project(**p), projects)
