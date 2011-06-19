@@ -372,14 +372,21 @@ def fix_tests_using_call_outputs(timeline):
         assert_equal(expected, output)
         assert_equal(output, something.somewhere)
     """
+    def new_name_generator():
+        yield 'result'
+        i = 2
+        while True:
+            yield "result%d" % i
+            i += 1
+    name = new_name_generator()
     for event in timeline:
         if isinstance(event, EqualAssertionLine) and \
                 isinstance(event.actual, (MethodCallContext, Call)) and \
                 event.actual.output.timestamp > event.actual.timestamp and \
                 used_later_than(event.actual.output, timeline, event.timestamp):
-            # TODO use unique names
-            yield Assign('result', event.actual, event.actual.timestamp-0.0001)
-            event.actual = 'result'
+            varname = name.next()
+            yield Assign(varname, event.actual, event.actual.timestamp-0.0001)
+            event.actual = varname
             yield event
         else:
             yield event
