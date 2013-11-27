@@ -102,7 +102,8 @@ def insert_after_other_imports(module, code):
     if last_import:
         insert_after(last_import, code)
     else:
-        # Add an extra newline separating imports from the code.
+        # Add 2 extra newlines separating imports from the code.
+        code_of(module).insert_child(0, Newline())
         code_of(module).insert_child(0, Newline())
         code_of(module).insert_child(0, code)
     # Just inserted import becomes the last one.
