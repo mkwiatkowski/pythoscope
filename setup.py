@@ -33,7 +33,7 @@ setup(
     author = 'Michal Kwiatkowski',
     author_email = 'constant.beta@gmail.com',
     description = 'unit test generator for Python',
-    long_description = open("README").read() + "\n" + open("Changelog").read(),
+    long_description = open("README.md").read() + "\n" + open("Changelog").read(),
     license = 'MIT',
     url = 'http://pythoscope.org',
 
