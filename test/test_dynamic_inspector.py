@@ -822,7 +822,7 @@ class TestRaisedExceptions(IgnoredWarnings):
             filename = '<string>'
         else:
             filename = None
-        syntax_error_exc_args = ('invalid syntax', (filename, 1, 3, 'a b c'))
+        syntax_error_exc_args = ('invalid syntax', (filename, 1, 3, 'a b c\n'))
 
         call = inspect_returning_single_call(causes_interpreter_to_raise_syntax_error)
         assert_call_with_exception({}, 'SyntaxError', call)
