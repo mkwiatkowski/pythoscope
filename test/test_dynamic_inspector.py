@@ -813,7 +813,7 @@ class TestRaisedExceptions(IgnoredWarnings):
 
     def test_handles_multiargument_exceptions_raised_by_the_interpreter_like_syntax_error(self):
         def causes_interpreter_to_raise_syntax_error():
-            def raising_syntax_error(): exec 'a b c'
+            def raising_syntax_error(): exec 'a b c\n'
             try: raising_syntax_error()
             except: pass
         # Versions of Python up to 2.4 used None for a filename in syntax
