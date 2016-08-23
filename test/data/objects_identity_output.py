@@ -6,6 +6,7 @@ from module import System
 from module import do_something_simple_with_system
 from module import main
 
+
 class TestFacade(unittest.TestCase):
     def test_just_do_it_returns_None_after_creation_with_system_instance(self):
         alist = [Object('one'), Object('two'), Object('three')]

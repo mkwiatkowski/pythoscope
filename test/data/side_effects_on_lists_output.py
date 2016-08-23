@@ -3,6 +3,7 @@ import unittest
 from module import after
 from module import main
 
+
 class TestBefore(unittest.TestCase):
     def test_before_returns_list(self):
         alist = [1]

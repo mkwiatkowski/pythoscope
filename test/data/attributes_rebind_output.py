@@ -5,6 +5,7 @@ from module import UsingOther
 from module import UsingOtherInternally
 from module import main
 
+
 class TestOldStyle(unittest.TestCase):
     def test_setx_returns_None_for_42(self):
         old_style = OldStyle()
